@@ -64,11 +64,27 @@ jobs:
         working-directory: ./
         run: git push origin HEAD:main
 
+
+      # ── Changelog, from dirk_publicInfo ──
+      # The entry is authored ONCE, as JSON, via the dirk-changelog MCP. This
+      # renders it into the CHANGELOG.md that ships in the zip, so the file a
+      # customer reads and the entry the panel fetches are the same text.
+      #
+      # It is also a GATE: no entry for the version being built and the release
+      # STOPS, rather than quietly shipping the previous version's notes.
+      - name: Changelog from publicInfo
+        run: |
+          BASE=https://raw.githubusercontent.com/DirkScripts-FiveM/dirk_publicInfo/main
+          curl -fsSL "$BASE/render.mjs" -o /tmp/render.mjs
+          curl -fsSL "$BASE/changelogs/dirk_lib.json" -o /tmp/changelog.json
+          node /tmp/render.mjs /tmp/changelog.json "${{ env.NEW_VERSION }}" > CHANGELOG.md
+          echo "CHANGELOG.md rendered for ${{ env.NEW_VERSION }}"
+
       - name: Bundle files
         run: |
           mkdir -p ./temp/dirk_lib
           mkdir -p ./temp/dirk_lib/web/
-          cp ./fxmanifest.lua ./init.lua ./schema.json ./README.md ./LICENSE ./temp/dirk_lib/
+          cp ./fxmanifest.lua ./init.lua ./schema.json ./README.md ./CHANGELOG.md ./LICENSE ./temp/dirk_lib/
           cp -r ./src ./temp/dirk_lib
           cp -r ./bridge ./temp/dirk_lib
           cp -r ./locales ./temp/dirk_lib
