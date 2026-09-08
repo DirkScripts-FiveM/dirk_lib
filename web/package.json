@@ -32,7 +32,6 @@
     "chroma-js": "^3.2.0",
     "dayjs": "^1.11.13",
     "dirk-cfx-react": "^1.1.97",
-    "dirk-ui-studio": "link:../.studio",
     "embla-carousel-autoplay": "8.5.2",
     "framer-motion": "^12.23.26",
     "leaflet": "^1.9.4",

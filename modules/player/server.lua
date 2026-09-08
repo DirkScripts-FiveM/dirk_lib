@@ -228,6 +228,158 @@ return  {
     return false
   end,
 
+  ---@function lib.player.roster
+  ---@description
+  --- Every character the server has ever had, a page at a time.
+  ---
+  --- ── why this is in dirk_lib ────────────────────────────────────────────
+  ---
+  --- Any script with an admin Players page needs the same thing: search the
+  --- roster, page it, put whoever is online at the top, and hand back each
+  --- character's metadata so the script can read its own key out of it.
+  --- dirk_fishing wrote it, and dirk_projectCars was about to write it again —
+  --- the same framework-branching SQL, the same column-fallback ladder, the
+  --- same online-first ordering, in two places that would drift.
+  ---
+  --- The table differs by framework and so do the columns: QB keeps characters
+  --- in `players` keyed by `citizenid`, ESX in `users` keyed by `identifier`,
+  --- and neither is consistent about which name columns exist across versions.
+  --- So each shape is tried in turn and the first that runs wins, rather than
+  --- guessing from a version number.
+  ---
+  --- Returns rows only. It does NOT check permission — the CALLER must, because
+  --- only the caller knows which resource's admins are allowed to look.
+  ---
+  ---@param opts table? { query: string?, offset: number?, limit: number? }
+  ---@return table { items = { { id, name, online, metadata } }, total = number }
+  roster = function(opts)
+    opts = type(opts) == 'table' and opts or {}
+    local offset = math.max(0, math.floor(tonumber(opts.offset) or 0))
+    local limit = math.floor(math.max(1, math.min(100, tonumber(opts.limit) or 40)))
+    local search = tostring(opts.query or ''):gsub('^%s+', ''):gsub('%s+$', '')
+    local like = ('%%%s%%'):format(search)
+
+    local isEsx = (settings and settings.framework) == 'es_extended'
+    local table_ = isEsx and 'users' or 'players'
+    local idCol = isEsx and 'identifier' or 'citizenid'
+
+    -- Online first, so the person an admin is most likely looking for is on
+    -- page one. The identifiers come from the server's own roster, never from
+    -- input, and still go through `?` substitution.
+    local online, onlineBy = {}, {}
+    for _, ply in ipairs(GetPlayers()) do
+      local src = tonumber(ply)
+      local id = src and lib.player.get(src) and lib.player.identifier(src)
+      if id then
+        online[#online + 1] = tostring(id)
+        onlineBy[tostring(id)] = src
+      end
+    end
+    local onlineCsv = table.concat(online, ',')
+
+    --- Run the first query that this database actually accepts.
+    ---
+    --- A missing column is a hard SQL error, and which name columns exist
+    --- varies by framework version. Trying in order of richest-first means a
+    --- server keeps the best result its schema can give.
+    local function firstThatRuns(queries, args)
+      for _, sql in ipairs(queries) do
+        local ok, result = pcall(MySQL.query.await, sql, args)
+        if ok and result then return result end
+      end
+      return {}
+    end
+
+    local order = ('ORDER BY (CASE WHEN FIND_IN_SET(%s, ?) > 0 THEN 0 ELSE 1 END), %s ASC LIMIT ? OFFSET ?')
+      :format(idCol, idCol)
+
+    local nameCols = isEsx
+      and { 'name', 'firstname', 'lastname' }
+      or { 'name', 'charinfo' }
+
+    local rows, total = {}, 0
+
+    -- Richest first: every name column, then fewer, then the id alone.
+    for take = #nameCols, 0, -1 do
+      local cols = { idCol, 'metadata' }
+      local where = { ('%s LIKE ?'):format(idCol) }
+      local args = { search, like }
+      for i = 1, take do
+        cols[#cols + 1] = nameCols[i]
+        where[#where + 1] = ('%s LIKE ?'):format(nameCols[i])
+        args[#args + 1] = like
+      end
+      args[#args + 1] = onlineCsv
+      args[#args + 1] = limit
+      args[#args + 1] = offset
+
+      local sql = ('SELECT %s FROM %s WHERE (? = "" OR %s) %s')
+        :format(table.concat(cols, ', '), table_, table.concat(where, ' OR '), order)
+
+      local ok, result = pcall(MySQL.query.await, sql, args)
+      if ok and result then
+        rows = result
+        -- The same WHERE, counted. Built from the shape that just worked, so
+        -- the total can never describe a different query from the page.
+        local countArgs = { search, like }
+        for _ = 1, take do countArgs[#countArgs + 1] = like end
+        local counted = firstThatRuns({
+          ('SELECT COUNT(*) as n FROM %s WHERE (? = "" OR %s)')
+            :format(table_, table.concat(where, ' OR ')),
+        }, countArgs)
+        total = tonumber(counted[1] and counted[1].n) or #rows
+        break
+      end
+    end
+
+    local items = {}
+    for _, row in ipairs(rows) do
+      local id = tostring(row[idCol] or '')
+      -- The CHARACTER's name, from whichever column this framework turned out
+      -- to have. QB packs it into `charinfo` JSON; ESX has columns for it.
+      --
+      -- Character columns are read FIRST, and `name` is only the fallback.
+      -- On QB `players.name` is the ACCOUNT - the person's own handle - so
+      -- reading it first meant every row showed the same handle twice and the
+      -- character's actual name never appeared anywhere. Which one goes where
+      -- is the whole point of returning both.
+      local name
+      if row.firstname or row.lastname then
+        name = ('%s %s'):format(row.firstname or '', row.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
+      elseif type(row.charinfo) == 'string' then
+        local ok, info = pcall(json.decode, row.charinfo)
+        if ok and type(info) == 'table' then
+          name = ('%s %s'):format(info.firstname or '', info.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
+        end
+      elseif type(row.charinfo) == 'table' then
+        name = ('%s %s'):format(row.charinfo.firstname or '', row.charinfo.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
+      end
+      if not name or name == '' then name = row.name end
+
+      local metadata = row.metadata
+      if type(metadata) == 'string' then
+        local ok, decoded = pcall(json.decode, metadata)
+        metadata = ok and decoded or {}
+      end
+
+      items[#items + 1] = {
+        id = id,
+        name = (name and name ~= '') and name or id,
+        -- The ACCOUNT name, separately. A character is "Marcus Webb" and the
+        -- person behind them is whatever they called themselves — an admin
+        -- looking for a player often knows only the second, and collapsing the
+        -- two loses the one they typed.
+        account = (type(row.name) == 'string' and row.name ~= '') and row.name or nil,
+        -- The SOURCE, not a boolean. `false` when offline, so it reads as one
+        -- either way, but a caller that wants to message them has it.
+        online = onlineBy[id] or false,
+        metadata = type(metadata) == 'table' and metadata or {},
+      }
+    end
+
+    return { items = items, total = total, nextOffset = (offset + #items < total) and (offset + #items) or nil }
+  end,
+
   getIdentifierType = function(src, _type)
     local identifiers = GetPlayerIdentifiers(src)
     for k,v in pairs(identifiers) do 

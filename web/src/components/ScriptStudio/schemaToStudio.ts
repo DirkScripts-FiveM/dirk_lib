@@ -72,6 +72,39 @@ export function humanise(key: string): string {
 
 // ── control inference ───────────────────────────────────────────────────────
 
+/**
+ * How many numbers this place actually has.
+ *
+ * A yard's owner is a vector4 - somewhere to stand and a way to face. A zone
+ * corner is a vector2; it has no height, and the map draws the ring flat. Ask
+ * the same control for both and it writes back all four every time, so a corner
+ * silently grows a `z` and a `w` that nothing reads and every diff shows.
+ *
+ * Declared beats counted: a field whose default is `{}` has nothing to count.
+ */
+export function vectorDims(node: JsonSchema, value?: unknown): 2 | 3 | 4 {
+  if (node?.['x-vector2']) return 2;
+  if (node?.['x-vector3']) return 3;
+  if (node?.['x-vector4']) return 4;
+
+  const props = node?.properties;
+  if (props) {
+    if ('w' in props) return 4;
+    if ('z' in props) return 3;
+    if ('x' in props && 'y' in props) return 2;
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const v = value as Record<string, unknown>;
+    if (typeof v.w === 'number') return 4;
+    if (typeof v.z === 'number') return 3;
+  }
+
+  // Four is what every position picker produces, so it is the safe guess for a
+  // field that never said and has nothing stored yet.
+  return 4;
+}
+
 function looksLikeCoords(value: unknown, node: JsonSchema): boolean {
   const props = node?.properties;
   if (props && 'x' in props && 'y' in props) return true;
@@ -116,6 +149,11 @@ const CONTROL_TYPES = new Set<string>([
   'custom',
   'keybindMap', 'groupGrades', 'weightMap',
   'discordChannel', 'redirectKind', 'duration', 'hourOfDay', 'boolChoice', 'objectMap',
+  // A PROP placed in the world. Not to be confused with `objectMap`, which is
+  // a map of arbitrary keys to values and has nothing to do with entities -
+  // nor with the `object` TYPE, which is a nested block of sub-fields and is
+  // inferred from the shape, never declared.
+  'prop',
 ]);
 
 /**
@@ -135,7 +173,13 @@ const EXPLICIT_CONTROLS: { flag: string; control: ControlType }[] = [
   { flag: 'x-secret', control: 'secret' },
   { flag: 'x-itemPicker', control: 'item' },
   { flag: 'x-installItem', control: 'item' },
+  // All three say the same thing - "this is a place" - and differ only in how
+  // much of one. The control is the same; what it WRITES BACK is trimmed to
+  // the shape asked for, so a zone corner never grows a heading it has no use
+  // for and a 2D point never grows a height.
   { flag: 'x-vector4', control: 'coords' },
+  { flag: 'x-vector3', control: 'coords' },
+  { flag: 'x-vector2', control: 'coords' },
   { flag: 'x-keybind', control: 'keybind' },
   { flag: 'x-groupPicker', control: 'group' },
   { flag: 'x-iconPicker', control: 'icon' },
@@ -770,7 +814,14 @@ function buildColumnInner(
   }
 
   // plain nested object
-  if (child.type === 'object' || (value !== null && typeof value === 'object' && !Array.isArray(value) && !looksLikeCoords(value, child))) {
+  //
+  // Skipped entirely when the field DECLARES a control. This branch fires on
+  // `type: 'object'` alone, so it used to claim every declared object before
+  // `inferControl` below was ever reached — meaning `x-control` on an object
+  // field silently did nothing and the field rendered as a run of plain boxes.
+  // An explicit declaration beats shape inference; that is what declaring is.
+  if (!child['x-control']
+    && (child.type === 'object' || (value !== null && typeof value === 'object' && !Array.isArray(value) && !looksLikeCoords(value, child)))) {
     const sample = (value ?? child.default ?? {}) as Record<string, unknown>;
     const props: JsonSchema | undefined = child.properties;
     const nestedKeys = props ? Object.keys(props) : Object.keys(sample);
@@ -798,10 +849,24 @@ function buildColumnInner(
   // abundance are all 0..1 or 0..2 in fishing's schema
   if ((control === 'number' || control === 'integer')
     && typeof min === 'number' && typeof max === 'number' && max <= 2) {
-    return { key, label, type: 'slider', min, max };
+    // `x-bandLabels` names the steps. Without it the slider borrows fishing's
+    // difficulty words, so a blip's SIZE reads "Weak" at its smallest.
+    return { key, label, type: 'slider', min, max, bandLabels: child?.['x-bandLabels'] };
   }
 
-  return { key, label, type: control, options: enumOptions(child), min, max };
+  return {
+    key, label, type: control, options: enumOptions(child), min, max,
+    bandLabels: child?.['x-bandLabels'],
+    // What the two sides of a `boolChoice` are called. Rows were the one place
+    // this never made it through, so a `x-boolLabels` inside an array item was
+    // read, validated, and then dropped - the control fell back to "Off / On"
+    // with nothing to say why.
+    boolLabels: child?.['x-boolLabels'],
+    vectorDims: control === 'coords' ? vectorDims(child, value) : undefined,
+    // Which prop the placer spawns. Per-field, because only the schema
+    // knows this one is a laptop and the next one is a vending machine.
+    propModel: typeof child['x-propModel'] === 'string' ? child['x-propModel'] : undefined,
+  };
 }
 
 /**
@@ -862,6 +927,14 @@ type MapPathSpec = {
   shape?: 'polygon' | 'marker';
   /** Named positions within each row, when a row is more than one place. */
   points?: { key: string; label?: string; color?: string }[];
+  /**
+   * May a pin on this layer be dragged?
+   *
+   * `false` for anything captured by STANDING somewhere: a barn find's owner
+   * has a height and a heading, and a map has neither to give back. Those are
+   * shown on the map and set in the row editor.
+   */
+  movable?: boolean;
 };
 
 /** The declared map paths, plus the styling declared alongside them. */
@@ -869,6 +942,7 @@ type MapMeta = Set<string> & {
   colors: Map<string, string>;
   shapes: Map<string, 'polygon' | 'marker'>;
   points: Map<string, { key: string; label?: string; color?: string }[]>;
+  movable: Map<string, boolean>;
 };
 
 /**
@@ -1022,10 +1096,12 @@ export function schemaToStudio(schema: JsonSchema, meta: StudioMeta): StudioScri
     colors: new Map<string, string>(),
     shapes: new Map<string, 'polygon' | 'marker'>(),
     points: new Map<string, { key: string; label?: string; color?: string }[]>(),
+    movable: new Map<string, boolean>(),
   });
   const mapColors = mapPaths.colors;
   const mapShapes = mapPaths.shapes;
   const mapPoints = mapPaths.points;
+  const mapMovable = mapPaths.movable;
 
   const topLevel: JsonSchema = schema?.properties ?? {};
 
@@ -1065,6 +1141,7 @@ export function schemaToStudio(schema: JsonSchema, meta: StudioMeta): StudioScri
     if (spec.color) mapColors.set(spec.path, spec.color);
     if (spec.shape) mapShapes.set(spec.path, spec.shape);
     if (spec.points) mapPoints.set(spec.path, spec.points);
+    if (spec.movable !== undefined) mapMovable.set(spec.path, spec.movable !== false);
   }
 
   siblingLists = new Set(
@@ -1306,6 +1383,15 @@ function walkObject(
       walkObject(child, childPath, group, childServerOnly, out, overrides, mapPaths, {
         id: childPath,
         label: labelFor(key, child),
+        // `x-skill` says this block IS a levelling curve. The four numbers in
+        // it mean nothing on their own - nobody can read "modifier 1.4" and
+        // picture what it costs to reach level 10 - so the block draws the
+        // curve it describes underneath itself.
+        //
+        // Named, not just flagged, because a script can have several: fishing
+        // has one, a scrapyard's reputation is another, and they are edited on
+        // different pages of the same panel.
+        skill: typeof child?.['x-skill'] === 'string' ? child['x-skill'] : undefined,
       }, rowTabs);
       continue;
     }
@@ -1336,6 +1422,14 @@ function walkObject(
       // What the two sides of a `boolChoice` are called. The panel cannot
       // know that `useScenario: false` means a shovel.
       boolLabels: child?.['x-boolLabels'],
+      // What a slider calls its own steps, low to high. Without it every
+      // slider borrowed fishing's difficulty words, so a blip's SIZE read
+      // "Weak" at its smallest.
+      bandLabels: child?.['x-bandLabels'],
+      // How many numbers a place has. A zone corner is flat; an owner faces a
+      // way. Same control, different shape written back.
+      vectorDims: control === 'coords' ? vectorDims(child, fallback) : undefined,
+      propModel: typeof child['x-propModel'] === 'string' ? child['x-propModel'] : undefined,
       // "That is set over there." A setting can point at another script's
       // setting rather than describing where to find it in prose.
       goTo: child?.['x-goTo'],
@@ -1589,6 +1683,11 @@ function buildListEntry(
     mapShape: mapPaths.has(path) ? (mapPaths.shapes.get(path) ?? detectMapShape(rows)) : undefined,
     mapColor: mapPaths.has(path) ? mapPaths.colors.get(path) : undefined,
     mapPoints: mapPaths.has(path) ? mapPaths.points.get(path) : undefined,
+    // Can a pin on this layer be DRAGGED? `movable: false` on the x-mapPaths
+    // entry says the position is not map data - it is somewhere you stood,
+    // with a height and a heading a map cannot express - so the map shows it
+    // and the row editor sets it.
+    mapMovable: mapPaths.has(path) ? mapPaths.movable.get(path) : undefined,
     component: node?.['x-component'],
     componentFull: node?.['x-componentFull'] === true,
     group,

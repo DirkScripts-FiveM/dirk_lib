@@ -1,7 +1,8 @@
 import { alpha, Flex, NumberInput, Text, TextInput, useMantineTheme } from '@mantine/core';
 import {
-  Modal, blipUrlForSprite, fetchNui, getBlipColor, getBlipEntry, isEnvBrowser,
-  loadModels, useItems, useModels,
+  Modal, WorldPositionPicker, blipUrlForSprite, getBlipColor, getBlipEntry,
+  isEnvBrowser, loadModels, useItems, useModels,
+  type Vector4Value,
 } from 'dirk-cfx-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { PedArt } from './pedArt';
@@ -612,8 +613,19 @@ export function PickerDrawer({
 
           {type === 'coords' && (
             <Flex direction="column" gap="sm">
+              {/*
+                `w` only when the value HAS one.
+
+                The picker writes a heading, so hiding the field meant the one
+                number you cannot judge by eye was also the one you could not
+                see or correct. A zone corner has no heading, though, and
+                offering it a box to type one into is worse than not showing it.
+              */}
               <Flex gap="xs">
-                {(['x', 'y', 'z'] as const).map((axis) => (
+                {((draft as Record<string, unknown>)?.w !== undefined
+                  ? (['x', 'y', 'z', 'w'] as const)
+                  : (['x', 'y', 'z'] as const)
+                ).map((axis) => (
                   <Flex key={axis} direction="column" gap="0.3vh" style={{ flex: 1 }}>
                     <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.1em" c="rgba(255,255,255,0.35)">{axis}</Text>
                     <NumberInput
@@ -628,56 +640,53 @@ export function PickerDrawer({
                 ))}
               </Flex>
 
-              <Flex gap="xs">
-                <motion.button
-                  type="button"
-                  disabled={disabled || inBrowser}
-                  onClick={() => {
-                    // dirk_lib hides the panel, spawns a draggable preview and
-                    // returns the placed coords - the same flow fishing uses.
-                    fetchNui('START_POSITION_PICK', { current: draft });
-                    onClose();
-                  }}
-                  whileHover={disabled || inBrowser ? undefined : { background: alpha(color, 0.2) }}
-                  whileTap={disabled || inBrowser ? undefined : { scale: 0.98 }}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6vh',
-                    flex: 1, height: '3.6vh',
-                    background: alpha(color, 0.14),
-                    border: `0.1vh solid ${alpha(color, 0.4)}`,
-                    borderRadius: theme.radius.xs,
-                    cursor: disabled || inBrowser ? 'not-allowed' : 'pointer',
-                    opacity: disabled || inBrowser ? 0.5 : 1,
-                  }}
-                >
-                  <Crosshair size="1.6vh" color={color} />
-                  <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.06em" c={color}>{t('pickerDrawer.place_in_world', 'Place in world')}</Text>
-                </motion.button>
-                <motion.button
-                  type="button"
-                  disabled={disabled || inBrowser}
-                  onClick={() => fetchNui('TELEPORT_TO_POSITION', { coords: draft })}
-                  whileHover={disabled || inBrowser ? undefined : { background: alpha('#ffffff', 0.06) }}
-                  whileTap={disabled || inBrowser ? undefined : { scale: 0.98 }}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6vh',
-                    flex: 1, height: '3.6vh',
-                    background: 'transparent',
-                    border: `0.1vh solid ${alpha(theme.colors.dark[4], 0.5)}`,
-                    borderRadius: theme.radius.xs,
-                    cursor: disabled || inBrowser ? 'not-allowed' : 'pointer',
-                    opacity: disabled || inBrowser ? 0.5 : 1,
-                  }}
-                >
-                  <Navigation size="1.6vh" color="rgba(255,255,255,0.5)" />
-                  <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.06em" c="rgba(255,255,255,0.6)">{t('pickerDrawer.teleport_here', 'Teleport here')}</Text>
-                </motion.button>
+              {/*
+                The SHARED picker, not a local copy of one.
+
+                These two buttons were hand-rolled here and fired
+                `START_POSITION_PICK` / `TELEPORT_TO_POSITION` - callback names
+                no resource has ever registered. So the fetch went nowhere, the
+                drawer closed on top of it, and the Set button looked like it
+                did nothing. Meanwhile the real flow already existed and the
+                positions LIST two files over was using it correctly.
+
+                `WorldPositionPicker` speaks the `lib.adminTool` dispatch
+                (`ADMIN_TOOL_BEGIN { id: 'capturePosition' }` /
+                `ADMIN_TOOL_INVOKE { id: 'gotoCoord' }`), which is gated on the
+                panel actually being open - so neither the walk-and-set nor the
+                teleport is reachable from CEF devtools with the panel shut.
+              */}
+              <Flex gap="xs" justify="flex-end">
+                <WorldPositionPicker
+                  value={draft as Vector4Value}
+                  onChange={(next: Vector4Value) => setDraft(next)}
+                />
               </Flex>
 
               <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.28)">
                 {inBrowser
-                  ? 'In game these hide the panel and drop a draggable preview at your feet — typing numbers is the fallback, not the workflow.'
-                  : 'Hides the panel and drops a draggable preview at your feet.'}
+                  ? t('pickerDrawer.set_hint_browser', 'In game, Set hides the panel and lets you walk to the spot — typing numbers is the fallback, not the workflow.')
+                  : t('pickerDrawer.set_hint', 'Set hides the panel so you can walk to the spot. Your heading is taken from the way you are facing.')}
+              </Text>
+            </Flex>
+          )}
+
+          {/*
+            A drawer that knows nothing about this type.
+
+            Every branch above is opt-in per control, so a field whose control
+            has no picker here opened an EMPTY modal - a header, two buttons and
+            a void, with nothing anywhere saying which type it could not draw.
+            That is indistinguishable from a picker whose contents failed to
+            load, which is the wrong thing to go looking for.
+          */}
+          {!DRAWABLE.has(type) && (
+            <Flex direction="column" align="center" gap="0.6vh" py="xl">
+              <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.55)">
+                {t('pickerDrawer.no_picker', 'No picker for this field')}
+              </Text>
+              <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.3)">
+                {`type: ${String(type)}`}
               </Text>
             </Flex>
           )}
@@ -699,6 +708,9 @@ export function PickerDrawer({
     </Modal>
   );
 }
+
+/** The types this drawer actually draws something for. */
+const DRAWABLE = new Set<string>(['item', 'coords', 'icon', 'blipColor', 'blipSprite', 'ped']);
 
 const PICKER_META: Partial<Record<ControlType, { icon: React.ElementType; title: string }>> = {
   keybind: { icon: Keyboard, title: 'Rebind key' },

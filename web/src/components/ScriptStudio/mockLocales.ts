@@ -8,7 +8,16 @@
 
 import type { LocaleBundles } from './studioLocale';
 
+// projectCars' REAL bundle, not a hand-written sample.
+//
+// Its schema is where the newest annotations land, and a hand-copied handful
+// of keys meant the browser showed prettified schema English while the game
+// showed the translation - so the one place the panel gets looked at before
+// it ships was the one place that could not show a missing key.
+import projectCarsEn from './fixtures/dirk_projectCars.en.json';
+
 export const MOCK_LOCALES: LocaleBundles = {
+  dirk_projectCars: { en: projectCarsEn as Record<string, string> },
   dirk_fishing: {
     en: {
       'sections.general.label': 'General',

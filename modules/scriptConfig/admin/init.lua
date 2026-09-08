@@ -24,9 +24,24 @@ end
 
 local adminEditing = false
 
----@return boolean editing True while the scriptConfig admin panel is open.
+--- Is dirk_lib's OWN panel open?
+---
+--- The local flag is set by this VM's `dirk_lib:scriptConfigOpened`, which
+--- fires for the resource whose settings were opened. Script Studio is one
+--- panel over every script, so dirk_lib's own VM can be hosting the page for
+--- somebody else's settings and never see that event. Asking dirk_lib
+--- directly covers that; the local flag covers a consumer's own UI.
+---
+--- pcall'd because this file also loads on the server, where the export does
+--- not exist and a hard error would take the caller with it.
+local function libPanelOpen()
+  local ok, open = pcall(function() return exports.dirk_lib:isDirkAdminUiOpen() end)
+  return ok and open == true
+end
+
+---@return boolean editing True while a scriptConfig admin panel is open.
 function lib.adminTool.isEditing()
-  return adminEditing
+  return adminEditing or libPanelOpen()
 end
 
 AddEventHandler('dirk_lib:scriptConfigOpened', function()
@@ -69,27 +84,47 @@ function lib.adminTool.register(id, kind, fn)
   handlers[kind][id] = fn
 end
 
+--- Why a dispatch went nowhere.
+---
+--- Every refusal below used to be a bare `return`, which is right for the
+--- SECURITY case — a devtools call should get nothing back — and wrong for
+--- everyone else, because the two failures that actually happen in
+--- development look identical to it from the UI: the panel is not registered
+--- as open, or nothing ever registered that tool id. Both present as "the
+--- button does nothing", with not one line anywhere saying so.
+---
+--- Warn, do not error: this is reachable from the NUI, so it must not become
+--- a way to spam the console into uselessness. One line, naming the id.
+local function refuse(kind, id, why)
+  lib.print.warn(('[adminTool] %s "%s" ignored — %s'):format(kind, tostring(id), why))
+end
+
 RegisterNUICallback('ADMIN_TOOL_BEGIN', function(data, cb)
   cb({})
-  if not adminEditing then return end
-  if type(data) ~= 'table' or type(data.id) ~= 'string' then return end
-  local handler = handlers.begin[data.id]
-  if type(handler) == 'function' then handler(data) end
+  local id = type(data) == 'table' and data.id or nil
+  if not lib.adminTool.isEditing() then return refuse('begin', id, 'the config panel is not open') end
+  if type(id) ~= 'string' then return refuse('begin', id, 'no tool id was sent') end
+  local handler = handlers.begin[id]
+  if type(handler) ~= 'function' then return refuse('begin', id, 'no tool registered under that id') end
+  handler(data)
 end)
 
 RegisterNUICallback('ADMIN_TOOL_INVOKE', function(data, cb)
   cb({})
-  if not adminEditing then return end
-  if type(data) ~= 'table' or type(data.id) ~= 'string' then return end
-  local handler = handlers.invoke[data.id]
-  if type(handler) == 'function' then handler(data) end
+  local id = type(data) == 'table' and data.id or nil
+  if not lib.adminTool.isEditing() then return refuse('invoke', id, 'the config panel is not open') end
+  if type(id) ~= 'string' then return refuse('invoke', id, 'no tool id was sent') end
+  local handler = handlers.invoke[id]
+  if type(handler) ~= 'function' then return refuse('invoke', id, 'no tool registered under that id') end
+  handler(data)
 end)
 
 RegisterNUICallback('ADMIN_TOOL_QUERY', function(data, cb)
-  if not adminEditing then return cb(nil) end
-  if type(data) ~= 'table' or type(data.id) ~= 'string' then return cb(nil) end
-  local handler = handlers.query[data.id]
-  if type(handler) ~= 'function' then return cb(nil) end
+  local id = type(data) == 'table' and data.id or nil
+  if not lib.adminTool.isEditing() then refuse('query', id, 'the config panel is not open') return cb(nil) end
+  if type(id) ~= 'string' then refuse('query', id, 'no tool id was sent') return cb(nil) end
+  local handler = handlers.query[id]
+  if type(handler) ~= 'function' then refuse('query', id, 'no tool registered under that id') return cb(nil) end
   local ok, result = pcall(handler, data)
   if not ok then
     lib.print.warn(('adminTool query [%s] errored: %s'):format(data.id, tostring(result)))
@@ -101,6 +136,7 @@ end)
 -- Load every tool. Adding a new one = drop a new file in tools/ and add
 -- one require line below — no central registry to wire up.
 require '@dirk_lib/modules/scriptConfig/admin/tools/position'
+require '@dirk_lib/modules/scriptConfig/admin/tools/object'
 require '@dirk_lib/modules/scriptConfig/admin/tools/models'
 require '@dirk_lib/modules/scriptConfig/admin/tools/players'
 

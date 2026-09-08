@@ -2,12 +2,13 @@ import { alpha, Flex, Text, TextInput, Tooltip, useMantineTheme } from '@mantine
 import { ConfirmModal, isEnvBrowser, useSettings } from 'dirk-cfx-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  AlertTriangle, Anchor, ArrowRight, Banknote, Box, Braces, Car, ChevronRight, Droplets, Fish, Gamepad2, History, Home, Image, LayoutTemplate, Library, Lightbulb, Link as LinkIcon, ListRestart, Lock, Map as MapIcon, MessageCircle, Music, Package, Palette, Plug, Radar, Redo2, RefreshCw, RotateCcw, ScrollText, Search, Shield, Shovel, SlidersHorizontal, Sprout, Store, Target, TrendingUp, Trophy, Undo2, User, Users, Utensils, Waves, Wrench, X,
+  AlertTriangle, Anchor, ArrowRight, Banknote, Box, Braces, Car, ChevronRight, Droplets, Fish, Gamepad2, History, Home, Image, Info, LayoutTemplate, Library, Lightbulb, Link as LinkIcon, ListRestart, Lock, Map as MapIcon, MessageCircle, Music, Package, Palette, Plug, Radar, Redo2, RefreshCw, RotateCcw, ScrollText, Search, Shield, Shovel, SlidersHorizontal, Sprout, Store, Target, TrendingUp, Trophy, Undo2, User, Users, Utensils, Waves, Wrench, X,
 } from 'lucide-react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { Fragment, memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNuiEvent } from '../../hooks/useNuiEvent';
 import { forgetComponents } from './CustomControl';
+import { useCompactHelp } from './compactHelp';
 import { fetchNui } from '../../utils/fetchNui';
 import { ControlsControl, SettingControl, controlSize, isWideType } from './Controls';
 import { ListRows } from './ListRows';
@@ -39,10 +40,11 @@ import { FieldValidator } from './FieldValidator';
 import { Icon } from './Icon';
 import { PickerDrawer, opensPicker } from './PickerDrawer';
 import { SearchResults } from './SearchResults';
+import { SearchLinks, type SearchLink } from './SearchLinks';
 import { ScriptPage } from './ScriptPage';
 import { Chip, StudioButton } from './ui';
 import {
-  commitDraft, dirtyCount, discardDraft, effectiveValue, factoryReset, isEnabled, isModified, isStaged, matchesSearch, redo, revertToDefault, sectionValues, setValue, undo, useStudio,
+  commitDraft, dirtyCount, discardDraft, effectiveValue, factoryReset, isEnabled, isModified, isStaged, matchesSearch, redo, revertToDefault, rowMatches, sectionValues, setValue, undo, useStudio,
 } from './store';
 import { loadLocales, sectionKey, settingKey, translate, useActiveLanguage, useBundles, useChrome } from './studioLocale';
 import type { SettingEntry, SettingGroup, StudioScript } from './types';
@@ -51,7 +53,7 @@ import { useAdminToolStore } from 'dirk-cfx-react';
 import { ChangelogPage } from './ChangelogPage';
 import { TestsPage } from './TestsPage';
 import { useAnnouncedResources } from './Dispatch';
-import { BASIC_CHILD, MAP_CHILD, tabsAsList } from './types';
+import { BASIC_CHILD, MAP_CHILD, SKILL_CHILD, tabsAsList } from './types';
 import { Toasts } from './Toasts';
 
 // Icons resolve by name from the whole lucide set - see ./Icon. Re-exported
@@ -339,7 +341,7 @@ export default function ScriptStudio() {
    * have - so the click opened the right script on its first section and
    * stopped there. Selecting is one render; jumping is the next.
    */
-  const pendingJump = useRef<{ resource: string; group: string } | null>(null);
+  const pendingJump = useRef<{ resource: string; group: string; list?: string; rowPath?: string; row?: number } | null>(null);
   /**
    * Bumped whenever `pendingJump` is set from outside the render that
    * consumes it.
@@ -388,6 +390,8 @@ export default function ScriptStudio() {
     [script, byGroup],
   );
 
+
+
   /**
    * Sections that ARE a workspace - a map, a script's own editor.
    *
@@ -412,6 +416,82 @@ export default function ScriptStudio() {
     }
     return ids;
   }, [populatedGroups, byGroup]);
+
+  /**
+   * Matches the pane cannot show, as links.
+   *
+   * A workspace section is not in the scroll - it replaces it - so a match
+   * inside one had nowhere to appear. The rail lit up and the pane said
+   * nothing, and finding the thing meant clicking the section and then hunting
+   * the tab. These name the row that matched, say where it is, and go there.
+   *
+   * Built AFTER the workspace set is known, so it lists exactly the sections
+   * the filtered pane is going to leave out.
+   */
+  const searchLinks = useMemo(() => {
+    const needle = query.trim();
+    if (!needle || !script) return [];
+
+    const out: SearchLink[] = [];
+    for (const group of populatedGroups) {
+      if (!workspaceGroups.has(group.id)) continue;
+
+      const label = groupLabels.get(group.id) ?? group.label;
+      for (const entry of byGroup.get(group.id) ?? []) {
+        for (const hit of rowMatches(entry, needle)) {
+          out.push({
+            title: hit.title,
+            section: label,
+            tab: hit.tab,
+            within: hit.within,
+            icon: group.icon,
+            /*
+              Through `pendingJump`, the same road the cross-script results
+              take — not a direct call.
+
+              Two goes at this landed on Basic instead, because a direct jump
+              skips the one thing that makes the existing links work: the effect
+              that consumes `pendingJump` REFUSES to move while a search is
+              still on (`if (query) return`). `deferredSearch` lags a render, so
+              jumping immediately scrolls a pane that is still filtered, and it
+              snaps back to the top the moment it unfilters.
+
+              So: state the destination, clear the search, and let the effect
+              fire it when the pane has actually settled. The list is carried
+              along with it, which is the only thing this needed that the
+              cross-script version did not.
+            */
+            go: () => {
+              pendingJump.current = {
+                resource: script.resource,
+                group: group.id,
+                // A MAP section's rail child is `MAP_CHILD`, not the entry's
+                // own path — the map is one canvas shared by every polygon
+                // layer, so it has a single identity rather than one per list.
+                // Passing the path set `activeList` to something no tab could
+                // ever match, the request sat there unconsumed, and the section
+                // fell back to its Basic tab. That is the whole of "it went to
+                // scrapyards/basic".
+                list: entry.type === 'zones' ? MAP_CHILD : entry.path,
+                // The ROW still belongs to its own layer, so this stays the
+                // real path — ZoneMap matches its layers on it.
+                rowPath: entry.path,
+                // The result named a ROW, so land on the row - not the list it
+                // happens to sit in, and not the section above that. Answered
+                // by whichever editor owns the list, so it works the same on a
+                // plain list and on a map.
+                row: hit.index,
+              };
+              setJumpNonce((n) => n + 1);
+              setSearch('');
+            },
+          });
+        }
+      }
+    }
+    // A screenful of "it is over there" is a list, not a hint.
+    return out.slice(0, 6);
+  }, [query, script, populatedGroups, workspaceGroups, byGroup, groupLabels]);
 
   /** The scrolling stack: everything that is not a workspace. */
   const visibleGroups = useMemo(
@@ -444,9 +524,19 @@ export default function ScriptStudio() {
       // scrolling page. The layers stay together under a single Zones child —
       // splitting them would defeat the shared canvas.
       const mapLayers = groupEntries.filter((entry) => entry.type === 'zones');
-      const looseSettings = loose.filter((entry) => entry.type !== 'zones');
 
-      if (isWorkspace && mapLayers.length > 0 && looseSettings.length > 0) {
+      // A levelling curve is a PAGE, not a paragraph. Left among the loose
+      // settings it sits under Basic with everything else and the chart beside
+      // it gets a third of the width — so it comes out and gets its own child,
+      // the same way the map does.
+      const skillBlock = groupEntries.find((entry) => entry.subgroup?.skill);
+      const skillLabel = skillBlock?.subgroup?.label;
+      const isSkill = (entry: SettingEntry) => !!entry.subgroup?.skill;
+
+      const looseSettings = loose.filter(
+        (entry) => entry.type !== 'zones' && !isSkill(entry));
+
+      if (isWorkspace && mapLayers.length > 0 && (looseSettings.length > 0 || skillBlock)) {
         // Every OTHER list in the section still gets its own place.
         //
         // This branch used to offer Basic and the map and nothing else, so a
@@ -468,6 +558,13 @@ export default function ScriptStudio() {
             count: Array.isArray(entry.value) ? entry.value.length : 0,
             list: entry.path,
           })),
+          // The curve, when this section has one.
+          ...(skillBlock ? [{
+            id: SKILL_CHILD,
+            label: skillLabel ?? t('main.levels', 'Levels'),
+            count: groupEntries.filter(isSkill).length,
+            list: SKILL_CHILD,
+          }] : []),
           {
             id: MAP_CHILD,
             // Named after what is ON the map when there is only one layer, so
@@ -628,6 +725,11 @@ export default function ScriptStudio() {
   const [pinned, setPinned] = useState<number[]>([]);
   const hoverTimer = useRef<number | undefined>(undefined);
 
+  // How tall the scrolling pane is, so the tail spacer below the list can be
+  // sized. Measured rather than assumed: the panel is sized in vh and the
+  // window is whatever the player's screen is.
+  const [viewHeight, setViewHeight] = useState(0);
+
   const pinSection = useCallback((index: number) => {
     setPinned((prev) => (prev[0] === index ? prev : [index, ...prev.filter((i) => i !== index)].slice(0, 4)));
   }, []);
@@ -641,6 +743,8 @@ export default function ScriptStudio() {
   const cancelPrefetch = useCallback(() => clearTimeout(hoverTimer.current), []);
 
   const jumpAnim = useRef<number | null>(null);
+  /** The lighter watch that keeps a finished jump in place - see `hold`. */
+  const holdAnim = useRef<number | null>(null);
   const jumping = useRef(false);
 
   const virtualizer = useVirtualizer({
@@ -672,6 +776,19 @@ export default function ScriptStudio() {
   });
 
   const items = virtualizer.getVirtualItems();
+
+  // Same deps as the scroll listener below, and for the same reason: a
+  // workspace or a full page replaces the pane, so the element this measures
+  // is a different one each time.
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const read = () => setViewHeight(container.clientHeight);
+    read();
+    const observer = new ResizeObserver(read);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [open, activePage, openWorkspace?.id]);
 
   // Which section is being read: the last one starting above the fold. Comes
   // from measurements the virtualiser already holds, so no layout reads here.
@@ -781,6 +898,7 @@ export default function ScriptStudio() {
   // jumpTo re-enters itself after closing a page, so it reaches its own latest
   // identity through a ref rather than listing itself as a dependency
   const jumpToRef = useRef<(groupId: string, subgroupId?: string, keepList?: boolean) => void>(() => {});
+  const jumpToSubgroupRef = useRef<(groupId: string, subgroupId: string, listPath?: string) => void>(() => {});
 
   /**
    * Scroll to a sub-block within its section.
@@ -896,9 +1014,17 @@ export default function ScriptStudio() {
 
     setActiveGroup(groupId);
     if (jumpAnim.current !== null) cancelAnimationFrame(jumpAnim.current);
+    if (holdAnim.current !== null) cancelAnimationFrame(holdAnim.current);
     jumping.current = true;
     setForcedIndex(index);
     pinSection(index);
+    // The LAST section too, because the tail spacer is sized from its height
+    // and a jump can only travel as far as the road that exists. Unmeasured,
+    // there is no spacer, the final screenful of scroll does not exist yet,
+    // and a jump to the end of the list stops short - then the background
+    // measuring pass (which stands down while a jump is in flight) adds the
+    // room a moment later with nothing left running to use it.
+    pinSection(visibleGroups.length - 1);
 
     const from = container.scrollTop;
     const startedAt = performance.now();
@@ -934,10 +1060,69 @@ export default function ScriptStudio() {
     // costs almost nothing, and long jumps cut straight there.
     const glide = Math.abs(initialTarget() - from) <= container.clientHeight * 1.5 ? 240 : 0;
 
+    /**
+     * Keep the landing while the rest of the list is still measuring.
+     *
+     * The jump has to LET GO before the background measuring pass will run at
+     * all - that pass stands down while a jump is in flight - and it is the
+     * pass that finally replaces the 700px estimate for every section ABOVE
+     * the target with a real height. Each one that changes moves the target
+     * with it, so a jump that landed perfectly slid most of a screen out of
+     * place a moment after it finished, and the rail highlight went with it.
+     *
+     * So this watches for the list resizing and puts the target back. It only
+     * acts on a resize, it gives up the moment the user scrolls themselves,
+     * and it is over in a couple of seconds.
+     */
+    const hold = (from: number) => {
+      let height = container.scrollHeight;
+      let mine = container.scrollTop;
+      const until = from + 2500;
+      const watch = (now: number) => {
+        if (now > until) { holdAnim.current = null; return; }
+        // The resize is checked FIRST, and the "did the user take over" test
+        // only runs on a frame where nothing resized. The browser's own scroll
+        // anchoring nudges scrollTop when content above changes - a couple of
+        // hundred pixels of it here - and reading that as a hand on the wheel
+        // is what made this watch give up on the exact frame it existed for.
+        if (container.scrollHeight !== height) {
+          height = container.scrollHeight;
+          const drift = realDelta();
+          if (drift !== null && Math.abs(drift) >= 1) container.scrollTop = clamp(container.scrollTop + drift);
+          mine = container.scrollTop;
+        } else if (Math.abs(container.scrollTop - mine) > 2) {
+          holdAnim.current = null;
+          return;
+        }
+        holdAnim.current = requestAnimationFrame(watch);
+      };
+      holdAnim.current = requestAnimationFrame(watch);
+    };
+
     let settled = 0;
+    // The list keeps resizing under the jump. Every section that swaps its
+    // 700px estimate for a real height moves everything below it - the target
+    // included - and the background warming pass carries on doing that for a
+    // second or two after the jump has "finished". Landing before that stops
+    // means landing on a number that is about to change, which is how a jump
+    // to the far end of a long script arrived a screen and a half short.
+    //
+    // So the settle is not on a fixed clock: any change in the scroll height
+    // reopens the window, up to a hard ceiling so a script that never stops
+    // measuring cannot hold the pane forever.
+    const CEILING = 6000;
+    let lastHeight = container.scrollHeight;
+    let deadline = startedAt + glide + SETTLE;
 
     const step = (now: number) => {
       const elapsed = now - startedAt;
+
+      const height = container.scrollHeight;
+      if (height !== lastHeight) {
+        lastHeight = height;
+        settled = 0;
+        deadline = Math.min(now + SETTLE, startedAt + glide + CEILING);
+      }
 
       if (elapsed < glide) {
         const t = elapsed / glide;
@@ -960,11 +1145,12 @@ export default function ScriptStudio() {
         }
       }
 
-      if (settled >= 3 || elapsed > glide + SETTLE) {
+      if (settled >= 3 || now > deadline) {
         jumpAnim.current = null;
         jumping.current = false;
         setForcedIndex(null);
         setHeadingGone(false);
+        hold(now);
         return;
       }
       jumpAnim.current = requestAnimationFrame(step);
@@ -991,17 +1177,44 @@ export default function ScriptStudio() {
     // render - so jumping straight away scrolled a list that was still
     // filtered, and the pane snapped back when it unfiltered a tick later.
     if (query) return;
-    if (!visibleGroups.some((group) => group.id === want.group)) return;
+    // `populatedGroups`, NOT `visibleGroups`.
+    //
+    // `visibleGroups` is `populatedGroups` with the workspaces filtered OUT -
+    // they are not in the scroll, they replace it - so this guard could never
+    // pass for a workspace target and the jump simply never happened. You
+    // clicked a result and stayed wherever you were, which read as the link
+    // going to Basic.
+    //
+    // The guard is only here to prove the script on screen is the right one.
+    // A workspace needs no anchor to scroll to; `jumpTo` switches to it.
+    if (!populatedGroups.some((group) => group.id === want.group)) return;
 
     pendingJump.current = null;
     // Two frames: the pane has just gone from one section to all of them, and
     // the virtualiser measures on the frame after that.
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => jumpToRef.current(want.group));
+      requestAnimationFrame(() => {
+        // A list was named, so land IN it rather than on the section — a
+        // workspace opens on whichever of its lists you were last in
+        // otherwise, which is not where the result was.
+        if (want.list) jumpToSubgroupRef.current(want.group, want.list, want.list);
+        else jumpToRef.current(want.group);
+
+        // Asked for AFTER the section switch, so the editor that answers it is
+        // mounted by the time it looks. Both row editors watch this; whichever
+        // owns the list picks it up and the other ignores it.
+        if (want.rowPath && want.row !== undefined) {
+          useStudio.setState({ openRowRequest: { path: want.rowPath, index: want.row } });
+        }
+      });
     });
-  }, [script, visibleGroups, query, jumpNonce]);
+  }, [script, visibleGroups, populatedGroups, query, jumpNonce]);
 
   jumpToRef.current = jumpTo;
+  // Through a ref for the same reason `jumpTo` is: the search links are built
+  // above where `jumpToSubgroup` is defined, and a link is only ever called
+  // after render anyway.
+  jumpToSubgroupRef.current = jumpToSubgroup;
 
   useEffect(() => () => {
     if (jumpAnim.current !== null) cancelAnimationFrame(jumpAnim.current);
@@ -1158,10 +1371,27 @@ export default function ScriptStudio() {
                 {(activePage || (query && populatedGroups.length === 0)) && query ? (
                   <SearchResults
                     query={query}
-                    onOpen={(resource, group) => {
+                    onOpen={(resource, group, target) => {
                       useStudio.setState({ activeResource: resource, activePage: null });
                       setSearch('');
-                      pendingJump.current = { resource, group };
+                      // Same shape the in-script cards build, including the
+                      // MAP_CHILD rule - a map section's rail child is not its
+                      // entry path, and getting that wrong is what left every
+                      // one of these landing on the section's Basic tab.
+                      const entry = target
+                        ? scripts.find((s) => s.resource === resource)
+                          ?.entries.find((e) => e.path === target.list)
+                        : undefined;
+                      pendingJump.current = target
+                        ? {
+                          resource,
+                          group,
+                          list: entry?.type === 'zones' ? MAP_CHILD : target.list,
+                          rowPath: target.list,
+                          row: target.row,
+                        }
+                        : { resource, group };
+                      setJumpNonce((n) => n + 1);
                     }}
                   />
                 ) : activePage === 'home' ? <HomePage />
@@ -1251,7 +1481,9 @@ export default function ScriptStudio() {
                     // itself, and the CSS glide fought every correction
                   }}
                 >
-                  {visibleGroups.length === 0 && (
+                  <SearchLinks links={searchLinks} />
+
+                  {visibleGroups.length === 0 && searchLinks.length === 0 && (
                     <Flex direction="column" align="center" justify="center" gap="xs" style={{ flex: 1, paddingTop: '18vh' }}>
                       <Search size="3vh" color="rgba(255,255,255,0.18)" />
                       <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.4)">
@@ -1344,6 +1576,26 @@ export default function ScriptStudio() {
                     );
                   })}
                   </Flex>
+
+                  {/* Room past the end, so the LAST sections can reach the top.
+                      Without it a script's final one or two sections physically
+                      cannot be scrolled under the heading - there is nothing
+                      below them to scroll - so a rail click or a search result
+                      landed as far down as the pane would go and the highlight
+                      settled on whichever section happened to be nearest the
+                      top instead. It read as "the link goes to the wrong
+                      place"; the link was right and the pane was out of road.
+
+                      Sized to exactly the shortfall: viewport minus the last
+                      section, so at the bottom of the scroll that section sits
+                      at the top and nothing further is blank. */}
+                  {(() => {
+                    const last = visibleGroups[visibleGroups.length - 1];
+                    const height = last && sizeCache.current.get(last.id);
+                    if (!height || viewHeight === 0) return null;
+                    const room = Math.max(0, viewHeight - height);
+                    return room > 0 ? <Flex style={{ height: room, flexShrink: 0 }} /> : null;
+                  })()}
 
                 </Flex>
 
@@ -2219,6 +2471,28 @@ function Sidebar({
                     }}
                   />
                 ))}
+
+                {/* The shared band lists dirk_lib's SECTIONS directly, which
+                    reads better than one clickable script wrapping one child -
+                    but flattening it also dropped every page that belongs to a
+                    script rather than to a section. dirk_lib's own changelog
+                    was unreachable from the panel entirely: it is in the index,
+                    it just had nothing to render it, because "What's new" only
+                    exists inside renderScript and the shared script never goes
+                    through it. */}
+                {changelogs.includes(entry.resource) && (
+                  <SharedSectionRow
+                    resource={entry.resource}
+                    group={{ id: '__changelog', icon: 'scroll-text', label: '' } as SettingGroup}
+                    label={t('main.changelog', "What's new")}
+                    count={0}
+                    active={activePage === 'changelog' && script.resource === entry.resource}
+                    onClick={() => {
+                      if (script.resource !== entry.resource) onPickScript(entry.resource);
+                      onPickPage('changelog');
+                    }}
+                  />
+                )}
               </Fragment>
             ))}
           </>
@@ -2304,9 +2578,56 @@ const SettingRow = memo(function SettingRow({
   const help = entry.help
     ? translate(bundles, language, resource, settingKey(entry.path, 'description'), entry.help)
     : undefined;
+
+  /**
+   * A dropdown's options and a slider's bands, in the panel's language.
+   *
+   * These come from the schema and the schema is English, so a fully
+   * translated panel still had English words inside its controls with no key
+   * to translate them by. Derived from the path like everything else:
+   *
+   *   settings.<path>.enum.<value>
+   *   settings.<path>.bands.<index>
+   *   settings.<path>.bool.true / .bool.false
+   *
+   * The last pair are a `boolChoice`'s two sides. They came straight off
+   * `x-boolLabels` untranslated, so a German panel still offered "Trowel
+   * (kneel)" and there was no key to fix it with.
+   *
+   * Row columns do the same in FieldRow - one field deeper in the key.
+   */
+  const localisedEntry = useMemo(() => {
+    if (!entry.options && !entry.bandLabels && !entry.boolLabels) return entry;
+    return {
+      ...entry,
+      options: entry.options?.map((option) => ({
+        ...option,
+        label: translate(
+          bundles, language, resource,
+          `settings.${entry.path}.enum.${option.value}`, option.label,
+        ),
+      })),
+      bandLabels: entry.bandLabels?.map((band, i) => translate(
+        bundles, language, resource,
+        `settings.${entry.path}.bands.${i}`, band,
+      )),
+      boolLabels: entry.boolLabels && {
+        true: translate(
+          bundles, language, resource,
+          `settings.${entry.path}.bool.true`, entry.boolLabels.true ?? '',
+        ) || undefined,
+        false: translate(
+          bundles, language, resource,
+          `settings.${entry.path}.bool.false`, entry.boolLabels.false ?? '',
+        ) || undefined,
+      },
+    };
+  }, [entry, bundles, language, resource]);
+
   const value = effectiveValue(resource, entry);
   const modified = isModified(resource, entry);
   const wide = isWideType(entry.type);
+  const compactHelp = useCompactHelp();
 
   /**
    * A control that asked for the whole workspace gets it.
@@ -2384,9 +2705,50 @@ const SettingRow = memo(function SettingRow({
           {entry.serverOnly && (
             <Chip label={t('main.server_only', 'Server only')} color="#4CC3DE" icon={Lock} />
           )}
+
+          {/* Narrow column: the description hides behind the same hover icon
+              the row editors use, rather than wrapping to a dozen lines and
+              pushing the control it belongs to out of sight. */}
+          {(help || compactHelp) && compactHelp && (
+            <Tooltip
+              label={(
+                <>
+                  {help}
+                  {/* The path lives in here too. On its own line under a
+                      half-width label it wrapped mid-word — "strictC /
+                      atchLevel" — and every row ended up a different height
+                      for the sake of a string nobody reads twice. */}
+                  <div style={{ marginTop: help ? '0.5vh' : 0, opacity: 0.55, fontFamily: 'monospace' }}>
+                    {entry.path}
+                    {modified ? `  ·  default: ${formatDefault(entry.default)}` : ''}
+                  </div>
+                </>
+              )}
+              position="top"
+              withArrow
+              multiline
+              w={300}
+              zIndex={10500}
+              styles={{
+                tooltip: {
+                  background: alpha(theme.colors.dark[7], 0.97),
+                  border: '0.1vh solid rgba(255,255,255,0.1)',
+                  color: 'rgba(255,255,255,0.75)',
+                  fontFamily: 'Akrobat SemiBold',
+                  fontSize: '1.2vh',
+                  padding: '0.6vh 0.8vh',
+                  lineHeight: 1.35,
+                },
+              }}
+            >
+              <Flex align="center" style={{ cursor: 'help' }}>
+                <Info size="1.3vh" color="rgba(255,255,255,0.35)" />
+              </Flex>
+            </Tooltip>
+          )}
         </Flex>
 
-        {help && (
+        {help && !compactHelp && (
           <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.45)" style={{ maxWidth: '82vh' }}>
             <Highlight text={help} query={query} />
           </Text>
@@ -2419,11 +2781,16 @@ const SettingRow = memo(function SettingRow({
           </motion.button>
         )}
 
-        <Flex align="center" gap="xs">
-          <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.22)">
-            <Highlight text={entry.path} query={query} />
-          </Text>
-          {modified && (
+        <Flex align="center" gap="xs" wrap="wrap" style={{ minWidth: 0 }}>
+          {/* The path and the default move to the hover icon in a narrow
+              column. Everything after them - a validator, an action, a gate
+              reason - stays, because those are things you act on. */}
+          {!compactHelp && (
+            <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.22)">
+              <Highlight text={entry.path} query={query} />
+            </Text>
+          )}
+          {modified && !compactHelp && (
             <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.3)">
               default: {formatDefault(entry.default)}
             </Text>
@@ -2475,7 +2842,7 @@ const SettingRow = memo(function SettingRow({
         {!wide && (
           <SettingControl
             type={entry.type}
-            entry={entry}
+            entry={localisedEntry}
             resource={resource}
             value={value}
             disabled={!canEdit}

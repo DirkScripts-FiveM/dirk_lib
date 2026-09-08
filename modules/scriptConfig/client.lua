@@ -659,6 +659,12 @@ exports('dirkStudioSnapshot', function()
     loaded = settingsLoaded,
     config = scriptConfig,
     client_version = clientVersion,
+    -- How many asks it took. The whole cold-boot bug was invisible because
+    -- nothing outside this file could see it: a client that gave up and ran on
+    -- defaults looked identical to one that never needed to retry. Exposed so a
+    -- test can assert the config arrived FIRST time, which is the only
+    -- statement that actually distinguishes a fixed server from a lucky one.
+    attempts = attempts,
   }
 end)
 

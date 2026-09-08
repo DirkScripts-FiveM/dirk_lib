@@ -52,9 +52,9 @@
     },
     {
       "id": "progression",
-      "label": "Progression",
+      "label": "Levels",
       "icon": "trending-up",
-      "description": "Levels and the XP curve.",
+      "description": "The XP curve, and what a level unlocks.",
       "paths": [
         "basic.skillSettings"
       ]
@@ -733,6 +733,29 @@
           "type": "object",
           "description": "Fishing skill / levelling configuration",
           "properties": {
+            "strictCatchLevel": {
+              "type": "boolean",
+              "default": true,
+              "description": "When on, players can only catch fish at or below their fishing level (matches the level required to sell). When off, fish up to 10 levels above the player can still be caught at a reduced rate, but they won't be sellable — leaving players with unsellable inventory. Default on (recommended)."
+            },
+            "curve": {
+              "type": "string",
+              "title": "Levelling style",
+              "default": "runescape",
+              "x-enum": [
+                "runescape",
+                "linear",
+                "quadratic",
+                "softcap"
+              ],
+              "x-enumLabels": {
+                "runescape": "Long haul (RuneScape)",
+                "linear": "Steady",
+                "quadratic": "Classic RPG",
+                "softcap": "Reachable"
+              },
+              "description": "The SHAPE of the climb.\n\nLong haul: early levels fly, the last few are a project.\nSteady: every level costs the same — predictable, and flat at the top.\nClassic RPG: cost grows with the square. A real climb without a cliff.\nReachable: steep early, easing near the top, for a ladder meant to be finished.\n\nSwitching takes nobody's XP away. Level is worked out from XP every time it is asked for, so everyone is simply re-read against the new shape."
+            },
             "baseLevel": {
               "type": "number",
               "default": 1,
@@ -772,13 +795,9 @@
               "minimum": 0,
               "maximum": 100,
               "description": "Extra XP percentage bonus for releasing a fish instead of keeping it (0–100%)"
-            },
-            "strictCatchLevel": {
-              "type": "boolean",
-              "default": true,
-              "description": "When on, players can only catch fish at or below their fishing level (matches the level required to sell). When off, fish up to 10 levels above the player can still be caught at a reduced rate, but they won't be sellable — leaving players with unsellable inventory. Default on (recommended)."
             }
-          }
+          },
+          "x-skill": "fishing"
         },
         "maxTrapsPerPlayer": {
           "type": "number",
@@ -2968,19 +2987,36 @@
             "type": "number",
             "minimum": 0,
             "maximum": 1,
-            "x-control": "chance"
+            "x-control": "chance",
+            "x-bandLabels": [
+              "Rarely",
+              "Sometimes",
+              "Often"
+            ]
           },
           "fightChance": {
             "type": "number",
             "minimum": 0,
             "maximum": 1,
-            "x-control": "chance"
+            "x-control": "chance",
+            "x-bandLabels": [
+              "Rarely",
+              "Sometimes",
+              "Often"
+            ]
           },
           "abundance": {
             "type": "number",
             "minimum": 0,
             "maximum": 2,
-            "x-control": "rarity"
+            "x-control": "rarity",
+            "x-bandLabels": [
+              "Very rare",
+              "Rare",
+              "Common",
+              "Plentiful",
+              "Everywhere"
+            ]
           },
           "weightLimits": {
             "x-validate": [
@@ -3138,7 +3174,12 @@
             "type": "number",
             "minimum": 0,
             "maximum": 1,
-            "x-control": "chance"
+            "x-control": "chance",
+            "x-bandLabels": [
+              "Rarely",
+              "Sometimes",
+              "Often"
+            ]
           },
           "minigameType": {
             "type": "string",
@@ -3196,7 +3237,12 @@
                 "chance": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1
+                  "maximum": 1,
+                  "x-bandLabels": [
+                    "Rarely",
+                    "Sometimes",
+                    "Often"
+                  ]
                 }
               },
               "required": [

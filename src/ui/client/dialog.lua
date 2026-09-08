@@ -186,6 +186,10 @@ function dialog:send()
       prevDialog  = self.prevDialog,
       audioFile   = self.audioFile,
       metadata    = self.metadata,
+      -- Standing with whoever is talking. The shape `lib.skill.progress`
+      -- returns, passed straight through — no conversion here, because a
+      -- translation layer between the two is where they drift apart.
+      skill       = self.skill,
       note        = self.note,
       noteTone    = self.noteTone,
       locked      = self.locked,
@@ -210,7 +214,7 @@ end
 --- dialogue that said "refused" once would say it forever. The handlers and the
 --- camera are not in this list and survive.
 local PER_STATE = {
-  'subtitle', 'dialogTone', 'metadata', 'note', 'noteTone',
+  'subtitle', 'dialogTone', 'metadata', 'skill', 'note', 'noteTone',
   'locked', 'closeLabel', 'expression', 'gesture', 'talking',
 }
 

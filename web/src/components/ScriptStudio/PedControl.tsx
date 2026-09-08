@@ -71,14 +71,77 @@ export function PedsField({
   );
 }
 
+/**
+ * ONE ped, picked the same way several are.
+ *
+ * The single-ped control was a plain text box — type the model name and hope —
+ * while the multi one right beside it had the portrait, the catalogue and the
+ * search. Same thing, twice, and only one of them usable.
+ *
+ * It reuses `PedListControl` with a list of one rather than drawing a second
+ * portrait card: that component already hides its arrows below two entries, so
+ * a single ped renders exactly as it should with nothing to keep in step.
+ */
+export function PedField({
+  value, onChange, disabled, label,
+}: {
+  value: unknown;
+  onChange: (next: string) => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  const t = useChrome();
+  const [picking, setPicking] = useState(false);
+  const model = typeof value === 'string' && value ? value : '';
+
+  return (
+    <>
+      <PedListControl
+        value={model ? [model] : []}
+        // Replaced, never appended — there is only ever one. Cleared to an
+        // empty string rather than dropped, so the field still exists and the
+        // picker can put somebody back.
+        onChange={(next) => onChange(next[0] ?? '')}
+        disabled={disabled}
+        onAdd={() => setPicking(true)}
+        addLabel={model
+          ? t('ped.change', 'Change ped')
+          : t('ped.choose', 'Choose ped')}
+      />
+
+      <AnimatePresence>
+        {picking && (
+          <PickerDrawer
+            type="ped"
+            label={label ?? t('ped.title', 'Ped model')}
+            value={model}
+            disabled={disabled}
+            onApply={(next) => onChange(String(next ?? '').trim())}
+            onClose={() => setPicking(false)}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 export function PedListControl({
-  value, onChange, disabled, onAdd,
+  value, onChange, disabled, onAdd, addLabel,
 }: {
   value: unknown;
   onChange: (next: string[]) => void;
   disabled?: boolean;
   /** opens the picker; the list itself does not own it */
   onAdd: () => void;
+  /**
+   * What the button SAYS.
+   *
+   * "Add ped" is right for a shortlist and wrong for a field that holds one:
+   * there is nothing to add to, only somebody to swap. The word is the whole
+   * difference between "this yard can have several owners" and "this yard has
+   * an owner", which is the thing the setting is trying to tell you.
+   */
+  addLabel?: string;
 }) {
   const theme = useMantineTheme();
   const t = useChrome();
@@ -193,7 +256,7 @@ export function PedListControl({
         >
           <Plus size="1.4vh" color={color} />
           <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.06em" c={color}>
-            {t('ped.add', 'Add ped')}
+            {addLabel ?? t('ped.add', 'Add ped')}
           </Text>
         </motion.button>
       )}

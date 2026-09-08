@@ -1,0 +1,3907 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-label": "Project Cars",
+  "x-icon": "car",
+  "x-sections": [
+    {
+      "id": "basic",
+      "label": "Basic",
+      "icon": "settings-2",
+      "description": "Core behaviour — plates, garage, fuel and the finished-car handover.",
+      "paths": [
+        "basic.debugMode",
+        "basic.plateFormat",
+        "basic.disableEngineMetadata",
+        "basic.defaultGarage",
+        "basic.despawnOnFinish",
+        "basic.defaultFuel",
+        "basic.manualItem",
+        "basic.easyTorqueMode"
+      ]
+    },
+    {
+      "id": "blueprints",
+      "label": "Blueprints",
+      "icon": "clipboard-list",
+      "description": "Which vehicles get a build sheet, and whether a blueprint is consumed on use.",
+      "paths": [
+        "blueprints"
+      ]
+    },
+    {
+      "id": "scrapSearch",
+      "label": "Scrap Search",
+      "icon": "search",
+      "description": "Searching wrecks for parts, blueprints and loot.",
+      "paths": [
+        "scrapSearch"
+      ]
+    },
+    {
+      "id": "barnFinds",
+      "label": "Barn Finds",
+      "icon": "warehouse",
+      "description": "Forgotten cars sitting in barns and lock-ups — where they turn up, what they cost, and how far an owner will come down.",
+      "workspace": true,
+      "paths": [
+        "barnFinds"
+      ]
+    },
+    {
+      "id": "scrapyards",
+      "label": "Scrapyards",
+      "icon": "recycle",
+      "description": "Yards that break cars for parts, buy what you pull off them, hand back what you lost, and take the flatbed off your hands.",
+      "workspace": true,
+      "paths": [
+        "scrapyards.enabled",
+        "scrapyards.paymentAccount",
+        "scrapyards.fullBasketBonus",
+        "scrapyards.recoveryFee",
+        "scrapyards.truckReturnReward",
+        "scrapyards.alertsEnabled",
+        "scrapyards.alertChance",
+        "scrapyards.printsEnabled",
+        "scrapyards.printDecayMinutes",
+        "scrapyards.gloveDrawables",
+        "scrapyards.locations",
+        "scrapyards.tiers",
+        "scrapyards.rep"
+      ]
+    },
+    {
+      "id": "interact",
+      "label": "Interact",
+      "icon": "mouse-pointer-click",
+      "description": "How players interact with cars, jack stands and stores, and the place/cancel keys.",
+      "paths": [
+        "interact"
+      ]
+    },
+    {
+      "id": "vehicleParts",
+      "label": "Vehicle Parts",
+      "icon": "wrench",
+      "description": "Every fittable part and what it costs to fit.",
+      "paths": [
+        "vehicleParts"
+      ],
+      "workspace": true
+    },
+    {
+      "id": "tools",
+      "label": "Tools",
+      "icon": "hammer",
+      "description": "Handheld tools used to fit and remove parts.",
+      "paths": [
+        "tools"
+      ],
+      "workspace": true
+    },
+    {
+      "id": "stores",
+      "label": "Stores",
+      "icon": "store",
+      "description": "Buy/sell shops, their peds, blips and stock.",
+      "paths": [
+        "stores"
+      ],
+      "workspace": true
+    },
+    {
+      "id": "lifts",
+      "label": "Lifts",
+      "icon": "arrow-up-from-line",
+      "description": "Placed vehicle lifts to raise a car on while building, as an alternative to jack stands.",
+      "paths": [
+        "lifts"
+      ],
+      "workspace": true
+    },
+    {
+      "id": "fluids",
+      "label": "Fluids",
+      "icon": "droplets",
+      "description": "Oils, coolants and brake fluids, and which vehicle classes each grade suits.",
+      "paths": [
+        "fluids"
+      ],
+      "workspace": true
+    },
+    {
+      "id": "fasteners",
+      "label": "Fasteners",
+      "icon": "bolt",
+      "description": "Which items are consumed as wheel nuts and general fixings.",
+      "paths": [
+        "fasteners"
+      ]
+    },
+    {
+      "id": "restrict",
+      "label": "Restrict",
+      "icon": "lock",
+      "description": "Who may start a project car, and where.",
+      "workspace": true,
+      "paths": [
+        "restrict"
+      ]
+    }
+  ],
+  "x-mapPaths": [
+    {
+      "path": "restrict.zones",
+      "shape": "polygon",
+      "color": "#5FD08A"
+    },
+    {
+      "path": "barnFinds.locations",
+      "shape": "marker",
+      "color": "#C9A227",
+      "points": [
+        {
+          "key": "vehicle",
+          "label": "Car",
+          "color": "#C9A227"
+        },
+        {
+          "key": "ped",
+          "label": "Owner",
+          "color": "#7aa2f7"
+        }
+      ],
+      "movable": false
+    },
+    {
+      "path": "scrapyards.locations",
+      "shape": "polygon",
+      "color": "#E07A5F"
+    },
+    {
+      "path": "scrapyards.pickups",
+      "shape": "marker",
+      "color": "#7aa2f7"
+    }
+  ],
+  "type": "object",
+  "description": "dirk_projectCars script settings schema. Defines structure, types, constraints and default values. Used by Lua at runtime and TypeScript at build time.",
+  "definitions": {
+    "range": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[min, max] band — a value is rolled inside this range."
+    },
+    "vector3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "[x, y, z] world position/rotation/offset."
+    },
+    "vector4": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "[x, y, z, w] world position — w is heading in degrees."
+    }
+  },
+  "properties": {
+    "basic": {
+      "type": "object",
+      "description": "Core project cars settings",
+      "properties": {
+        "debugMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Development mode. Barn finds ignore their chance and every spot goes live, so a flow can be walked without waiting on a roll. Turn this OFF on a live server."
+        },
+        "plateFormat": {
+          "type": "string",
+          "default": "11AAA111",
+          "description": "1 = Random Number 1-9 | A = Upper Case Letter A-Z | . = Random Letter or Number"
+        },
+        "disableEngineMetadata": {
+          "type": "boolean",
+          "default": true,
+          "description": "Disable the engine metadata system"
+        },
+        "defaultGarage": {
+          "type": "string",
+          "default": "pillboxgarage",
+          "description": "The default garage to use if none is specified"
+        },
+        "despawnOnFinish": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, the finished car is sent straight to the player's garage instead of being spawned at the workshop",
+          "x-control": "boolChoice",
+          "x-boolLabels": {
+            "true": "Send to garage",
+            "false": "Spawn at workshop"
+          }
+        },
+        "defaultFuel": {
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "The default fuel level to use if none is specified",
+          "x-control": "slider",
+          "x-bandLabels": [
+            "Empty",
+            "Quarter",
+            "Half",
+            "Three quarters",
+            "Full"
+          ]
+        },
+        "manualItem": {
+          "type": "string",
+          "default": "car_manual",
+          "description": "Item that opens The Car Builder's Manual — torque specs, tightening patterns and build reference. Empty = no manual item.",
+          "x-installItem": {
+            "label": "Car Builder's Manual",
+            "weight": 300,
+            "description": "A greasy workshop manual. Torque figures, tightening patterns and build notes for every model worth building.",
+            "useable": true,
+            "shouldClose": true
+          }
+        },
+        "easyTorqueMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Torque assist for wheel fitting. Guided: the readout colours as you near the right torque and ticks inside the window. Knowledge: the number alone — players learn each model's spec from the manual.",
+          "x-control": "boolChoice",
+          "x-boolLabels": {
+            "true": "Guided (colours + tick)",
+            "false": "Knowledge (number only)"
+          }
+        },
+        "vehicleImageCdn": {
+          "type": "string",
+          "default": "https://cdn.sky-systems.net/vehicles/%s.png",
+          "description": "Where the vehicle panel fetches car pictures. %s is replaced with the spawn name. Your own pictures go in the resource's vehicleImages/ folder (png, jpg, jpeg or webp, named by spawn name) and are used before this service — that is also how custom models get a picture."
+        },
+        "jackAnyVehicle": {
+          "type": "boolean",
+          "default": true,
+          "x-control": "boolChoice",
+          "x-boolLabels": {
+            "true": "Guided (colours + tick)",
+            "false": "Knowledge (number only)"
+          },
+          "description": "Let players put ANY vehicle on a jack, not just blueprint builds. Jacking a car up turns it into a project so it can be worked on, synced to other players, and — if it is an owned vehicle — remembered. Turn off to restrict work to blueprint builds only."
+        }
+      }
+    },
+    "blueprints": {
+      "type": "object",
+      "description": "Vehicle blueprint (build sheet) settings",
+      "properties": {
+        "oneTimeUse": {
+          "type": "boolean",
+          "default": true,
+          "description": "Consume the blueprint item when the vehicle is placed"
+        },
+        "vehicles": {
+          "type": "array",
+          "title": "Vehicles",
+          "x-arrayKey": "key",
+          "x-component": "web/build/studio/blueprint-list.js",
+          "x-componentFull": true,
+          "x-itemTitle": "name",
+          "x-rowOrder": [
+            "name",
+            "model",
+            "blueprintItem"
+          ],
+          "description": "Every vehicle this script can build. A row is either a named vehicle or a category rule — chosen when you add it, and stored on the row as `source` (with `category` for a rule). Both are managed by the list, not this form.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "What players see it called. Filled in from the model when you pick one.",
+                "x-enabledWhen": {
+                  "path": "self.source",
+                  "equals": "model"
+                },
+                "x-validate": [
+                  {
+                    "when": {
+                      "path": "self.source",
+                      "equals": "model"
+                    },
+                    "must": {
+                      "isSet": true
+                    },
+                    "message": "ErrVehicleNameRequired"
+                  }
+                ]
+              },
+              "model": {
+                "type": "string",
+                "x-control": "vehicle",
+                "description": "Spawn name",
+                "x-enabledWhen": {
+                  "path": "self.source",
+                  "equals": "model"
+                },
+                "x-validate": [
+                  {
+                    "when": {
+                      "path": "self.source",
+                      "equals": "model"
+                    },
+                    "must": {
+                      "isSet": true
+                    },
+                    "message": "ErrVehicleModelRequired"
+                  }
+                ]
+              },
+              "blueprintItem": {
+                "type": "string",
+                "x-itemPicker": true,
+                "description": "Item that unlocks this build. Leave empty for the generated blueprint_<model>."
+              }
+            }
+          },
+          "default": [
+            {
+              "source": "category",
+              "category": "luxury"
+            },
+            {
+              "source": "model",
+              "name": "Blista",
+              "model": "blista"
+            },
+            {
+              "source": "model",
+              "name": "Premier",
+              "model": "premier"
+            },
+            {
+              "source": "model",
+              "name": "Landstalker",
+              "model": "landstalker"
+            },
+            {
+              "source": "model",
+              "name": "Cognoscenti Cabrio",
+              "model": "cogcabrio"
+            },
+            {
+              "source": "model",
+              "name": "Dominator",
+              "model": "dominator"
+            },
+            {
+              "source": "model",
+              "name": "Sultan RS",
+              "model": "sultanrs"
+            },
+            {
+              "source": "model",
+              "name": "Adder",
+              "model": "adder"
+            },
+            {
+              "source": "model",
+              "name": "SandKing XL",
+              "model": "sandking"
+            },
+            {
+              "source": "model",
+              "name": "Burrito",
+              "model": "burrito3"
+            },
+            {
+              "source": "model",
+              "name": "Bati 801",
+              "model": "bati"
+            },
+            {
+              "source": "model",
+              "name": "BMX",
+              "model": "bmx"
+            }
+          ]
+        }
+      },
+      "x-workspace": true
+    },
+    "scrapSearch": {
+      "type": "object",
+      "description": "Scrapyard vehicle-wreck search settings",
+      "x-workspace": true,
+      "x-enabledWhen": {
+        "path": "scrapSearch.enabled",
+        "equals": true
+      },
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Master switch for searching scrap wrecks"
+        },
+        "interactType": {
+          "type": "string",
+          "enum": [
+            "target",
+            "interact"
+          ],
+          "default": "target",
+          "description": "How should the wrecked car be interacted with",
+          "x-enumLabels": {
+            "target": "Target",
+            "interact": "Interact prompt"
+          }
+        },
+        "interactDistance": {
+          "type": "number",
+          "default": 1.5,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "How close you must be to search a wreck"
+        },
+        "searchCooldown": {
+          "type": "number",
+          "default": 4,
+          "minimum": 0,
+          "description": "How long before the same wreck can be searched again",
+          "x-control": "duration",
+          "x-durationBase": "minutes"
+        },
+        "searchTime": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "description": "How long a single search takes",
+          "x-control": "duration",
+          "x-durationBase": "seconds"
+        },
+        "extraItems": {
+          "type": "array",
+          "x-arrayKey": "name",
+          "description": "Items a search can turn up alongside the parts",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-itemPicker": true
+              },
+              "amount": {
+                "$ref": "#/definitions/range",
+                "description": "How many of this item, when it is found"
+              },
+              "weight": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 50,
+                "x-control": "slider",
+                "description": "How common this is compared with the other items here",
+                "x-bandLabels": [
+                  "Rare",
+                  "Uncommon",
+                  "Common"
+                ]
+              }
+            }
+          },
+          "default": [
+            {
+              "name": "water",
+              "amount": [
+                1,
+                5
+              ],
+              "weight": 60
+            }
+          ],
+          "x-itemTitle": "name",
+          "x-rowOrder": [
+            "name",
+            "weight",
+            "amount"
+          ]
+        },
+        "models": {
+          "type": "array",
+          "x-arrayKey": "model",
+          "description": "Wrecked-vehicle prop models that can be searched, and the damage-stage variants each one can spawn as.",
+          "items": {
+            "type": "object",
+            "required": [
+              "model"
+            ],
+            "properties": {
+              "model": {
+                "x-control": "model",
+                "type": "string"
+              },
+              "damages": {
+                "type": "array",
+                "description": "Which damage-stage variants this wreck can spawn as. Leave empty for the undamaged prop.",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 30
+                },
+                "x-control": "pickList",
+                "x-enum": [
+                  0,
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  13,
+                  14,
+                  15,
+                  16,
+                  17,
+                  18,
+                  19,
+                  20,
+                  21,
+                  22,
+                  23,
+                  24,
+                  25,
+                  26,
+                  27,
+                  28,
+                  29,
+                  30
+                ],
+                "x-enumLabels": {
+                  "0": "Variant 0",
+                  "1": "Variant 1",
+                  "2": "Variant 2",
+                  "3": "Variant 3",
+                  "4": "Variant 4",
+                  "5": "Variant 5",
+                  "6": "Variant 6",
+                  "7": "Variant 7",
+                  "8": "Variant 8",
+                  "9": "Variant 9",
+                  "10": "Variant 10",
+                  "11": "Variant 11",
+                  "12": "Variant 12",
+                  "13": "Variant 13",
+                  "14": "Variant 14",
+                  "15": "Variant 15",
+                  "16": "Variant 16",
+                  "17": "Variant 17",
+                  "18": "Variant 18",
+                  "19": "Variant 19",
+                  "20": "Variant 20",
+                  "21": "Variant 21",
+                  "22": "Variant 22",
+                  "23": "Variant 23",
+                  "24": "Variant 24",
+                  "25": "Variant 25",
+                  "26": "Variant 26",
+                  "27": "Variant 27",
+                  "28": "Variant 28",
+                  "29": "Variant 29",
+                  "30": "Variant 30"
+                }
+              }
+            }
+          },
+          "default": [
+            {
+              "model": "prop_rub_carwreck_1",
+              "damages": [
+                1
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_2",
+              "damages": [
+                3,
+                4,
+                5
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_3",
+              "damages": [
+                9,
+                11,
+                12
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_4",
+              "damages": [
+                9,
+                11,
+                22
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_5",
+              "damages": [
+                0,
+                1,
+                7
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_6",
+              "damages": [
+                0,
+                1,
+                7
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_7",
+              "damages": [
+                1,
+                3,
+                6
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_8",
+              "damages": [
+                0,
+                1,
+                3
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_9",
+              "damages": [
+                2,
+                9,
+                12
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_10",
+              "damages": [
+                2,
+                9,
+                12
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_11",
+              "damages": [
+                22,
+                3,
+                4
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_12",
+              "damages": [
+                3,
+                6,
+                7
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_13",
+              "damages": [
+                2,
+                5,
+                9
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_14",
+              "damages": [
+                0,
+                1,
+                2
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_15",
+              "damages": [
+                3,
+                4,
+                5
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_16",
+              "damages": [
+                2,
+                4,
+                6
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_17",
+              "damages": [
+                1,
+                22,
+                3
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_18",
+              "damages": [
+                4,
+                5,
+                6
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_19",
+              "damages": [
+                0,
+                1,
+                2
+              ]
+            },
+            {
+              "model": "prop_rub_carwreck_20",
+              "damages": [
+                3,
+                22,
+                5
+              ]
+            },
+            {
+              "model": "cs4_05_buswreck",
+              "damages": [
+                10,
+                11,
+                20
+              ]
+            },
+            {
+              "model": "prop_rub_buswreck_03",
+              "damages": [
+                10,
+                11,
+                20
+              ]
+            },
+            {
+              "model": "prop_rub_buswreck_06",
+              "damages": [
+                10,
+                11,
+                20
+              ]
+            },
+            {
+              "model": "prop_rub_buswreck_01",
+              "damages": [
+                10,
+                11,
+                20
+              ]
+            },
+            {
+              "model": "prop_rub_trukwreck_1",
+              "damages": [
+                10,
+                11,
+                20
+              ]
+            }
+          ],
+          "x-itemTitle": "model",
+          "x-rowOrder": [
+            "model",
+            "damages"
+          ]
+        },
+        "lootLevel": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.5,
+          "x-control": "generosity",
+          "description": "How worthwhile searching a wreck is. Sets how many random items turn up and how often a blueprint does."
+        }
+      }
+    },
+    "barnFinds": {
+      "type": "object",
+      "description": "Cars found rotting in barns and lock-ups. A find is a whole vehicle rather than a blueprint, and it is bought from whoever owns it — so the haggle, not the build, is the game here.",
+      "x-enabledWhen": {
+        "path": "barnFinds.enabled",
+        "equals": true
+      },
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether barn finds appear at all."
+        },
+        "maxActive": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "How many finds sit in the world at once. Spots are picked at random from Locations, so this is the number of them in play — not the number of places."
+        },
+        "respawnMinutes": {
+          "type": "number",
+          "default": 120,
+          "minimum": 0,
+          "description": "How long a spot rests after its car is taken before it can be picked again. 0 = it can come straight back."
+        },
+        "haggleAttempts": {
+          "type": "array",
+          "description": "[min, max] goes a player gets at talking the price down, rolled per find. Same spread every time makes every seller feel identical.",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "default": [
+            2,
+            4
+          ]
+        },
+        "haggleMaxDiscount": {
+          "type": "number",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 90,
+          "x-control": "percent",
+          "description": "The most a perfect haggle can take off the asking price, as a percentage."
+        },
+        "haggleWalkaway": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether pushing too hard can make the owner refuse to sell at all until the spot resets. Off = the worst outcome is paying full price."
+        },
+        "paymentAccount": {
+          "type": "string",
+          "enum": [
+            "cash",
+            "bank"
+          ],
+          "default": "cash",
+          "description": "Which account a barn find is paid from.",
+          "x-enumLabels": {
+            "cash": "Cash",
+            "bank": "Bank"
+          }
+        },
+        "truckModel": {
+          "type": "string",
+          "default": "flatbed",
+          "x-control": "vehicle",
+          "description": "What turns up to carry the car away. Needs a flat back — the car is attached to the bed."
+        },
+        "archetypes": {
+          "type": "array",
+          "title": "Sellers",
+          "x-arrayKey": "id",
+          "description": "The kinds of person who end up with a car in a barn. Each one has its own pool of dialogue in the locale file under `haggle.<id>.` — add a row here, write the lines there, and it works. No code.",
+          "x-rowControls": {
+            "give": "multiplier",
+            "wear": "multiplier",
+            "lines": {
+              "control": "custom",
+              "component": "web/build/studio/seller-lines.js"
+            }
+          },
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Lower case, no spaces. This IS the locale prefix: `farmer` reads `haggle.farmer.opener.1` and so on."
+              },
+              "label": {
+                "type": "string",
+                "description": "What an admin sees when picking this seller for a barn."
+              },
+              "give": {
+                "type": "number",
+                "default": 1,
+                "minimum": 0.1,
+                "maximum": 2,
+                "description": "How much ground he gives. Above 1 concedes more per argument, below 1 less.",
+                "x-bandLabels": [
+                  "Stubborn",
+                  "Firm",
+                  "Fair",
+                  "Soft",
+                  "Pushover"
+                ]
+              },
+              "wear": {
+                "type": "number",
+                "default": 1,
+                "minimum": 0.1,
+                "maximum": 3,
+                "description": "How fast he tires of being argued with. Above 1 runs out of patience sooner."
+              },
+              "lines": {
+                "type": "string",
+                "title": "Dialogue",
+                "description": "Which pools of lines this seller has. Written in the locale file, not here."
+              }
+            }
+          },
+          "default": [
+            {
+              "id": "farmer",
+              "label": "Farmer — it was the family's, and they're in no rush",
+              "give": 1,
+              "wear": 1
+            },
+            {
+              "id": "widow",
+              "label": "Widow — it hurts to sell, and she wants it over",
+              "give": 1.25,
+              "wear": 1.35
+            },
+            {
+              "id": "dealer",
+              "label": "Dealer — knows what it's worth and will wait",
+              "give": 0.7,
+              "wear": 0.8
+            }
+          ],
+          "x-rowTabs": [
+            {
+              "id": "who",
+              "label": "Seller",
+              "icon": "user",
+              "keys": [
+                "id",
+                "label",
+                "give",
+                "wear"
+              ]
+            },
+            {
+              "id": "lines",
+              "label": "Dialogue",
+              "icon": "message-square",
+              "keys": [
+                "lines"
+              ]
+            }
+          ]
+        },
+        "locations": {
+          "type": "array",
+          "title": "Locations",
+          "x-arrayKey": "id",
+          "x-rowControls": {
+            "vehicle": "coords",
+            "ped": "coords",
+            "chance": "chance",
+            "cars.model": "vehicle",
+            "cars.chance": "chance",
+            "pedModels": "peds",
+            "truck": "coords"
+          },
+          "description": "Every place a find can turn up. Each is two positions — the car and the person selling it — so they are set here rather than drawn; the map shows both pins and either can be dragged.",
+          "x-rowTabs": [
+            {
+              "id": "spot",
+              "label": "Spot",
+              "icon": "map-pin",
+              "keys": [
+                "id",
+                "label",
+                "vehicle",
+                "ped",
+                "truck",
+                "pedModels",
+                "archetype",
+                "chance"
+              ]
+            },
+            {
+              "id": "find",
+              "label": "The Find",
+              "icon": "car",
+              "keys": [
+                "cars"
+              ]
+            }
+          ],
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "vehicle",
+              "ped",
+              "truck",
+              "pedModels",
+              "cars"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "x-generateId": "barn"
+              },
+              "label": {
+                "type": "string",
+                "description": "What this place is called — shown to the player and used to name the pin."
+              },
+              "vehicle": {
+                "type": "object",
+                "description": "Where the car sits. Stand on the spot and set it — the heading is which way it faces.",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  }
+                }
+              },
+              "ped": {
+                "type": "object",
+                "description": "Where the owner stands. Usually a few metres off, so you walk up to a person rather than to a bonnet.",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  }
+                }
+              },
+              "truck": {
+                "type": "object",
+                "description": "Where the flatbed is waiting once you have bought it. Somewhere you can drive out of — not inside the barn.",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  }
+                }
+              },
+              "pedModels": {
+                "type": "array",
+                "title": "Ped Models",
+                "description": "Who might be standing there. One is picked when the spot goes live, so everyone sees the same person. Keep them all the same sort of person as the archetype below.",
+                "items": {
+                  "type": "string"
+                },
+                "default": [
+                  "a_m_m_farmer_01"
+                ]
+              },
+              "archetype": {
+                "type": "string",
+                "default": "farmer",
+                "description": "How this seller talks. Picks which pool of lines the haggle draws from.",
+                "x-optionsFrom": {
+                  "path": "barnFinds.archetypes",
+                  "key": "id",
+                  "labelKey": "label"
+                }
+              },
+              "chance": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 0.5,
+                "description": "How likely this spot is to be one of the live finds. A rare barn with a good car in it is what makes hunting them worth doing.",
+                "x-bandLabels": [
+                  "Rare",
+                  "Uncommon",
+                  "Common"
+                ]
+              },
+              "cars": {
+                "type": "array",
+                "title": "Cars",
+                "description": "What can turn up HERE. One is picked at random when the spot goes live, so a barn with one entry always has the same car and a barn with six is a lottery.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "model"
+                  ],
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "description": "The vehicle sitting in this barn."
+                    },
+                    "chance": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "default": 0.5,
+                      "description": "How likely this car is the one sitting there, weighed against the others in this list.",
+                      "x-bandLabels": [
+                        "Rare",
+                        "Uncommon",
+                        "Common"
+                      ]
+                    },
+                    "price": {
+                      "type": "array",
+                      "description": "[min, max] the owner opens at, before any haggling.",
+                      "items": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "default": [
+                        8000,
+                        25000
+                      ]
+                    },
+                    "condition": {
+                      "type": "array",
+                      "description": "[min, max] how much of the car is still on it. A low roll is a shell; a high one mostly needs recommissioning.",
+                      "items": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "default": [
+                        0.2,
+                        0.7
+                      ]
+                    }
+                  }
+                },
+                "default": [],
+                "minItems": 1
+              }
+            }
+          },
+          "default": [
+            {
+              "id": "barn_grapeseed",
+              "label": "Grapeseed Barn",
+              "vehicle": {
+                "x": 1902.5623779297,
+                "y": 4919.3735351562,
+                "z": 48.31322479248,
+                "w": 162.99534606934
+              },
+              "ped": {
+                "x": 1896.3792724609,
+                "y": 4917.3598632812,
+                "z": 47.834747314453,
+                "w": 258.50833129883
+              },
+              "truck": {
+                "x": 1897.9786376953,
+                "y": 4901.0268554688,
+                "z": 47.856506347656,
+                "w": 170.17987060547
+              },
+              "pedModels": [
+                "a_m_m_farmer_01",
+                "a_m_o_acult_01",
+                "a_m_m_hillbilly_01"
+              ],
+              "archetype": "farmer",
+              "chance": 1,
+              "cars": [
+                {
+                  "model": "dukes",
+                  "chance": 1,
+                  "price": [
+                    9000,
+                    18000
+                  ],
+                  "condition": [
+                    0.25,
+                    0.6
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "scrapyards": {
+      "type": "object",
+      "description": "Yards where cars are broken for parts. Public places, deliberately: legitimate traffic goes through them, so being at one proves nothing and police have to work out who was actually stripping. They are also where a lost vehicle is recovered and where a borrowed flatbed goes back.",
+      "x-enabledWhen": {
+        "path": "scrapyards.enabled",
+        "equals": true
+      },
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether scrapyards exist at all. Off hides every yard, and recovery with them."
+        },
+        "paymentAccount": {
+          "type": "string",
+          "default": "cash",
+          "description": "Which account a yard pays out of and takes recovery fees from."
+        },
+        "fullBasketBonus": {
+          "type": "number",
+          "default": 25,
+          "minimum": 0,
+          "maximum": 200,
+          "x-control": "percent",
+          "description": "Extra paid on a FULL basket, on top of the parts in it. This is what stops a crew taking the wheels and walking away — finishing the car is worth more per part than starting three."
+        },
+        "recoveryFee": {
+          "type": "number",
+          "default": 750,
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "What it costs to get a vehicle back from a yard after losing it — a crash mid-delivery, a truck destroyed, a disconnect. Set 0 to hand it back free."
+        },
+        "truckReturnReward": {
+          "type": "number",
+          "default": 250,
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "Paid for bringing a borrowed flatbed back to a yard, so the truck is worth returning rather than abandoning in a field."
+        },
+        "repPerPart": {
+          "type": "number",
+          "default": 6,
+          "minimum": 0,
+          "maximum": 500,
+          "description": "Standing earned for every part pulled off a car inside a yard's boundary. This is the whole of how rep is earned, so it is what decides how long the climb is."
+        },
+        "repStripBonus": {
+          "type": "number",
+          "default": 80,
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "Paid once when a car is stripped to a bare shell. Rewards finishing rather than pulling the two easy panels and walking."
+        },
+        "alertsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether stripping a car can bring the police."
+        },
+        "alertChance": {
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100,
+          "x-control": "percent",
+          "description": "The chance a part being pulled is noticed. Judged per PART, not on a timer — so dropping an engine out is a bigger risk than taking a bonnet off, and the noisy jobs are a decision rather than a stopwatch."
+        },
+        "printsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether stripping a car leaves fingerprints on it that police can lift. This is the counterweight to a yard being public: being there proves nothing, so police need a real reason to suspect someone."
+        },
+        "printDecayMinutes": {
+          "type": "number",
+          "default": 60,
+          "minimum": 0,
+          "maximum": 1440,
+          "description": "How long prints stay liftable. 0 means they never fade."
+        },
+        "gloveDrawables": {
+          "type": "array",
+          "title": "Gloves",
+          "description": "Hand drawable numbers that count as gloves. Wearing one of these leaves no prints. Add your own server's gloves here — the defaults are the base game's.",
+          "items": {
+            "type": "number"
+          },
+          "default": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ]
+        },
+        "locations": {
+          "type": "array",
+          "title": "Yards",
+          "x-arrayKey": "id",
+          "description": "Every scrapyard. The yard itself is an AREA drawn on the map — that boundary is what makes \"at a scrapyard\" a thing the script can answer, for drop-off rules and for the cover a public place gives. Everything inside it is a position set by standing on the spot: the owner, the basket, where a returned flatbed goes and where a recovered car appears.",
+          "x-rowControls": {
+            "ped": "coords",
+            "payRate": "multiplier",
+            "truck": "coords",
+            "blip.sprite": "blipSprite",
+            "blip.color": "blipColor",
+            "blip.display": "blipDisplay",
+            "pedModel": "ped"
+          },
+          "x-rowTabs": [
+            {
+              "id": "yard",
+              "label": "Yard",
+              "icon": "map-pin",
+              "keys": [
+                "id",
+                "label",
+                "speciality",
+                "payRate"
+              ]
+            },
+            {
+              "id": "spots",
+              "label": "Spots",
+              "icon": "crosshair",
+              "keys": [
+                "pedModel",
+                "ownerName",
+                "ped",
+                "truck",
+                "laptopModel",
+                "laptop"
+              ]
+            },
+            {
+              "id": "blip",
+              "label": "Blip",
+              "icon": "map",
+              "keys": [
+                "blipEnabled",
+                "blip"
+              ]
+            },
+            {
+              "id": "building",
+              "label": "Building",
+              "icon": "wrench",
+              "keys": [
+                "acceptsDeliveries"
+              ]
+            }
+          ],
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "zone",
+              "ped",
+              "pedModel",
+              "basket",
+              "truck",
+              "ownerName"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "x-generateId": "yard"
+              },
+              "label": {
+                "type": "string",
+                "description": "What this yard is called — shown to the player and used to name the area."
+              },
+              "zone": {
+                "type": "array",
+                "description": "The yard's boundary. DRAWN on the shared Script Studio map and edited there — it is deliberately absent from this form, because a list of coordinates is not something anyone should be typing. Everything inside it counts as being at this yard.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "default": []
+              },
+              "ped": {
+                "type": "object",
+                "description": "Where the yard's owner stands. Walk to the spot and set it.",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  }
+                }
+              },
+              "laptopModel": {
+                "type": "string",
+                "title": "Laptop model",
+                "default": "prop_laptop_01a",
+                "enum": [
+                  "prop_laptop_01a"
+                ],
+                "description": "Which prop the screen is drawn on. Only models this script knows the screen texture for can be used, which is why this is a list rather than a box.",
+                "x-enumLabels": {
+                  "prop_laptop_01a": "Open laptop"
+                }
+              },
+              "laptop": {
+                "type": "object",
+                "title": "Laptop position",
+                "x-control": "prop",
+                "description": "Where the laptop sits. Place one where you want it, or point at one the yard already has — whichever button you use is what the yard then does.",
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "y": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "z": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "w": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "rx": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "ry": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "existing": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "model": {
+                    "type": "string",
+                    "default": ""
+                  }
+                },
+                "x-propModel": "prop_laptop_01a"
+              },
+              "blipEnabled": {
+                "type": "boolean",
+                "title": "Show on map",
+                "default": true,
+                "description": "Whether this yard shows on the map. On by default, unlike barn finds — a yard is a business, and a place nobody can find is not cover for anything. Off greys out the settings below."
+              },
+              "blip": {
+                "type": "object",
+                "title": "Blip settings",
+                "description": "How the marker looks. Only read when the yard is shown on the map.",
+                "x-enabledWhen": {
+                  "path": "self.blipEnabled",
+                  "equals": true
+                },
+                "properties": {
+                  "sprite": {
+                    "type": "integer",
+                    "default": 446,
+                    "description": "The icon. 446 is the wrench the game uses for garages and workshops."
+                  },
+                  "color": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "The colour."
+                  },
+                  "scale": {
+                    "type": "number",
+                    "default": 0.7,
+                    "minimum": 0.1,
+                    "maximum": 2,
+                    "x-bandLabels": [
+                      "Tiny",
+                      "Small",
+                      "Normal",
+                      "Large",
+                      "Huge"
+                    ],
+                    "description": "How big it draws. 0.7 is the size the game uses for a shop."
+                  },
+                  "display": {
+                    "type": "integer",
+                    "default": 4,
+                    "description": "Where it shows. 4 is both the map and the minimap, which is what a business wants."
+                  }
+                }
+              },
+              "payRate": {
+                "type": "number",
+                "default": 1,
+                "minimum": 0.1,
+                "maximum": 3,
+                "description": "What this yard pays relative to a part's value. Below 1 is a poor price."
+              },
+              "speciality": {
+                "type": "array",
+                "title": "Speciality",
+                "description": "What this one is actually interested in. A speciality is why you build rep with more than the nearest yard — he pays over the odds for his own sort of car and the jobs he hands out are that sort. Leave it empty for a yard that takes anything.\n\nThese are the game's own vehicle classes, read off the model at runtime, so an addon car sorts itself without anyone listing it.",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "compacts",
+                    "sedans",
+                    "suvs",
+                    "coupes",
+                    "muscle",
+                    "sportsclassics",
+                    "sports",
+                    "super",
+                    "motorcycles",
+                    "offroad",
+                    "industrial",
+                    "utility",
+                    "vans",
+                    "commercial"
+                  ]
+                },
+                "x-enumLabels": {
+                  "compacts": "Compacts",
+                  "sedans": "Sedans",
+                  "suvs": "SUVs",
+                  "coupes": "Coupes",
+                  "muscle": "Muscle",
+                  "sportsclassics": "Sports Classics",
+                  "sports": "Sports",
+                  "super": "Super",
+                  "motorcycles": "Motorcycles",
+                  "offroad": "Off-road",
+                  "industrial": "Industrial",
+                  "utility": "Utility",
+                  "vans": "Vans",
+                  "commercial": "Commercial"
+                },
+                "default": []
+              },
+              "truck": {
+                "type": "object",
+                "description": "Where a flatbed sits at this yard. It does two jobs and they are the same spot: a borrowed truck is brought back here, and a vehicle being RECOVERED appears here already loaded on one — so getting a lost car back is another delivery to drive rather than a car that teleports into your lap. Leave it clear and drivable out of.",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  }
+                }
+              },
+              "acceptsDeliveries": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether a car being delivered can be unloaded here. Only matters when Restrictions is set to scrapyards only."
+              },
+              "pedModel": {
+                "type": "string",
+                "title": "Ped Model",
+                "x-control": "ped",
+                "default": "s_m_y_dealer_01",
+                "description": "Who runs this yard. One model, not a shortlist — you build rep with a PERSON, and a man who is someone different each restart is not someone you know."
+              },
+              "ownerName": {
+                "type": "string",
+                "title": "Owner Name",
+                "default": "The Manager",
+                "description": "What this person is CALLED. Shown on every prompt and at the top of the conversation.\n\nStated rather than guessed: reputation is held with a PERSON, so the name has to be the same every time — and only you know whether the ped you picked should be called Marcus or Maria."
+              }
+            }
+          },
+          "default": [
+            {
+              "id": "yard_lsia",
+              "label": "Cypress Flats",
+              "zone": [
+                {
+                  "x": 514.63903808594,
+                  "y": -1337.1409912109
+                },
+                {
+                  "x": 510.5256652832,
+                  "y": -1340.9132080078
+                },
+                {
+                  "x": 481.87197875977,
+                  "y": -1340.8229980469
+                },
+                {
+                  "x": 446.41802978516,
+                  "y": -1310.3781738281
+                },
+                {
+                  "x": 489.40780639648,
+                  "y": -1301.4510498047
+                }
+              ],
+              "ped": {
+                "x": 475.80114746094,
+                "y": -1315.8819580078,
+                "z": 28.205520629883,
+                "w": 280.10137939453
+              },
+              "blipEnabled": true,
+              "blip": {
+                "sprite": 446,
+                "color": 5,
+                "scale": 0.7,
+                "display": 4
+              },
+              "payRate": 1,
+              "speciality": [],
+              "truck": {
+                "x": 493.53356933594,
+                "y": -1320.7806396484,
+                "z": 29.329362869263,
+                "w": 346.73992919922
+              },
+              "acceptsDeliveries": true,
+              "pedModel": "s_m_y_dealer_01",
+              "ownerName": "Sal",
+              "laptopModel": "prop_laptop_01a",
+              "laptop": {
+                "x": 471.4666442871094,
+                "y": -1310.9898681640625,
+                "z": 29.23751640319824,
+                "w": 111.87600708007812,
+                "rx": 0,
+                "ry": 0,
+                "existing": true,
+                "model": "prop_laptop_01a"
+              }
+            }
+          ]
+        },
+        "tiers": {
+          "type": "array",
+          "title": "Rep Tiers",
+          "x-arrayKey": "id",
+          "description": "What a yard will trust you with, and when. Rep is held PER YARD, so work done for one man means nothing to another. Each tier unlocks the cars he will send you after and what he pays for the job.",
+          "x-rowControls": {
+            "payMultiplier": "multiplier",
+            "cars.model": "vehicle",
+            "cars.chance": "chance"
+          },
+          "x-rowTabs": [
+            {
+              "id": "tier",
+              "label": "Tier",
+              "icon": "trending-up",
+              "keys": [
+                "id",
+                "label",
+                "rep",
+                "payMultiplier"
+              ]
+            },
+            {
+              "id": "cars",
+              "label": "Jobs",
+              "icon": "car",
+              "keys": [
+                "cars"
+              ]
+            }
+          ],
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "rep"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "x-generateId": "tier"
+              },
+              "label": {
+                "type": "string",
+                "description": "What an admin calls this tier. Players never see it."
+              },
+              "rep": {
+                "type": "number",
+                "default": 0,
+                "minimum": 0,
+                "maximum": 10000,
+                "description": "Rep with THIS yard needed before these jobs are offered."
+              },
+              "payMultiplier": {
+                "type": "number",
+                "default": 1,
+                "minimum": 0.1,
+                "maximum": 5,
+                "description": "What the parts off these cars are worth relative to normal."
+              },
+              "cars": {
+                "type": "array",
+                "title": "Cars",
+                "description": "What he sends you after at this tier. One is picked per job, weighted by chance, so a rare car stays rare.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "model"
+                  ],
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "x-control": "vehicle",
+                      "description": "Spawn name of the car to go and find."
+                    },
+                    "chance": {
+                      "type": "number",
+                      "default": 0.5,
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "How often this one comes up relative to the others in the tier.",
+                      "x-bandLabels": [
+                        "Rare",
+                        "Uncommon",
+                        "Common"
+                      ]
+                    }
+                  }
+                },
+                "default": []
+              }
+            }
+          },
+          "default": [
+            {
+              "id": "walkin",
+              "label": "Walk-in — whatever is going",
+              "rep": 0,
+              "payMultiplier": 1,
+              "cars": [
+                {
+                  "model": "asea",
+                  "chance": 0.9
+                },
+                {
+                  "model": "blista",
+                  "chance": 0.9
+                },
+                {
+                  "model": "futo",
+                  "chance": 0.7
+                },
+                {
+                  "model": "premier",
+                  "chance": 0.7
+                },
+                {
+                  "model": "washington",
+                  "chance": 0.6
+                },
+                {
+                  "model": "emperor",
+                  "chance": 0.8
+                }
+              ]
+            },
+            {
+              "id": "regular",
+              "label": "Regular — he has your number",
+              "rep": 250,
+              "payMultiplier": 1.3,
+              "cars": [
+                {
+                  "model": "sultan",
+                  "chance": 0.7
+                },
+                {
+                  "model": "buffalo",
+                  "chance": 0.6
+                },
+                {
+                  "model": "gauntlet",
+                  "chance": 0.6
+                },
+                {
+                  "model": "dominator",
+                  "chance": 0.5
+                },
+                {
+                  "model": "sentinel",
+                  "chance": 0.5
+                }
+              ]
+            },
+            {
+              "id": "trusted",
+              "label": "Trusted — the jobs he does not advertise",
+              "rep": 1000,
+              "payMultiplier": 1.8,
+              "cars": [
+                {
+                  "model": "comet2",
+                  "chance": 0.4
+                },
+                {
+                  "model": "banshee",
+                  "chance": 0.4
+                },
+                {
+                  "model": "elegy2",
+                  "chance": 0.3
+                },
+                {
+                  "model": "feltzer2",
+                  "chance": 0.3
+                },
+                {
+                  "model": "schafter2",
+                  "chance": 0.5
+                }
+              ]
+            }
+          ]
+        },
+        "pickups": {
+          "type": "array",
+          "title": "Pickup Spots",
+          "x-arrayKey": "id",
+          "description": "Where a job car is waiting when a yard sends you after one. Shared by every yard — a man in Cypress Flats will happily send you to Paleto. One spot is picked per job, and the kind of spot is what makes the job easy or hard.",
+          "x-rowControls": {
+            "coords": "coords"
+          },
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "coords"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "x-generateId": "spot"
+              },
+              "label": {
+                "type": "string",
+                "default": "",
+                "description": "Where this is, in words. Shown on the job card, so write it the way somebody would say it — \"behind the Vespucci lot\"."
+              },
+              "coords": {
+                "type": "object",
+                "x-control": "coords",
+                "x-vector4": true,
+                "description": "Where the car sits, and which way it faces.",
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "y": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "z": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "w": {
+                    "type": "number",
+                    "default": 0
+                  }
+                }
+              },
+              "kind": {
+                "type": "string",
+                "default": "street",
+                "enum": [
+                  "street",
+                  "lot",
+                  "guarded",
+                  "convoy"
+                ],
+                "description": "How hard it is to take. Street is parked and forgotten; a lot has eyes on it; guarded has somebody watching; a convoy is moving and has company."
+              },
+              "payBonus": {
+                "type": "number",
+                "default": 0,
+                "minimum": 0,
+                "maximum": 2,
+                "x-control": "percent",
+                "description": "Paid on top for the trouble, as a share of the job's value."
+              }
+            }
+          },
+          "default": [
+            {
+              "id": "vespucci",
+              "label": "The Vespucci beach lot",
+              "coords": {
+                "x": -1197.0,
+                "y": -1497.0,
+                "z": 4.4,
+                "w": 125.0
+              },
+              "kind": "lot",
+              "payBonus": 0.1
+            },
+            {
+              "id": "mirrorpark",
+              "label": "A side street off Mirror Park",
+              "coords": {
+                "x": 1052.0,
+                "y": -776.0,
+                "z": 58.0,
+                "w": 265.0
+              },
+              "kind": "street",
+              "payBonus": 0.0
+            },
+            {
+              "id": "lamesa",
+              "label": "Behind the La Mesa units",
+              "coords": {
+                "x": 830.0,
+                "y": -1290.0,
+                "z": 27.0,
+                "w": 90.0
+              },
+              "kind": "street",
+              "payBonus": 0.0
+            },
+            {
+              "id": "sandy",
+              "label": "Outside the Sandy Shores garage",
+              "coords": {
+                "x": 1960.0,
+                "y": 3740.0,
+                "z": 32.3,
+                "w": 300.0
+              },
+              "kind": "street",
+              "payBonus": 0.05
+            },
+            {
+              "id": "docks",
+              "label": "The Elysian Island docks",
+              "coords": {
+                "x": 150.0,
+                "y": -3200.0,
+                "z": 5.9,
+                "w": 180.0
+              },
+              "kind": "guarded",
+              "payBonus": 0.35
+            },
+            {
+              "id": "paleto",
+              "label": "The Paleto Bay forecourt",
+              "coords": {
+                "x": -100.0,
+                "y": 6440.0,
+                "z": 31.4,
+                "w": 45.0
+              },
+              "kind": "lot",
+              "payBonus": 0.2
+            }
+          ]
+        },
+        "rep": {
+          "type": "object",
+          "title": "Rep",
+          "description": "How standing with a yard is earned. Held PER YARD — you are somebody to one man and nobody to the next — but every yard uses this one curve.",
+          "properties": {
+            "curve": {
+              "type": "string",
+              "title": "Levelling style",
+              "default": "runescape",
+              "x-enum": [
+                "runescape",
+                "linear",
+                "quadratic",
+                "softcap"
+              ],
+              "x-enumLabels": {
+                "runescape": "Long haul (RuneScape)",
+                "linear": "Steady",
+                "quadratic": "Classic RPG",
+                "softcap": "Reachable"
+              },
+              "description": "The SHAPE of the climb.\n\nLong haul: early levels fly, the last few are a project.\nSteady: every level costs the same — predictable, and flat at the top.\nClassic RPG: cost grows with the square. A real climb without a cliff.\nReachable: steep early, easing near the top, for a ladder meant to be finished.\n\nSwitching takes nobody's XP away. Level is worked out from XP every time it is asked for, so everyone is simply re-read against the new shape."
+            },
+            "maxLevel": {
+              "type": "number",
+              "default": 10,
+              "minimum": 2,
+              "maximum": 99,
+              "description": "The top rank at a yard. Each rank unlocks better cars to go after and a better cut."
+            },
+            "baseXP": {
+              "type": "number",
+              "default": 40,
+              "minimum": 1,
+              "description": "Rep needed to reach rank 2. Every later rank scales off it."
+            },
+            "modifier": {
+              "type": "number",
+              "default": 1,
+              "minimum": 0.1,
+              "maximum": 3,
+              "x-control": "multiplier",
+              "description": "Stretches the whole curve. Higher is SLOWER — it multiplies what each rank costs."
+            },
+            "baseLevel": {
+              "type": "number",
+              "default": 1,
+              "minimum": 1,
+              "description": "The rank everyone starts on at a yard they have never worked for."
+            }
+          },
+          "x-skill": "yardRep"
+        }
+      }
+    },
+    "stores": {
+      "type": "array",
+      "x-arrayKey": "id",
+      "x-rowTabs": [
+        {
+          "id": "general",
+          "label": "General",
+          "icon": "info",
+          "keys": [
+            "type",
+            "id",
+            "name",
+            "description",
+            "icon"
+          ]
+        },
+        {
+          "id": "world",
+          "label": "World",
+          "icon": "map-pin",
+          "keys": [
+            "models",
+            "locations",
+            "blip",
+            "openingHours"
+          ]
+        },
+        {
+          "id": "commerce",
+          "label": "Commerce",
+          "icon": "shopping-cart",
+          "keys": [
+            "paymentMethods",
+            "categories",
+            "stock"
+          ]
+        }
+      ],
+      "x-rowControls": {
+        "locations": "positions",
+        "categories.icon": {
+          "control": "icon",
+          "iconSet": "fontawesome"
+        }
+      },
+      "description": "Buy/sell stores (mechanic shops etc). `canOpen` is Lua-side behaviour and is not part of this config.",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "name"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "x-enumLabels": {
+              "buy": "Buy",
+              "sell": "Sell"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "Unique ID for the store (used for server side checks)",
+            "x-generateId": "store"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the store (used for client side blips and menus)"
+          },
+          "description": {
+            "x-control": "text",
+            "type": "string",
+            "description": "Description of the store (used for client side menus)"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon for the store (used for client side menus)",
+            "x-control": "icon",
+            "x-iconSet": "fontawesome"
+          },
+          "models": {
+            "type": "array",
+            "x-control": "peds",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ped models used for the store NPC(s)"
+          },
+          "locations": {
+            "type": "array",
+            "x-control": "positions",
+            "items": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "z": {
+                  "type": "number"
+                },
+                "w": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "z"
+              ]
+            },
+            "description": "World positions {x,y,z,w} the store can be opened from (w = heading)"
+          },
+          "blip": {
+            "type": "object",
+            "properties": {
+              "color": {
+                "x-control": "blipColor",
+                "type": "number"
+              },
+              "scale": {
+                "type": "number",
+                "minimum": 0
+              },
+              "sprite": {
+                "x-control": "blipSprite",
+                "type": "number"
+              },
+              "display": {
+                "x-control": "blipDisplay",
+                "type": "number"
+              }
+            }
+          },
+          "openingHours": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 24
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "[openHour, closeHour] — omit for always-open"
+          },
+          "paymentMethods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "x-control": "text",
+                  "type": "string"
+                },
+                "icon": {
+                  "type": "string",
+                  "x-control": "icon",
+                  "x-iconSet": "fontawesome"
+                }
+              }
+            }
+          },
+          "stock": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "x-itemPicker": true
+                },
+                "category": {
+                  "type": "string",
+                  "x-control": "pickOne",
+                  "x-optionsFrom": {
+                    "path": "parent.categories",
+                    "key": "name"
+                  },
+                  "x-anyLabel": "Uncategorised"
+                },
+                "price": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": [
+        {
+          "type": "buy",
+          "id": "car_parts_store",
+          "name": "Car Parts Store",
+          "description": "Everything you need for car repairs and maintenance.",
+          "icon": "fas fa-car",
+          "models": [
+            "s_m_m_autoshop_01"
+          ],
+          "locations": [
+            {
+              "x": 481.328125,
+              "y": -1301.6591796875,
+              "z": 29.296226501465,
+              "w": 210.07563781738
+            }
+          ],
+          "blip": {
+            "color": 5,
+            "scale": 0.8,
+            "sprite": 402,
+            "display": 2
+          },
+          "paymentMethods": [
+            "cash",
+            "bank"
+          ],
+          "categories": [
+            {
+              "name": "Tools",
+              "description": "Essential tools for working on cars",
+              "icon": "fas fa-tools"
+            },
+            {
+              "name": "Parts",
+              "description": "Miscellaneous car parts and accessories",
+              "icon": "fas fa-cogs"
+            }
+          ],
+          "stock": [
+            {
+              "name": "wrench",
+              "category": "Tools",
+              "price": 750
+            },
+            {
+              "name": "impact_gun",
+              "category": "Tools",
+              "price": 3000
+            },
+            {
+              "name": "hammer",
+              "category": "Tools",
+              "price": 500
+            },
+            {
+              "name": "screwdriver",
+              "category": "Tools",
+              "price": 400
+            },
+            {
+              "name": "jackstand",
+              "category": "Tools",
+              "price": 2500
+            },
+            {
+              "name": "bolts",
+              "category": "Parts",
+              "price": 150
+            },
+            {
+              "name": "funnel",
+              "category": "Parts",
+              "price": 100
+            },
+            {
+              "name": "wheel",
+              "category": "Parts",
+              "price": 1500
+            },
+            {
+              "name": "bonnet",
+              "category": "Parts",
+              "price": 1200
+            },
+            {
+              "name": "boot",
+              "category": "Parts",
+              "price": 1100
+            },
+            {
+              "name": "door",
+              "category": "Parts",
+              "price": 1000
+            },
+            {
+              "name": "window",
+              "category": "Parts",
+              "price": 400
+            },
+            {
+              "name": "seat",
+              "category": "Parts",
+              "price": 800
+            },
+            {
+              "name": "engine",
+              "category": "Parts",
+              "price": 4500
+            },
+            {
+              "name": "exhaust",
+              "category": "Parts",
+              "price": 700
+            }
+          ]
+        }
+      ]
+    },
+    "tools": {
+      "type": "array",
+      "x-arrayKey": "name",
+      "x-installItemList": true,
+      "x-rowTabs": [
+        {
+          "id": "general",
+          "label": "General",
+          "icon": "info",
+          "keys": [
+            "name",
+            "label",
+            "weight",
+            "description"
+          ]
+        },
+        {
+          "id": "behaviour",
+          "label": "Behaviour",
+          "icon": "sliders",
+          "keys": [
+            "chanceOfBreak",
+            "strength"
+          ]
+        },
+        {
+          "id": "prop",
+          "label": "Prop",
+          "icon": "box",
+          "keys": [
+            "model",
+            "holdOffset",
+            "holdRotation"
+          ]
+        }
+      ],
+      "description": "Handheld tools used to fit/remove vehicle parts. The jackstand's `useable` behaviour is Lua-side, not config.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "label"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0
+          },
+          "description": {
+            "x-control": "text",
+            "type": "string"
+          },
+          "chanceOfBreak": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "% chance the tool breaks (consumes a use) per action",
+            "x-control": "chance"
+          },
+          "holdRotation": {
+            "$ref": "#/definitions/vector3"
+          },
+          "holdOffset": {
+            "$ref": "#/definitions/vector3"
+          },
+          "model": {
+            "x-control": "model",
+            "type": "string",
+            "description": "Prop model held when using this tool"
+          },
+          "strength": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Jackstand-only: max vehicle weight (kg) it's rated for"
+          }
+        }
+      },
+      "default": [
+        {
+          "name": "wrench",
+          "label": "Wrench",
+          "weight": 1000,
+          "description": "A wrench is a tool used to provide grip and mechanical advantage in applying torque to turn objects—usually rotary fasteners, such as nuts and bolts—or keep them from turning.",
+          "chanceOfBreak": 25
+        },
+        {
+          "name": "impact_gun",
+          "label": "Impact Gun",
+          "weight": 1000,
+          "description": "An impact wrench (impact gun) delivers high, sudden torque with minimal effort — driven by compressed air or an electric motor. The go-to tool for loosening and tightening stubborn fasteners like wheel lug nuts.",
+          "chanceOfBreak": 25
+        },
+        {
+          "name": "hammer",
+          "label": "Hammer",
+          "weight": 1000,
+          "description": "A hammer is a tool consisting of a weighted head fixed to a long handle that is swung to deliver an impact to a small area of an object. This can be, for example, to drive nails into wood, to shape metal, or to crush rock.",
+          "chanceOfBreak": 25
+        },
+        {
+          "name": "screwdriver",
+          "label": "Screwdriver",
+          "weight": 1000,
+          "description": "A screwdriver is a tool, manual or powered, used for screwing (installing) and unscrewing (removing) screws. A typical simple screwdriver has a handle and a shaft, ending in a tip the user puts into the screw head before turning the handle.",
+          "chanceOfBreak": 25
+        },
+        {
+          "name": "bolts",
+          "label": "Bolts",
+          "weight": 1000,
+          "description": "Threaded lug bolts and nuts used to fasten wheels and panels to a vehicle."
+        },
+        {
+          "name": "lugnuts",
+          "label": "Lug Nuts",
+          "weight": 120,
+          "description": "Threaded lug nuts that fasten a wheel to the hub."
+        },
+        {
+          "name": "funnel",
+          "label": "Funnel",
+          "weight": 1000,
+          "description": "A funnel for pouring fluids into holes...",
+          "chanceOfBreak": 25
+        },
+        {
+          "name": "jackstand",
+          "label": "Jack Stand",
+          "weight": 1000,
+          "holdRotation": [
+            0,
+            0,
+            0
+          ],
+          "holdOffset": [
+            0,
+            0,
+            -0.18
+          ],
+          "model": "imp_prop_axel_stand_01a",
+          "description": "A stand for holding up the car...",
+          "strength": 1500
+        }
+      ]
+    },
+    "vehicleParts": {
+      "type": "array",
+      "x-arrayKey": "id",
+      "x-installItemList": {
+        "nameField": "id"
+      },
+      "x-rowTabs": [
+        {
+          "id": "basic",
+          "label": "Basic",
+          "icon": "info",
+          "keys": [
+            "id",
+            "item",
+            "label",
+            "description",
+            "searchChance",
+            "weight",
+            "model"
+          ]
+        },
+        {
+          "id": "fitting",
+          "label": "Fitting",
+          "icon": "wrench",
+          "keys": [
+            "minigame",
+            "applyRange",
+            "applyAtBone",
+            "isBone",
+            "reqParts",
+            "reqJackStands",
+            "anim",
+            "holdOffset",
+            "holdRotation"
+          ]
+        },
+        {
+          "id": "tools",
+          "label": "Tools",
+          "icon": "hammer",
+          "keys": [
+            "tools"
+          ]
+        },
+        {
+          "id": "consumables",
+          "label": "Consumables",
+          "icon": "package",
+          "keys": [
+            "consumables"
+          ]
+        }
+      ],
+      "description": "Fittable vehicle parts (data only). `canStart`/`exists`/`removePart`/`addPart` are Lua-side behaviour and NOT part of this config — most parts use sensible built-in defaults; special-cased ones (e.g. wheel bone removal, carpaint colour) are handled in code.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "x-generateId": "part"
+          },
+          "item": {
+            "type": "string",
+            "x-itemPicker": true,
+            "description": "Inventory item name the player uses for this part. Defaults to the behaviour id if omitted."
+          },
+          "label": {
+            "type": "string",
+            "description": "Seed label used when generating the item install snippet (the display label resolves from the inventory item once it exists)."
+          },
+          "description": {
+            "x-control": "text",
+            "type": "string",
+            "description": "Seed description used when generating the item install snippet."
+          },
+          "searchChance": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Chance (0-1) of finding this item while scrap searching",
+            "x-control": "chance",
+            "x-bandLabels": [
+              "Rare",
+              "Uncommon",
+              "Common"
+            ]
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Weight in inventory"
+          },
+          "model": {
+            "x-control": "model",
+            "type": "string",
+            "description": "Prop used when holding this part in hand (can be omitted)"
+          },
+          "tools": {
+            "type": "object",
+            "x-control": "weightMap",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "description": "Map of tool item name -> quantity required"
+          },
+          "consumables": {
+            "type": "object",
+            "x-control": "weightMap",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "description": "Map of consumable item name -> quantity required"
+          },
+          "anim": {
+            "type": "object",
+            "properties": {
+              "keepMode": {
+                "type": "boolean"
+              },
+              "dict": {
+                "type": "string"
+              },
+              "anim": {
+                "type": "string"
+              },
+              "time": {
+                "type": "number"
+              }
+            }
+          },
+          "minigame": {
+            "type": "string",
+            "description": "Minigame run when fitting this part. 'bolts' is the torque/lug-nut game — it keeps its own count of fasteners, taking one as each goes in and handing it back when one is wound out, so this resource neither demands the full set up front nor charges for it afterwards."
+          },
+          "applyRange": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Distance the part can be applied from"
+          },
+          "applyAtBone": {
+            "type": "string",
+            "description": "Vehicle bone the part is applied at"
+          },
+          "isBone": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "description": "Bone name(s) checked for this part's presence — a single name, or a list (e.g. the 4 wheel bones)"
+          },
+          "reqParts": {
+            "type": "array",
+            "x-control": "pickList",
+            "x-optionsFrom": {
+              "path": "vehicleParts",
+              "key": "id",
+              "labelKey": "label"
+            },
+            "items": {
+              "type": "string"
+            },
+            "description": "Other part ids that must already be fitted before this one"
+          },
+          "reqJackStands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Jack stand position(s) required to be placed before this part can be worked on"
+          },
+          "holdOffset": {
+            "$ref": "#/definitions/vector3"
+          },
+          "holdRotation": {
+            "$ref": "#/definitions/vector3"
+          }
+        }
+      },
+      "default": [
+        {
+          "id": "wheel",
+          "label": "Wheel",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_wheel",
+          "tools": {
+            "impact_gun": 1
+          },
+          "consumables": {
+            "lugnuts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "minigame": "bolts",
+          "applyRange": 1.5,
+          "applyAtBone": "engine",
+          "isBone": [
+            "wheel_lf",
+            "wheel_lr",
+            "wheel_rr",
+            "wheel_rf"
+          ]
+        },
+        {
+          "id": "bonnet",
+          "label": "Bonnet",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "prop_car_bonnet_02",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "reqParts": [
+            "engine"
+          ],
+          "minigame": "ox_skillcheck",
+          "applyRange": 1.5,
+          "applyAtBone": "bonnet",
+          "isBone": "bonnet"
+        },
+        {
+          "id": "boot",
+          "label": "Trunk",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_boot",
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "boot",
+          "isBone": "boot"
+        },
+        {
+          "id": "door_dside_f",
+          "label": "Front Drivers Door",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_door_dside_f",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "door_dside_f",
+          "isBone": "door_dside_f"
+        },
+        {
+          "id": "door_pside_f",
+          "label": "Front Passengers Door",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_door_pside_f",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "door_pside_f",
+          "isBone": "door_pside_f"
+        },
+        {
+          "id": "door_dside_r",
+          "label": "Rear Drivers Door",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_door_dside_r",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "door_dside_r",
+          "isBone": "door_dside_r"
+        },
+        {
+          "id": "door_pside_r",
+          "label": "Rear Passengers Door",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_door_pside_r",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "door_pside_r",
+          "isBone": "door_pside_r"
+        },
+        {
+          "id": "seat_dside_f",
+          "label": "Drivers Seat",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "prop_car_seat",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "seat_dside_f",
+          "isBone": "seat_dside_f"
+        },
+        {
+          "id": "seat_pside_f",
+          "label": "Passengers Seat",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "prop_car_seat",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "seat_pside_f",
+          "isBone": "seat_pside_f"
+        },
+        {
+          "id": "seat_dside_r",
+          "label": "Rear Drivers Seat",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "prop_car_seat",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "seat_dside_r",
+          "isBone": "seat_dside_r"
+        },
+        {
+          "id": "seat_pside_r",
+          "label": "Rear Passengers Seat",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "prop_car_seat",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "seat_pside_r",
+          "isBone": "seat_pside_r"
+        },
+        {
+          "id": "window_lf",
+          "label": "Drivers Window",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_window_lf",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "reqParts": [
+            "door_dside_f"
+          ],
+          "applyRange": 1.5,
+          "applyAtBone": "window_lf",
+          "isBone": "window_lf"
+        },
+        {
+          "id": "window_rf",
+          "label": "Passengers Window",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_window_rf",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "reqParts": [
+            "door_pside_f"
+          ],
+          "applyRange": 1.5,
+          "applyAtBone": "window_rf",
+          "isBone": "window_rf"
+        },
+        {
+          "id": "window_lr",
+          "label": "Drivers Rear Window",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_window_lr",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "reqParts": [
+            "door_dside_r"
+          ],
+          "applyRange": 1.5,
+          "applyAtBone": "window_lr",
+          "isBone": "window_lr"
+        },
+        {
+          "id": "window_rr",
+          "label": "Passengers Rear Window",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_windor_rm1",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "reqParts": [
+            "door_pside_r"
+          ],
+          "applyRange": 1.5,
+          "applyAtBone": "window_rr",
+          "isBone": "window_rr"
+        },
+        {
+          "id": "windscreen",
+          "label": "Windscreen",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "slb2k11_windscreen_r",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "reqParts": [
+            "boot"
+          ],
+          "applyRange": 1.5,
+          "applyAtBone": "windscreen",
+          "isBone": "windscreen"
+        },
+        {
+          "id": "windscreen_f",
+          "label": "Front Windscreen",
+          "searchChance": 0.25,
+          "weight": 1000,
+          "model": "imp_prop_impexp_car_door_02a",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "consumables": {
+            "bolts": 5
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "windscreen_f",
+          "isBone": "windscreen_f"
+        },
+        {
+          "id": "engine",
+          "label": "Engine",
+          "searchChance": 0.25,
+          "weight": 1,
+          "model": "prop_car_engine_01",
+          "tools": {
+            "wrench": 1,
+            "impact_gun": 1
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "reqJackStands": [
+            "frontLeft, frontRight, rearLeft, rearRight"
+          ],
+          "holdOffset": [
+            0,
+            -0.7,
+            -0.3
+          ],
+          "applyRange": 1.5,
+          "applyAtBone": "engine"
+        },
+        {
+          "id": "exhaust",
+          "label": "Exhaust",
+          "searchChance": 0.25,
+          "weight": 1,
+          "model": "prop_car_exhaust_01",
+          "tools": {
+            "wrench": 1
+          },
+          "consumables": {
+            "bolts": 3
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "reqJackStands": [
+            "frontLeft, frontRight, rearLeft, rearRight"
+          ],
+          "holdRotation": [
+            0,
+            0,
+            90
+          ],
+          "holdOffset": [
+            -0.2,
+            -0.1,
+            -0.1
+          ],
+          "applyRange": 1.5,
+          "applyAtBone": "exhaust"
+        },
+        {
+          "id": "battery",
+          "label": "Battery",
+          "searchChance": 0.25,
+          "weight": 1,
+          "model": "prop_battery_02",
+          "tools": {
+            "wrench": 1
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "engine"
+        },
+        {
+          "id": "coolant",
+          "label": "Coolant",
+          "searchChance": 0.25,
+          "weight": 1,
+          "model": "v_med_cor_chemical",
+          "tools": {
+            "funnel": 1
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "engine"
+        },
+        {
+          "id": "oil",
+          "label": "Oil",
+          "searchChance": 0.25,
+          "weight": 1,
+          "model": "prop_oiltub_03",
+          "tools": {
+            "funnel": 1
+          },
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "reqParts": [
+            "engine"
+          ],
+          "applyRange": 1.5,
+          "applyAtBone": "engine"
+        },
+        {
+          "id": "carpaint",
+          "label": "Spray Paint",
+          "searchChance": 0.25,
+          "weight": 1,
+          "model": "ng_proc_spraycan01b",
+          "anim": {
+            "keepMode": true,
+            "dict": "anim@amb@clubhouse@tutorial@bkr_tut_ig3@",
+            "anim": "machinic_loop_mechandplayer",
+            "time": 10000
+          },
+          "applyRange": 1.5,
+          "applyAtBone": "engine"
+        }
+      ]
+    },
+    "interact": {
+      "type": "object",
+      "description": "Interaction keybinds and interact-system choices. showTextUI/hideTextUI are Lua-side helpers and not part of this config.",
+      "properties": {
+        "placePartKey": {
+          "type": "number",
+          "default": 47,
+          "description": "GTA control ID used to place/confirm a held part",
+          "x-control": "control"
+        },
+        "cancelPartKey": {
+          "type": "number",
+          "default": 120,
+          "description": "GTA control ID used to cancel placing a held part",
+          "x-control": "control"
+        },
+        "jackstandInteract": {
+          "type": "string",
+          "enum": [
+            "target",
+            "interact"
+          ],
+          "default": "target",
+          "description": "How should the jackstand be interacted with",
+          "x-enumLabels": {
+            "target": "Target",
+            "interact": "Interact prompt"
+          }
+        },
+        "carInteract": {
+          "type": "string",
+          "enum": [
+            "target",
+            "interact"
+          ],
+          "default": "target",
+          "description": "How should the car be interacted with",
+          "x-enumLabels": {
+            "target": "Target",
+            "interact": "Interact prompt"
+          }
+        },
+        "storeInteract": {
+          "type": "string",
+          "enum": [
+            "target",
+            "interact"
+          ],
+          "default": "target",
+          "description": "How should the store be interacted with",
+          "x-enumLabels": {
+            "target": "Target",
+            "interact": "Interact prompt"
+          }
+        },
+        "barnFindInteract": {
+          "type": "string",
+          "enum": [
+            "target",
+            "interact"
+          ],
+          "default": "target",
+          "description": "How the person selling a barn find is approached",
+          "x-enumLabels": {
+            "target": "Target",
+            "interact": "Interact prompt"
+          }
+        },
+        "scrapyardInteract": {
+          "type": "string",
+          "enum": [
+            "target",
+            "interact"
+          ],
+          "default": "target",
+          "description": "How the man running a scrapyard is approached",
+          "x-enumLabels": {
+            "target": "Target",
+            "interact": "Interact prompt"
+          }
+        },
+        "laptopKeys": {
+          "type": "array",
+          "title": "Keys usable at the laptop",
+          "default": [
+            249
+          ],
+          "items": {
+            "type": "number"
+          },
+          "x-control": "controls",
+          "description": "Sitting at a yard laptop switches every game control off, so a keybind cannot fire while you are typing into it — which also stops Escape reaching the pause menu. Anything listed here stays live anyway. Push-to-talk is always kept whether it is listed or not."
+        }
+      }
+    },
+    "restrict": {
+      "type": "object",
+      "description": "Restrict who/where new project cars can be created. Empty zones/jobs = anyone, anywhere can create.",
+      "properties": {
+        "dropMode": {
+          "type": "string",
+          "default": "anywhere",
+          "x-enum": [
+            "anywhere",
+            "scrapyards",
+            "zones"
+          ],
+          "x-enumLabels": {
+            "anywhere": "Anywhere",
+            "scrapyards": "Scrapyards only",
+            "zones": "Build zones and lifts only"
+          },
+          "description": "Where a delivered car may be dropped off. Scrapyards are PUBLIC, so choosing them does not make dropping off a criminal act — it just means everything arrives in the same few places, which is what gives the illegal side its cover."
+        },
+        "carClearance": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "How far a drop must be from a car that is already there, in metres. Stops a yard silting up with vehicles parked inside one another."
+        },
+        "barnClearance": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 500,
+          "description": "How far a drop must be from a live barn find, in metres. Without it a player can park their delivery on top of the next find and block it."
+        },
+        "zones": {
+          "type": "array",
+          "x-arrayKey": "id",
+          "description": "Polygon zones that vehicles may be created within, each optionally restricted to jobs/gangs. Empty = no zone restriction.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "x-generateId": "zone"
+              },
+              "zone": {
+                "type": "array",
+                "description": "Polygon boundary vertices {x,y}. Drawn, edited and cleared on the shared Script Studio map — no manual entry.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ]
+                }
+              },
+              "groups": {
+                "type": "array",
+                "description": "Jobs/gangs (with min grade) allowed to create within this zone. Empty = anyone.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "grade": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "default": []
+              }
+            }
+          },
+          "default": []
+        },
+        "jobs": {
+          "type": "object",
+          "x-control": "groupGrades",
+          "description": "Map of job name -> minimum grade allowed to create vehicles. Empty = no job restriction.",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {}
+        }
+      }
+    },
+    "lifts": {
+      "type": "array",
+      "x-arrayKey": "id",
+      "description": "Vehicle lifts a project car can be raised on to build, as an alternative to jack stands. Each is a placed prop, optionally job/gang locked. Empty = no lifts (jack stands everywhere).",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "x-generateId": "lift"
+          },
+          "label": {
+            "type": "string",
+            "description": "Name shown on the blip and interaction prompt"
+          },
+          "coords": {
+            "type": "object",
+            "x-control": "coords",
+            "description": "World position {x,y,z,w} the lift sits at (w = heading)",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number"
+              },
+              "w": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "z"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "x-control": "model",
+            "description": "Lift prop model. Leave blank to use the default lift prop."
+          },
+          "raiseHeight": {
+            "type": "number",
+            "default": 1,
+            "minimum": 0,
+            "description": "How high (m) the lift raises the vehicle to work on it"
+          },
+          "groups": {
+            "type": "array",
+            "description": "Jobs/gangs (with min grade) allowed to use this lift. Empty = anyone.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "grade": {
+                  "type": "number"
+                }
+              }
+            },
+            "default": []
+          },
+          "blip": {
+            "type": "object",
+            "properties": {
+              "color": {
+                "x-control": "blipColor",
+                "type": "number"
+              },
+              "scale": {
+                "type": "number",
+                "minimum": 0
+              },
+              "sprite": {
+                "x-control": "blipSprite",
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "fluids": {
+      "type": "array",
+      "x-arrayKey": "item",
+      "x-installItemList": {
+        "nameField": "item"
+      },
+      "description": "Oils, coolants and brake fluids. Which one a model wants is seeded from its model hash within the grades whose `classes` include that vehicle class — so it's deterministic (a Sultan always takes the same oil) and learnable from the manual. ADD YOUR OWN: a new row here is picked up by the seeder automatically, as long as its classes are set.",
+      "items": {
+        "type": "object",
+        "required": [
+          "item",
+          "kind"
+        ],
+        "properties": {
+          "item": {
+            "type": "string",
+            "description": "Inventory item name."
+          },
+          "label": {
+            "type": "string",
+            "description": "Fallback label. The inventory item’s own label wins where it has one."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "oil",
+              "coolant",
+              "brake"
+            ],
+            "description": "Which fluid this is. One of each kind is chosen per model.",
+            "x-enumLabels": {
+              "oil": "Engine oil",
+              "coolant": "Coolant",
+              "brake": "Brake fluid"
+            }
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 21
+            },
+            "description": "Vehicle classes this grade suits. Empty = any class."
+          },
+          "weight": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 500
+          },
+          "description": {
+            "type": "string",
+            "x-control": "text"
+          }
+        }
+      },
+      "default": [
+        {
+          "item": "oil_0w20",
+          "label": "0W-20 Engine Oil",
+          "kind": "oil",
+          "classes": [
+            0,
+            1,
+            12
+          ],
+          "description": "Thin modern synthetic for tight-tolerance economy engines.",
+          "weight": 500
+        },
+        {
+          "item": "oil_5w30",
+          "label": "5W-30 Engine Oil",
+          "kind": "oil",
+          "classes": [
+            0,
+            1,
+            2,
+            9,
+            11,
+            12,
+            17,
+            20
+          ],
+          "description": "The everyday all-rounder. Most road cars run this.",
+          "weight": 500
+        },
+        {
+          "item": "oil_5w40",
+          "label": "5W-40 Engine Oil",
+          "kind": "oil",
+          "classes": [
+            6,
+            7
+          ],
+          "description": "Holds pressure when things get hot. Performance engines.",
+          "weight": 500
+        },
+        {
+          "item": "oil_10w40",
+          "label": "10W-40 Engine Oil",
+          "kind": "oil",
+          "classes": [
+            3,
+            4,
+            5,
+            8,
+            10,
+            18,
+            19
+          ],
+          "description": "Thicker grade for older, looser and hard-worked engines.",
+          "weight": 500
+        },
+        {
+          "item": "oil_10w60",
+          "label": "10W-60 Engine Oil",
+          "kind": "oil",
+          "classes": [
+            7
+          ],
+          "description": "Track-grade oil for highly stressed engines.",
+          "weight": 500
+        },
+        {
+          "item": "coolant_green",
+          "label": "Green Coolant (IAT)",
+          "kind": "coolant",
+          "classes": [
+            3,
+            4,
+            5,
+            8,
+            10,
+            18,
+            19
+          ],
+          "description": "Traditional inorganic-acid coolant. Older engines, shorter life.",
+          "weight": 500
+        },
+        {
+          "item": "coolant_blue",
+          "label": "Blue Coolant (HOAT)",
+          "kind": "coolant",
+          "classes": [
+            0,
+            1,
+            12
+          ],
+          "description": "Hybrid organic coolant. Common on modern compacts and vans.",
+          "weight": 500
+        },
+        {
+          "item": "coolant_red",
+          "label": "Red Coolant (OAT)",
+          "kind": "coolant",
+          "classes": [
+            6,
+            7
+          ],
+          "description": "Long-life organic-acid coolant for performance engines.",
+          "weight": 500
+        },
+        {
+          "item": "coolant_orange",
+          "label": "Orange Coolant (OAT)",
+          "kind": "coolant",
+          "classes": [
+            2,
+            9,
+            11,
+            20
+          ],
+          "description": "Long-life organic-acid coolant. SUVs, utility and commercial.",
+          "weight": 500
+        },
+        {
+          "item": "coolant_yellow",
+          "label": "Yellow Coolant (HOAT)",
+          "kind": "coolant",
+          "classes": [
+            1,
+            17
+          ],
+          "description": "Hybrid coolant used across a lot of saloons and service vehicles.",
+          "weight": 500
+        },
+        {
+          "item": "brakefluid_dot3",
+          "label": "DOT 3 Brake Fluid",
+          "kind": "brake",
+          "classes": [
+            0,
+            1,
+            3,
+            4,
+            5,
+            12
+          ],
+          "description": "Standard glycol brake fluid. Everyday and older cars.",
+          "weight": 500
+        },
+        {
+          "item": "brakefluid_dot4",
+          "label": "DOT 4 Brake Fluid",
+          "kind": "brake",
+          "classes": [
+            2,
+            6,
+            8,
+            9,
+            11,
+            17,
+            20
+          ],
+          "description": "Higher boiling point than DOT 3. Most modern cars.",
+          "weight": 500
+        },
+        {
+          "item": "brakefluid_dot51",
+          "label": "DOT 5.1 Brake Fluid",
+          "kind": "brake",
+          "classes": [
+            7,
+            10,
+            18,
+            19
+          ],
+          "description": "Race-grade glycol fluid. Resists fade under heavy braking.",
+          "weight": 500
+        }
+      ]
+    },
+    "fasteners": {
+      "type": "object",
+      "description": "The fixings a build consumes. Kept as their own group so more fastener types can be added without touching part definitions.",
+      "properties": {
+        "lugNut": {
+          "type": "string",
+          "default": "lugnuts",
+          "description": "The nut that holds a wheel on. Consumed when fitting, handed back when removed, destroyed when over-torqued.",
+          "x-installItem": {
+            "label": "Lug Nuts",
+            "weight": 120,
+            "description": "Threaded lug nuts that fasten a wheel to the hub. Torque them to the figure in the manual.",
+            "useable": false,
+            "shouldClose": false
+          }
+        },
+        "bolt": {
+          "type": "string",
+          "default": "bolts",
+          "description": "General fixings used by panels and other bolt-on parts.",
+          "x-installItem": {
+            "label": "Bolts",
+            "weight": 100,
+            "description": "Threaded bolts and nuts used to fasten parts to a vehicle.",
+            "useable": false,
+            "shouldClose": false
+          }
+        }
+      }
+    }
+  },
+  "x-pages": [
+    {
+      "id": "players",
+      "label": "Players",
+      "icon": "users",
+      "component": "web/build/studio/players.js",
+      "description": "Everyone who has worked for a scrapyard, and where they stand with each one."
+    }
+  ]
+}

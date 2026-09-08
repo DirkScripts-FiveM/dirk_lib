@@ -7,7 +7,7 @@ import { useState } from 'react';
 import {
   AccountSelect, BlipDisplaySelect, ControlMultiSelect, ControlSelect, FiveMKeyBindInput,
   blipUrlForSprite, getBlipColor, getBlipEntry,
-  GroupSelect, Vector4Display, WorldPositionGotoButton, WorldPositionSetButton, fetchNui, useItems,
+  GroupSelect, Vector4Display, WorldPositionPicker, fetchNui, useItems,
 } from 'dirk-cfx-react';
 import { MeterControl } from './MeterControl';
 import { RangeControl, SliderControl } from './RichControls';
@@ -16,10 +16,11 @@ import { notify } from './Toasts';
 import { AnyIcon } from './Icon';
 import { ModelControl } from './ModelControl';
 import { VehicleControl } from './VehicleControl';
-import { PedsField } from './PedControl';
+import { PedField, PedsField } from './PedControl';
 import type { ControlType, SettingColumn, SettingEntry } from './types';
 import { DiscordChannelControl } from './DiscordChannelControl';
 import { DurationControl } from './DurationControl';
+import { ObjectPicker, type ObjectValue } from './ObjectPicker';
 import { BoolChoiceControl } from './BoolChoiceControl';
 import { useChrome } from './studioLocale';
 
@@ -646,16 +647,12 @@ export function SettingControl({ type, value, onChange, entry, column, disabled,
       );
 
     case 'ped':
+      // The portrait and the catalogue, same as `peds` — not a text box asking
+      // you to remember `s_m_y_dealer_01`. One is not a reason to lose the
+      // picker; it is only a reason to hold one at a time.
       return (
         <ControlShell>
-          <TextInput
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => onChange(e.currentTarget.value)}
-            disabled={disabled}
-            placeholder="model name"
-            styles={{ ...styles, input: { ...styles.input, fontFamily: 'monospace' } }}
-            style={{ flex: 1 }}
-          />
+          <PedField value={value} onChange={(next) => onChange(next)} disabled={disabled} />
         </ControlShell>
       );
 
@@ -675,21 +672,73 @@ export function SettingControl({ type, value, onChange, entry, column, disabled,
         w: typeof vec.w === 'number' ? vec.w : 0,
       };
 
+      // The picker always produces four numbers, because a player always has a
+      // height and a heading. The FIELD might only want two. Writing back all
+      // four gave a flat zone corner a `z` and a `w` that nothing reads, and
+      // put them in every diff and every changelog line thereafter.
+      const dims = entry?.vectorDims ?? column?.vectorDims ?? 4;
+      const trim = (next: { x: number; y: number; z: number; w: number }) => {
+        if (dims === 2) return { x: next.x, y: next.y };
+        if (dims === 3) return { x: next.x, y: next.y, z: next.z };
+        return next;
+      };
+
       return (
         <ControlShell width="44vh">
           <Flex align="center" gap="xs" style={{ flex: 1, minWidth: 0 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <Vector4Display value={position} />
             </div>
+            {/*
+              `WorldPositionPicker`, not the two buttons individually.
+
+              cfx-react exports TWO Set buttons and they do different things.
+              The standalone `WorldPositionSetButton` calls `GET_POSITION` and
+              writes your current coordinates immediately - no walking, no
+              instruction card, nothing to confirm. The one inside
+              `WorldPositionPicker` speaks the admin-tool router: it hides the
+              panel, shows the card, and waits for E.
+
+              This used the first, so Set looked broken by working instantly -
+              and Goto, which only has one implementation, worked fine and made
+              it look like the wiring was sound.
+            */}
             <Flex gap="0.3vh" style={{ flexShrink: 0 }}>
-              <WorldPositionGotoButton value={position} compact />
-              <WorldPositionSetButton
+              <WorldPositionPicker
                 value={position}
-                onChange={(next: { x: number; y: number; z: number; w: number }) => onChange(next)}
+                onChange={(next: { x: number; y: number; z: number; w: number }) => onChange(trim(next))}
                 compact
               />
             </Flex>
           </Flex>
+        </ControlShell>
+      );
+    }
+
+    case 'prop': {
+      // A prop, put where it goes rather than typed. Same admin-tool round
+      // trip as `coords` - the panel hides, the game hands back an answer -
+      // but the thing being positioned is visible while you position it, so
+      // the placer spawns the real model and you look at it.
+      const obj = (value ?? {}) as Partial<ObjectValue>;
+      return (
+        <ControlShell width="44vh">
+          <ObjectPicker
+            value={{
+              x: typeof obj.x === 'number' ? obj.x : 0,
+              y: typeof obj.y === 'number' ? obj.y : 0,
+              z: typeof obj.z === 'number' ? obj.z : 0,
+              w: typeof obj.w === 'number' ? obj.w : 0,
+              rx: typeof obj.rx === 'number' ? obj.rx : 0,
+              ry: typeof obj.ry === 'number' ? obj.ry : 0,
+            }}
+            model={entry?.propModel ?? column?.propModel}
+            // Pick will only accept these. One entry today; a field that can
+            // use several props lists them all.
+            allow={[entry?.propModel ?? column?.propModel].filter(Boolean) as string[]}
+            disabled={disabled}
+            onChange={onChange}
+          />
         </ControlShell>
       );
     }
@@ -924,6 +973,7 @@ export function SettingControl({ type, value, onChange, entry, column, disabled,
             value={value}
             min={entry?.min ?? column?.min}
             max={entry?.max ?? column?.max}
+            bands={entry?.bandLabels ?? column?.bandLabels}
             disabled={disabled}
             onChange={onChange}
           />

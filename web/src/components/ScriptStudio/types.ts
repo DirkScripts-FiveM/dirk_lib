@@ -34,6 +34,16 @@ export type ControlType =
   | 'peds'
   | 'vehicle'
   | 'coords'
+  /**
+   * A PROP, placed in the world.
+   *
+   * Deliberately not called `object`: a column whose value is a nested object
+   * of sub-fields already carries that type, and the row editor renders those
+   * by mapping their child columns. Giving the placer the same name made it
+   * render as a label with nothing beside it, because a placer has no
+   * children to map.
+   */
+  | 'prop'
   | 'positions'
   | 'time'
   | 'keybind'
@@ -76,7 +86,10 @@ export type ControlType =
   | 'mantineColor'
   | 'shade'
   | 'rows'
-  | 'object';
+  /** a nested object of sub-fields, rendered as a small stack of them */
+  | 'object'
+  /** a PROP placed in the world - see the note on the setting-type union */
+  | 'prop';
 
 export type SettingOption = {
   /**
@@ -164,6 +177,20 @@ export type SettingColumn = {
   optionsFrom?: { path: string; key: string ; labelKey?: string };
   min?: number;
   max?: number;
+  /**
+   * `x-bandLabels` - what a slider calls its own steps, low to high.
+   *
+   * Sliders were named with fishing's difficulty bands (Weak / Moderate /
+   * Strong) whatever they measured, so a blip's SIZE read "Weak" at its
+   * smallest. A field that says what its steps are called also gets a neutral
+   * colour, because the traffic lights are a judgement that only a difficulty
+   * has an opinion about.
+   */
+  bandLabels?: string[];
+  /** How many numbers a `coords` column holds: 2, 3 or 4. */
+  vectorDims?: 2 | 3 | 4;
+  /** Prop model the `prop` control places. From `x-propModel`. */
+  propModel?: string;
   /** the schema's default for this field, shown when a row omits the key */
   default?: unknown;
   /** rows/object columns carry their own child columns */
@@ -222,6 +249,8 @@ export type SettingEntry = {
    * holds a `{x,y,z,w}` under each named key, and each one gets its own pin.
    */
   mapPoints?: { key: string; label?: string; color?: string }[];
+  /** `movable: false` on the map path — pins are shown but never dragged. */
+  mapMovable?: boolean;
   /** the map colour this layer was given in `x-mapPaths` */
   mapColor?: string;
   /**
@@ -254,7 +283,7 @@ export type SettingEntry = {
   type: ControlType;
   group: string;
   /** nested object inside a section - rendered as a labelled sub-block */
-  subgroup?: { id: string; label: string };
+  subgroup?: { id: string; label: string; skill?: string };
   default: unknown;
   value: unknown;
 
@@ -282,6 +311,12 @@ export type SettingEntry = {
     when?: unknown;
   };
   options?: SettingOption[];
+  /** `x-bandLabels` - what a slider calls its own steps, low to high. */
+  bandLabels?: string[];
+  /** How many numbers a `coords` setting holds: 2, 3 or 4. */
+  vectorDims?: 2 | 3 | 4;
+  /** Prop model the `prop` control places. From `x-propModel`. */
+  propModel?: string;
   /** pickList: the setting whose rows supply the options, e.g. 'fish' */
   optionsFrom?: { path: string; key: string };
 
@@ -435,3 +470,14 @@ export const BASIC_CHILD = '__basic__';
  * section is that the polygons are drawn together.
  */
 export const MAP_CHILD = '__map__';
+
+/**
+ * The child a workspace section's `x-skill` block occupies.
+ *
+ * A levelling curve is a page, not a paragraph: four or five settings and a
+ * chart beside them. Left among the section's loose settings it sat under
+ * "Basic" with everything else and the chart had a third of the width. Like
+ * the map, it has one identity rather than one per setting — there is only
+ * ever one curve in a section.
+ */
+export const SKILL_CHILD = '__skill__';

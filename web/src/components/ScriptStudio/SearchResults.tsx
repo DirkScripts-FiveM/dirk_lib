@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { CornerDownRight, SearchX } from 'lucide-react';
 import { useMemo } from 'react';
 import { Icon } from './Icon';
-import { matchesSearch, useStudio } from './store';
+import { matchesSearch, rowMatches, useStudio } from './store';
 import { sectionKey, settingKey, translate, useActiveLanguage, useBundles, useChrome } from './studioLocale';
 import type { SettingEntry, StudioScript } from './types';
 
@@ -24,7 +24,14 @@ export function SearchResults({
 }: {
   query: string;
   /** take me to this setting: script, then section */
-  onOpen: (resource: string, group: string) => void;
+  /**
+   * Take me there.
+   *
+   * `row` is what turns "the right section" into "the right thing": a result
+   * named a scrapyard, a store, a fish — landing on the section it lives in
+   * and leaving you to find it again is most of the work still to do.
+   */
+  onOpen: (resource: string, group: string, target?: { list: string; row: number }) => void;
 }) {
   const t = useChrome();
   const theme = useMantineTheme();
@@ -119,7 +126,7 @@ function ScriptHits({
   groups: { group: string; label: string; icon: string; entries: SettingEntry[] }[];
   query: string;
   color: string;
-  onOpen: (resource: string, group: string) => void;
+  onOpen: (resource: string, group: string, target?: { list: string; row: number }) => void;
 }) {
   const theme = useMantineTheme();
   const language = useActiveLanguage();
@@ -142,7 +149,17 @@ function ScriptHits({
               <motion.button
                 key={entry.path}
                 type="button"
-                onClick={() => onOpen(script.resource, group.group)}
+                onClick={() => {
+                  // A row hit lands ON the row. `rowMatches` is the same
+                  // function the in-script cards use, so both roads end in the
+                  // same place rather than one of them stopping short.
+                  const hit = rowMatches(entry, query)[0];
+                  onOpen(
+                    script.resource,
+                    group.group,
+                    hit ? { list: entry.path, row: hit.index } : undefined,
+                  );
+                }}
                 whileHover={{ background: alpha(color, 0.1) }}
                 whileTap={{ scale: 0.997 }}
                 style={{
@@ -165,6 +182,12 @@ function ScriptHits({
                   </Text>
                   <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.28)" truncate>
                     {group.label} · {entry.path}
+                    {/* Name the ROW that matched, not just the list holding it
+                        — "Stores" is not an answer to "where is Cypress". */}
+                    {(() => {
+                      const hit = rowMatches(entry, query)[0];
+                      return hit ? ` · ${hit.title}` : '';
+                    })()}
                   </Text>
                 </Flex>
 

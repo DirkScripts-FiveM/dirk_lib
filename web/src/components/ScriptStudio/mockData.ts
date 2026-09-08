@@ -14,6 +14,10 @@
 import fishingSchema from './fixtures/dirk_fishing.schema.json';
 import libSchema from './fixtures/dirk_lib.schema.json';
 import loadingSchema from './fixtures/dirk_loading.schema.json';
+// projectCars is here for the WORKSPACE shapes fishing does not have: a section
+// that is a map AND a list AND a levelling curve, all in one rail entry. Those
+// paths are only reachable through a schema shaped like this one.
+import projectCarsSchema from './fixtures/dirk_projectCars.schema.json';
 import { useItems } from 'dirk-cfx-react';
 import { schemaToStudio } from './schemaToStudio';
 import type { StudioScript } from './types';
@@ -136,7 +140,16 @@ const loading = schemaToStudio(loadingSchema as Record<string, unknown>, {
   managedElsewhere: ['designs', 'activeDesignId'],
 });
 
-export const MOCK_SCRIPTS: StudioScript[] = [fishing, { ...loading, designs: true }, lib];
+const projectCars = schemaToStudio(projectCarsSchema as Record<string, unknown>, {
+  resource: 'dirk_projectCars',
+  label: 'Project Cars',
+  icon: 'car',
+  version: '1.0.0',
+});
+
+export const MOCK_SCRIPTS: StudioScript[] = [
+  fishing, projectCars, { ...loading, designs: true }, lib,
+];
 
 /**
  * Stands in for the live inventory the item picker reads in game.

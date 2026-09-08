@@ -264,6 +264,61 @@ export const defaultTestItems = [
     }
   },
   {
+    index: 'dialogue_cards',
+    active: false,
+    label: 'NPC Dialogue — offers',
+    description: 'Replies drawn as cards: a picture, a name, a place and a figure',
+    icon: 'fa fa-id-card',
+    onEnable: {
+      action: 'DIALOG_STATE',
+      data: {
+        id       : 'yard_work',
+        title    : 'Vernon Pike',
+        subtitle : 'Cypress Flats',
+        dialog   : "Three things need collecting. Take one, or get out my way.",
+
+        skill : {
+          label: 'Reputation', level: 4, progress: 62,
+          xp: 1840, nextLevelXp: 2600, xpToNext: 760,
+          rankLabel: 'Regular',
+        },
+
+        metadata : [
+          { label: 'Deals in', value: 'Muscle, Coupes' },
+          { label: 'Pays', value: '85% of the going rate', emphasis: true },
+        ],
+
+        responses : [
+          {
+            index: 1, label: 'Sabre Turbo', sub: 'Sandy Shores', value: '$4,200',
+            badge: 'Guarded', badgeTone: 'warn',
+            // Deliberately a URL that does not resolve, so the fallback is
+            // what this fixture actually proves.
+            image: 'nui://dirk_projectCars/vehicleImages/sabregt.png',
+            imageFallback: 'data:image/svg+xml;utf8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 170 62%22%3E%3Cpath fill=%22%23fff%22 fill-opacity=%220.92%22 fill-rule=%22evenodd%22 d=%22M10 48 L10 30 L44 26 L58 13 L106 13 L118 26 L158 29 L158 48 Z M31 48 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 Z M36.22 48 a3.78 3.78 0 1 0 7.56 0 a3.78 3.78 0 1 0 -7.56 0 Z M119 48 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 Z M124.22 48 a3.78 3.78 0 1 0 7.56 0 a3.78 3.78 0 1 0 -7.56 0 Z%22/%3E%3C/svg%3E',
+            dontClose: true,
+          },
+          {
+            index: 2, label: 'Futo GTX', sub: 'Vespucci Beach', value: '$2,800',
+            badge: 'Street', badgeTone: 'ok',
+            image: 'data:image/svg+xml;utf8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 170 62%22%3E%3Cpath fill=%22%23fff%22 fill-opacity=%220.92%22 fill-rule=%22evenodd%22 d=%22M12 48 L12 31 L34 27 L56 14 L96 14 L134 30 L156 33 L156 48 Z M29 48 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 Z M34.22 48 a3.78 3.78 0 1 0 7.56 0 a3.78 3.78 0 1 0 -7.56 0 Z M121 48 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 Z M126.22 48 a3.78 3.78 0 1 0 7.56 0 a3.78 3.78 0 1 0 -7.56 0 Z%22/%3E%3C/svg%3E',
+            dontClose: true,
+          },
+          {
+            index: 3, label: 'Burrito', sub: 'Elysian Island', value: '$6,500',
+            badge: 'Convoy', badgeTone: 'bad',
+            image: 'data:image/svg+xml;utf8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 170 62%22%3E%3Cpath fill=%22%23fff%22 fill-opacity=%220.92%22 fill-rule=%22evenodd%22 d=%22M14 46 L14 22 L30 8 L142 8 L154 22 L154 46 Z M31 48 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 Z M36.22 48 a3.78 3.78 0 1 0 7.56 0 a3.78 3.78 0 1 0 -7.56 0 Z M121 48 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 Z M126.22 48 a3.78 3.78 0 1 0 7.56 0 a3.78 3.78 0 1 0 -7.56 0 Z%22/%3E%3C/svg%3E',
+            dontClose: true,
+          },
+          { index: 4, label: 'Nothing today', pin: true },
+        ],
+      }
+    },
+    onDisable: {
+      action: 'DIALOG_STATE',
+    }
+  },
+  {
     index: 'keycode',
     active: false,
     label: 'Keycode',

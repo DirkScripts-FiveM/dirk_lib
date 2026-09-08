@@ -11,7 +11,6 @@ import AdminSection from './Admin/main';
 import AlertDialog from './AlertDialog/main';
 import Menu from './Context/main';
 import Dialog from './Dialog/main';
-import GizmoOverlay from './Gizmo/main';
 import Input from './Input/main';
 import Instructions from './Instructions/main';
 import Keycode from './Keycode/main';
@@ -81,7 +80,6 @@ const App: React.FC = () => {
       <Themed theme={useUiTheme('keyinputs')}><KeyInputs /></Themed>
       <Themed theme={useUiTheme('keycode')}><Keycode /></Themed>
       <Themed theme={useUiTheme('status')}><StatusInfo /></Themed>
-      <GizmoOverlay />
       <Themed theme={useUiTheme('alert')}><AlertDialog /></Themed>
       <Themed theme={useUiTheme('instructions')}><Instructions /></Themed>
       <ScriptConfigChooser />

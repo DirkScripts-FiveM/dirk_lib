@@ -71,9 +71,6 @@ importers:
       dirk-cfx-react:
         specifier: ^1.1.97
         version: 1.1.97(7pxwgf3kk7eaugn5ycf3ieamse)
-      dirk-ui-studio:
-        specifier: link:../.studio
-        version: link:../.studio
       embla-carousel-autoplay:
         specifier: 8.5.2
         version: 8.5.2(embla-carousel@8.6.0)

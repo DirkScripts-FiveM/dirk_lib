@@ -14,8 +14,16 @@ if (!versionMatch) {
 let version = versionMatch[1];
 let versionParts = version.split('.').map(Number);
 
-// Increment the last part of the version
-versionParts[versionParts.length - 1] += 1;
+// Normally every push to main is a patch, so the last part goes up by one and
+// nobody has to think about it.
+//
+// A DELIBERATE version - a minor or a major - cannot be expressed that way:
+// there is no value that increments to 1.3.0. So a commit saying [no-bump]
+// ships the manifest exactly as written. NEW_VERSION is still exported either
+// way, because the release title, the dirk_versions dispatch and the changelog
+// gate all read it.
+const pinned = /\[no-bump\]/i.test(process.env.COMMIT_MSG || '');
+if (!pinned) versionParts[versionParts.length - 1] += 1;
 
 const newVersion = versionParts.join('.');
 

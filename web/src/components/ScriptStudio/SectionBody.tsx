@@ -2,9 +2,11 @@ import { alpha, Flex, Text, useMantineTheme } from '@mantine/core';
 import { motion } from 'framer-motion';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { effectiveValue, setValue, useStudio } from './store';
+import { SkillCurve } from './SkillCurve';
+import { CompactHelp } from './compactHelp';
 import { ZoneMap } from './ZoneMap';
 import type { SettingEntry } from './types';
-import { BASIC_CHILD, MAP_CHILD, tabsAsList } from './types';
+import { BASIC_CHILD, MAP_CHILD, SKILL_CHILD, tabsAsList } from './types';
 import { useChrome } from './studioLocale';
 
 /**
@@ -78,8 +80,9 @@ export function SectionBody({
 
       useStudio.setState({
         shownList: requestedList === MAP_CHILD ? MAP_CHILD
-          : picked ? requestedList
-            : BASIC_CHILD,
+          : requestedList === SKILL_CHILD ? SKILL_CHILD
+            : picked ? requestedList
+              : BASIC_CHILD,
       });
       return;
     }
@@ -126,6 +129,22 @@ export function SectionBody({
           );
         }
 
+        // The curve is its own page too, for the same reason the map is: it
+        // wants the width, and among the loose settings it would not get it.
+        if (requestedList === SKILL_CHILD) {
+          const skill = rest.filter((entry) => entry.subgroup?.skill);
+          return (
+            <Flex
+              direction="column" gap="xs" className="studio-scroll"
+              style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}
+            >
+              {skill.map((entry, index) => withSubgroup(
+                entry, index, skill, renderRow, color, theme, resource,
+              ))}
+            </Flex>
+          );
+        }
+
         // Each rail child is its OWN page.
         //
         // Rendering everything that was not the map put the section's settings
@@ -142,15 +161,17 @@ export function SectionBody({
           );
         }
 
-        // Otherwise the section's own settings, which is what Basic means.
-        const basics = rest.filter((entry) => !tabsAsList(entry));
+        // Otherwise the section's own settings, which is what Basic means —
+        // minus the skill block, which has a page of its own now and would
+        // otherwise be on both.
+        const basics = rest.filter((entry) => !tabsAsList(entry) && !entry.subgroup?.skill);
         return (
           <Flex
             direction="column" gap="xs" flex={1}
             className="studio-scroll"
             style={{ minHeight: 0, overflowY: 'auto' }}
           >
-            {basics.map((entry, index) => withSubgroup(entry, index, basics, renderRow, color, theme))}
+            {basics.map((entry, index) => withSubgroup(entry, index, basics, renderRow, color, theme, resource))}
           </Flex>
         );
       }
@@ -171,7 +192,7 @@ export function SectionBody({
     if (railLists.length <= 1 && railPlain.length <= 1) {
       return (
         <Flex direction="column" gap="xs" flex={1} style={{ minHeight: 0 }}>
-          {railPlain.map((entry, index) => withSubgroup(entry, index, railPlain, renderRow, color, theme))}
+          {railPlain.map((entry, index) => withSubgroup(entry, index, railPlain, renderRow, color, theme, resource))}
           {railLists[0] && (
             <Flex direction="column" flex={1} style={{ minHeight: 0 }}>
               {renderRow(railLists[0], query || undefined, true)}
@@ -190,7 +211,7 @@ export function SectionBody({
     }
     return (
       <Flex direction="column" gap="xs" flex={1} style={{ minHeight: 0 }}>
-        {railPlain.map((entry, index) => withSubgroup(entry, index, railPlain, renderRow, color, theme))}
+        {railPlain.map((entry, index) => withSubgroup(entry, index, railPlain, renderRow, color, theme, resource))}
       </Flex>
     );
   }
@@ -205,7 +226,7 @@ export function SectionBody({
             onChange: (next) => setValue(resource, entry, next),
           }))}
         />
-        {rest.map((entry, index) => withSubgroup(entry, index, rest, renderRow, color, theme))}
+        {rest.map((entry, index) => withSubgroup(entry, index, rest, renderRow, color, theme, resource))}
       </Flex>
     );
   }
@@ -215,7 +236,7 @@ export function SectionBody({
 
   if (!useTabs) {
     // Keep schema order when there is nothing to tab.
-    return <>{entries.map((entry, index) => withSubgroup(entry, index, entries, renderRow, color, theme))}</>;
+    return <>{entries.map((entry, index) => withSubgroup(entry, index, entries, renderRow, color, theme, resource))}</>;
   }
 
   // The exact complement of what is tabbed. Testing for `type !== 'list'` was
@@ -394,7 +415,7 @@ function ListTabs({
           without capping how tall a long one may be. */}
       {showBasic && (
         <Flex direction="column" gap="xs" style={{ minHeight: '24vh' }}>
-          {plain.map((entry, index) => withSubgroup(entry, index, plain, renderRow, color, theme))}
+          {plain.map((entry, index) => withSubgroup(entry, index, plain, renderRow, color, theme, resource))}
         </Flex>
       )}
 
@@ -420,27 +441,121 @@ function withSubgroup(
   renderRow: (entry: SettingEntry, rowFilter?: string) => React.ReactNode,
   color: string,
   theme: ReturnType<typeof useMantineTheme>,
+  resource?: string,
 ) {
   const previous = list[index - 1];
   const startsBlock = entry.subgroup && previous?.subgroup?.id !== entry.subgroup.id;
+  const skill = entry.subgroup?.skill;
+
+  const heading = startsBlock ? (
+    // The rail's sub-tree scrolls to this. The divider already marked where a
+    // block begins; it just had no name anything could aim at.
+    <Flex
+      align="center" gap="xs" mt="xs" mb="0.1vh"
+      data-subgroup={entry.subgroup!.id}
+    >
+      <Flex h="0.1vh" w="1.4vh" style={{ background: alpha(color, 0.5) }} />
+      <Text ff="Akrobat Bold" size="xs" tt="uppercase" lts="0.1em" c={alpha(color, 0.85)}>
+        {entry.subgroup!.label}
+      </Text>
+      <Flex h="0.1vh" style={{ flex: 1, background: alpha(theme.colors.dark[5], 0.5) }} />
+    </Flex>
+  ) : null;
+
+  /*
+    A skill block is drawn as ONE thing: settings on the left, the curve beside
+    them on the right.
+
+    The curve started underneath, after the last field, which reads the wrong
+    way round — you change a setting at the top and the thing that tells you
+    what you just did is off the bottom of the block, and you cannot see both at
+    once. A levelling block is four or five short fields and never grows, so the
+    room is there to put them side by side and watch the climb move as you drag.
+
+    Consumed in one go at the first entry, and every later entry of the block
+    returns nothing. Rendering them individually is what forced the curve to be
+    an afterthought appended at the end.
+  */
+  if (skill) {
+    if (!startsBlock) return null;
+
+    const mine = list.filter((e) => e.subgroup?.id === entry.subgroup!.id);
+
+    return (
+      <Fragment key={entry.path}>
+        {heading}
+        <Flex gap="md" align="flex-start" wrap="wrap">
+          {/*
+            Descriptions move to a hover icon in here.
+
+            A setting's help text is laid out inline at up to 82vh wide, which
+            is fine down the middle of a full pane and awful in a column half
+            that: the levelling-style paragraph wrapped to twelve lines and the
+            dropdown it belongs to ended up floating in the middle of them. The
+            same information, on the same hover icon the row editors already
+            use, and the fields stay a list of fields.
+          */}
+          <CompactHelp>
+            <Flex direction="column" gap="xs" style={{ flex: '1 1 34vh', minWidth: '30vh' }}>
+              {mine.map((e) => <Fragment key={e.path}>{renderRow(e)}</Fragment>)}
+            </Flex>
+          </CompactHelp>
+
+          {resource && (
+            <Flex style={{ flex: '1 1 34vh', minWidth: '28vh' }}>
+              <SkillCurveForBlock resource={resource} block={entry.subgroup!.id} list={list} />
+            </Flex>
+          )}
+        </Flex>
+      </Fragment>
+    );
+  }
 
   return (
     <Fragment key={entry.path}>
-      {startsBlock && (
-        // The rail's sub-tree scrolls to this. The divider already marked where
-        // a block begins; it just had no name anything could aim at.
-        <Flex
-          align="center" gap="xs" mt="xs" mb="0.1vh"
-          data-subgroup={entry.subgroup!.id}
-        >
-          <Flex h="0.1vh" w="1.4vh" style={{ background: alpha(color, 0.5) }} />
-          <Text ff="Akrobat Bold" size="xs" tt="uppercase" lts="0.1em" c={alpha(color, 0.85)}>
-            {entry.subgroup!.label}
-          </Text>
-          <Flex h="0.1vh" style={{ flex: 1, background: alpha(theme.colors.dark[5], 0.5) }} />
-        </Flex>
-      )}
+      {heading}
       {renderRow(entry)}
     </Fragment>
+  );
+}
+
+/**
+ * The curve for one `x-skill` block, from what is STAGED rather than saved.
+ *
+ * Reading the draft is the whole point: an admin dragging the modifier watches
+ * the climb change under their hand, which is the only way that number means
+ * anything before they commit to it.
+ */
+function SkillCurveForBlock({
+  resource, block, list,
+}: { resource: string; block: string; list: SettingEntry[] }) {
+  // Subscribed, not read once - `effectiveValue` is a plain function, so
+  // without this the chart would freeze at whatever it was on first render.
+  useStudio((state) => state.draft[resource]);
+
+  const read = (key: string, fallback: number) => {
+    const entry = list.find((e) => e.subgroup?.id === block && e.path.endsWith(`.${key}`));
+    if (!entry) return fallback;
+    const value = effectiveValue(resource, entry);
+    return typeof value === 'number' ? value : fallback;
+  };
+
+  const readText = (key: string, fallback: string) => {
+    const entry = list.find((e) => e.subgroup?.id === block && e.path.endsWith(`.${key}`));
+    if (!entry) return fallback;
+    const value = effectiveValue(resource, entry);
+    return typeof value === 'string' ? value : fallback;
+  };
+
+  return (
+    <SkillCurve
+      settings={{
+        baseLevel: read('baseLevel', 1),
+        maxLevel: read('maxLevel', 99),
+        baseXP: read('baseXP', 83),
+        modifier: read('modifier', 1),
+        curve: readText('curve', 'runescape') as never,
+      }}
+    />
   );
 }

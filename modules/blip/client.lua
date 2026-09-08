@@ -22,15 +22,28 @@ blip.delete = function(id)
   blips[id] = nil
 end
 
+--- Change a live blip.
+---
+--- Taken off and put back rather than edited in place: the shape can change as
+--- well as the look — a coord blip becoming an area or a radius one — and those
+--- are different natives, not different arguments.
+---
+--- `foundBlip`, NOT `blip`. This read `blip:hide()` and `blip:render()`, which
+--- are the CLASS, not the instance. The class has no `self.blip`, so `hide` bailed
+--- immediately and left the real blip on the map with nothing pointing at it any
+--- more, and `render` then went looking for `self.pos` on the class and threw. So
+--- every call errored AND leaked a blip, which is why callers stopped using it.
 blip.update = function(id, data)
   local foundBlip = blips[id]
-  if foundBlip then
-    for k,v in pairs(data) do 
-      foundBlip[k] = v
-    end
-    blip:hide()
-    blip:render()
+  if not foundBlip then return end
+
+  for k, v in pairs(data) do
+    foundBlip[k] = v
   end
+
+  foundBlip:hide()
+  foundBlip:render()
+  return foundBlip
 end
 
 
@@ -51,8 +64,19 @@ function blip:__init()
   self:render()
 end
 
+--- Should this blip be on the map right now?
+---
+--- A blip with no `canSee` is always on — that is every blip in every resource
+--- today, so this is the answer that has to stay cheap and unsurprising.
+---
+--- This used to end in `or true`, which is true whenever the left side is false.
+--- So it answered YES unconditionally and `canSee` did nothing at all: a blip
+--- meant to appear only while you are on the job was on the map permanently.
+--- The old shape also compared against `nil`, so a `canSee` returning `false`
+--- read as visible — the one answer it exists to give.
 function blip:canRender()
-  return ((self.canSee and self.canSee()) ~= nil) or true
+  if not self.canSee then return true end
+  return self.canSee() and true or false
 end
 
 
@@ -75,20 +99,24 @@ function blip:render()
     SetBlipScale(blip, self.scale or 1.0)
   end 
 
-  if cache.game == 'fivem' then 
+  if cache.game == 'fivem' then
     SetBlipDisplay(blip, self.display or 4)
     SetBlipColour(blip, self.color or 1)
-    SetBlipAsShortRange(blip, self.shortRange ~= nil and self.shortRange or true)
+    -- `x ~= nil and x or true` is the classic Lua and/or trap: with `x` false it
+    -- reads `(true and false) or true`, which is TRUE. So short-range could be
+    -- asked for but never turned off, and a blip meant to show across the whole
+    -- map only appeared once you were near it.
+    SetBlipAsShortRange(blip, self.shortRange ~= false)
     SetBlipCategory(blip, self.category or 1)
     SetBlipAlpha(blip, self.alpha or 255)
-  end 
-  
+  end
+
   if self.rotation then SetBlipRotation(blip, self.rotation or 0) end
 
   if self.route then
-    SetBlipRoute(blip, self.route or true)
+    SetBlipRoute(blip, true)
   end
-  
+
   if cache.game == 'redm' then 
     Citizen.InvokeNative(0x9CB1A1623062F402 , blip, self.name or 'Blip')
   elseif cache.game == 'fivem' then
@@ -97,20 +125,34 @@ function blip:render()
     EndTextCommandSetBlipName(blip)
   end
 
-  AddEventHandler('onResourceStop', function(resource)
-    if resource == GetCurrentResourceName() or resource == 'dirk_lib' then 
-      self:hide()
-    end
-  end)
-
   self.blip = blip
 end
 
+--- Take it off the map, but keep the registration.
+---
+--- This is what `canSee` needs and `destroy` cannot give it: a blip that comes
+--- back. Destroying forgets the blip entirely, so there is nothing left to
+--- re-render when the player is back on the job. A caller switching a blip off
+--- for good wants `lib.blip.destroy`.
 function blip:hide()
   if not self.blip then return end
   RemoveBlip(self.blip)
   self.blip = nil
 end
+
+--- ONE handler for every blip, registered once when the module loads.
+---
+--- This used to be registered inside `render`, so a blip was handed a fresh
+--- handler every time it was drawn — and a `canSee` blip is drawn again every
+--- time it comes back into view. Handlers are never removed, so a blip that
+--- flickered on and off for an hour left an hour's worth of them behind.
+---
+--- `modules/*` load into the CONSUMER's VM, so `GetCurrentResourceName` here is
+--- the resource that owns these blips, which is exactly what should clear them.
+AddEventHandler('onResourceStop', function(resource)
+  if resource ~= GetCurrentResourceName() and resource ~= 'dirk_lib' then return end
+  for _, v in pairs(blips) do v:hide() end
+end)
 
 
 CreateThread(function()

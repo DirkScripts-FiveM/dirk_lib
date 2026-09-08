@@ -25,11 +25,41 @@ local TOOL_ID = 'capturePosition'
 local capturing = false
 local captureCallback = nil
 
+--- Blur on or off, waiting its turn.
+---
+--- The blur natives IGNORE a new fade while one is still running, and the panel
+--- fades in the moment it opens - so clicking Set promptly enough had the
+--- fade-out silently dropped and left the world blurred for the whole walk,
+--- with nothing to clear it. `openSettingsUi` already waits for exactly this
+--- reason; the capture never did.
+---
+--- In its own thread because the entry points are NUI callbacks, which are no
+--- place to sit and yield.
+---
+--- ── and why it re-checks before it acts ─────────────────────────────────────
+---
+--- A thread that waits and then blurs is a thread that can blur AFTER the thing
+--- it was blurring for has gone. Close the panel while this is still waiting on
+--- a fade already in flight, and the fade-in lands on an empty screen with
+--- nothing left open to clear it - the world stays blurred until you restart.
+--- Which is worse than the bug it was added to fix.
+---
+--- So the fade-in only happens if we are still the reason for it. `still` is
+--- checked at the moment of acting, not the moment of asking.
+local function fade(on, still)
+  CreateThread(function()
+    while IsScreenblurFadeRunning() do Wait(0) end
+    if still and not still() then return end
+    if on then TriggerScreenblurFadeIn(0) else TriggerScreenblurFadeOut(0) end
+  end)
+end
+
 local function endCapture(success, payload)
   if not capturing then return end
   capturing = false
   SetNuiFocus(true, true)
-  TriggerScreenblurFadeIn(0)
+  -- Only re-blur if the panel is still there to be blurred BEHIND.
+  fade(true, function() return lib.adminTool.isEditing() end)
   lib.hideInstructions()
   if success then
     SendNuiMessage(json.encode({
@@ -56,7 +86,8 @@ local function startCapture(cb, instructions)
   captureCallback = cb
 
   SetNuiFocus(false, false)
-  TriggerScreenblurFadeOut(0)
+  fade(false)
+
   if type(instructions) == 'table' and instructions.title then
     lib.showInstructions(instructions)
   end
@@ -75,7 +106,17 @@ local function startCapture(cb, instructions)
         endCapture(true, {
           x = pos.x,
           y = pos.y,
-          z = pos.z,
+          -- The GROUND, not your middle.
+          --
+          -- `GetEntityCoords` on a standing ped reads about a metre above the
+          -- floor, so storing it raw made every saved position a metre high -
+          -- and everything that SPAWNS at one hovered. Every consumer was
+          -- quietly working around that with its own grounding call.
+          --
+          -- Fixed where it is captured instead, so the stored number is the
+          -- place itself. `gotoCoord` therefore does NOT subtract any more:
+          -- one offset, applied once, here.
+          z = pos.z - 1.0,
           w = GetEntityHeading(ply),
         })
         return
@@ -103,10 +144,10 @@ lib.adminTool.gotoCoord = function(v)
   local z = tonumber(v.z) or 0.0
   local w = tonumber(v.w) or 0.0
   local ply = PlayerPedId()
-  -- -1.0 z mirrors druglabs' shell-offset goto: GTA ped root sits ~1m above
-  -- visual ground when standing, so subtract 1m to drop the ped to the
-  -- floor instead of mid-air.
-  SetEntityCoords(ply, x + 0.0, y + 0.0, z - 1.0, false, false, false, false)
+  -- No offset. The capture above already stores the ground, so the number is
+  -- where you want to stand. This used to subtract a metre to undo the metre
+  -- the capture added; both halves are gone.
+  SetEntityCoords(ply, x + 0.0, y + 0.0, z + 0.0, false, false, false, false)
   SetEntityHeading(ply, w % 360.0)
 end
 
@@ -130,5 +171,24 @@ AddEventHandler('onResourceStop', function(name)
     captureCallback = nil
     SetNuiFocus(false, false)
     lib.hideInstructions()
+    TriggerScreenblurFadeOut(0)
   end
+end)
+
+--- The panel closed. Whatever was mid-flight, the screen is clear.
+---
+--- The backstop for every way a blur can be left behind: a capture running when
+--- the panel shut, a fade still queued, a resource restarted underneath one. A
+--- stuck blur has no way out from inside the game, so it is worth one
+--- unconditional clear on the one event that means "nothing is open".
+AddEventHandler('dirk_lib:scriptConfigClosed', function()
+  if capturing then
+    capturing = false
+    captureCallback = nil
+    lib.hideInstructions()
+  end
+  CreateThread(function()
+    while IsScreenblurFadeRunning() do Wait(0) end
+    TriggerScreenblurFadeOut(0)
+  end)
 end)

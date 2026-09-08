@@ -7,12 +7,41 @@ import { useChrome } from './studioLocale';
 
 const STRENGTH_COLORS = ['#22c55e', '#f59e0b', '#ef4444'];
 
-/** Matches fishing's own strength bands so the wording lines up with the game. */
-export function strengthMeta(value: number, max = 1) {
+/**
+ * Which band a value falls in, and what colour that band is.
+ *
+ * The traffic lights are a JUDGEMENT — green is a gentle setting, red a harsh
+ * one — which is true of a difficulty and nonsense for anything else. So a
+ * field that names its own bands gets a neutral colour instead: a blip that is
+ * "extra large" is not thereby a warning.
+ *
+ * @param bands  the field's own `x-bandLabels`, already translated
+ * @param fallbackBands  dirk_lib's default three, already translated. These
+ *        are the PANEL's words, not a script's, so they come from dirk_lib's
+ *        own chrome bundle — they used to be English string literals right
+ *        here, which made the one label on a slider the only untranslatable
+ *        thing on the form.
+ */
+export function strengthMeta(
+  value: number,
+  max = 1,
+  bands?: string[],
+  neutral?: string,
+  fallbackBands?: [string, string, string],
+) {
   const pct = Math.min(Math.max(value / max, 0), 1);
-  if (pct < 0.34) return { color: STRENGTH_COLORS[0], label: 'Weak' };
-  if (pct < 0.67) return { color: STRENGTH_COLORS[1], label: 'Moderate' };
-  return { color: STRENGTH_COLORS[2], label: 'Strong' };
+
+  if (bands && bands.length > 0) {
+    // Even slices across the range, and the top value lands in the LAST band
+    // rather than falling off the end of the array.
+    const i = Math.min(bands.length - 1, Math.floor(pct * bands.length));
+    return { color: neutral ?? STRENGTH_COLORS[1], label: bands[i] };
+  }
+
+  const [weak, moderate, strong] = fallbackBands ?? ['Weak', 'Moderate', 'Strong'];
+  if (pct < 0.34) return { color: STRENGTH_COLORS[0], label: weak };
+  if (pct < 0.67) return { color: STRENGTH_COLORS[1], label: moderate };
+  return { color: STRENGTH_COLORS[2], label: strong };
 }
 
 /**
@@ -22,17 +51,23 @@ export function strengthMeta(value: number, max = 1) {
  * everything the schema bounds to 0..1 or 0..2.
  */
 export function SliderControl({
-  value, min = 0, max = 1, onChange, disabled,
+  value, min = 0, max = 1, onChange, disabled, bands,
 }: {
   value: unknown;
   min?: number;
   max?: number;
   onChange: (next: number) => void;
   disabled?: boolean;
+  /** `x-bandLabels` — what this field calls its own steps, low to high. */
+  bands?: string[];
 }) {
   const theme = useMantineTheme();
+  const t = useChrome();
   const current = typeof value === 'number' ? value : 0;
-  const { color, label } = strengthMeta(current, max);
+  const { color, label } = strengthMeta(
+    current, max, bands, theme.colors[theme.primaryColor][5],
+    [t('bands.weak', 'Weak'), t('bands.moderate', 'Moderate'), t('bands.strong', 'Strong')],
+  );
   const pct = Math.min(Math.max(current / max, 0), 1);
 
   return (

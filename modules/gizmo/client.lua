@@ -151,7 +151,18 @@ local function clearEntityDraw(entity)
   if DoesEntityExist(entity) then SetEntityDrawOutline(entity, false) end
 end
 
---- Gizmo editor for an entity. Yields until confirmed or cancelled.
+--- Keys polled rather than key-mapped. See the loop for why ESC cannot be a
+--- binding; G joins it so the whole way-out scheme is read from one place.
+---   200 = INPUT_FRONTEND_PAUSE (ESC) · 47 = INPUT_DETONATE (G)
+---   38  = INPUT_PICKUP (E)
+---
+--- E is polled ALONGSIDE the RETURN keymapping rather than replacing it: a
+--- keymapping's default only applies the first time it is registered, so
+--- changing it would leave everyone who has already run this on RETURN while
+--- the card told them to press E.
+local CONTROL = { cancel = 200, back = 47, confirm = 38 }
+
+--- Gizmo editor for an entity. Yields until confirmed, stepped back, or cancelled.
 ---
 --- @param entity number The entity handle to manipulate
 --- @param options? table { disableControls = boolean (default true) }
@@ -172,17 +183,51 @@ function lib.gizmo(entity, options)
   local originalPos = GetEntityCoords(entity)
   local originalRot = GetEntityRotation(entity, 2)
 
-  -- Send real keybinds to the overlay
-  local keys = {
-    translate = lib.getCommandKey('+gizmoTranslation'),
-    rotate = lib.getCommandKey('+gizmoRotation'),
-    localWorld = lib.getCommandKey('+gizmoLocal'),
-    orbit = 'ALT',
-    select = lib.getCommandKey('+gizmoSelect'),
-    confirm = lib.getCommandKey('+gizmoConfirm'),
-    cancel = lib.getCommandKey('+gizmoCancel'),
-  }
-  TriggerEvent('dirk_lib:showGizmoControls', keys)
+  -- The SAME card every other in-world tool uses.
+  --
+  -- This had a hand-rolled overlay of its own (`dirk_lib:showGizmoControls`
+  -- and a React component to match), which meant two panels in one flow: a
+  -- placer would show the standard instruction card, hand over to the gizmo,
+  -- and the card would be replaced by a different-looking one saying the same
+  -- kind of thing. `lib.showInstructions` is the primitive for exactly this,
+  -- so the gizmo uses it and the transition is now just the keys changing.
+  --
+  -- `options.instructions` lets the caller supply its own wording - which is
+  -- also how it gets translated, since the caller holds the locale and this
+  -- module has no business knowing what language anyone reads.
+  --
+  -- The keys are read from the real bindings rather than written out, so
+  -- rebinding the gizmo changes the card with it.
+  --
+  -- Local/world axes is deliberately NOT on the card. It is a real setting -
+  -- it decides whether the handles follow the map's axes or the object's own -
+  -- but it lives inside the native, which is why `+gizmoLocal` has a key
+  -- mapping and no command behind it. We cannot set its default or turn it
+  -- off, so advertising a toggle we do not control, for a distinction that is
+  -- invisible until the object is rotated, costs a line and teaches nothing.
+  -- L still works for anyone who wants it.
+  -- Who owns the card.
+  --
+  -- A caller that supplied its own wording is running a flow with more than
+  -- one step in it, and hiding the card on the way out makes it fade away and
+  -- fade back for the next step - two panels, visibly. Left alone, the next
+  -- `showInstructions` just swaps the contents of the one already on screen.
+  --
+  -- So the gizmo only takes the card down if the card was its own.
+  local ownsCard = options.instructions == nil
+
+  lib.showInstructions(options.instructions or {
+    title = 'Place it',
+    hint  = 'Fine — drag the handles.',
+    keys  = {
+      { key = lib.getCommandKey('+gizmoSelect'),      action = 'Grab a handle' },
+      { key = lib.getCommandKey('+gizmoTranslation'), action = 'Move' },
+      { key = lib.getCommandKey('+gizmoRotation'),    action = 'Rotate' },
+      { key = 'G',     action = 'Back to aiming' },
+      { key = 'ENTER', action = 'Place it here' },
+      { key = 'ESC',   action = 'Cancel' },
+    },
+  })
 
   local resetPedAlpha = false
   if IsEntityAPed(entity) then
@@ -192,49 +237,85 @@ function lib.gizmo(entity, options)
     SetEntityDrawOutline(entity, true)
   end
 
-  local cancelled = false
+  -- Three ways out, not two.
+  --
+  -- A gizmo that only confirms or cancels cannot say "I am done fiddling, put
+  -- me back to aiming" — and that is a different thing from "forget the whole
+  -- placement". Conflating them meant backing out of fine tuning threw away
+  -- the position you had spent a minute getting right.
+  --
+  --   confirmed → the caller gets pos/rot
+  --   stepped   → the caller gets 'back', entity left exactly as it is
+  --   cancelled → the caller gets nil, entity reverted
+  local outcome = 'confirmed'
 
-  local function finish(cancel)
-    if cancel then cancelled = true end
+  local function finish(how)
+    outcome = how or 'confirmed'
     gizmoEnabled = false
   end
 
   activeGizmoObj.close = finish
 
-  local orbiting = false
-
   CreateThread(function()
     while gizmoEnabled and DoesEntityExist(entity) do
       Wait(0)
 
-      -- Enter to confirm
+      -- Dying takes the screen and puts the card away; without this the gizmo
+      -- carries on holding the mouse behind the respawn with nothing to say
+      -- why. Treated as a cancel, so the entity goes back where it was.
+      if IsEntityDead(cache.ped) then
+        finish('cancelled')
+        break
+      end
+
+      -- E (or Enter) to confirm
       if gizmoConfirmPressed then
         gizmoConfirmPressed = false
-        finish(false)
+        finish('confirmed')
         break
       end
 
       -- Backspace to cancel
       if gizmoCancelPressed then
         gizmoCancelPressed = false
-        finish(true)
+        finish('cancelled')
         break
       end
 
-      -- ALT (control 19 = INPUT_CHARACTER_WHEEL) to orbit — checked via IsDisabledControlPressed
-      local altHeld = IsDisabledControlPressed(0, 19)
-      if altHeld and not orbiting then
-        orbiting = true
-        LeaveCursorMode()
-      elseif not altHeld and orbiting then
-        orbiting = false
-        EnterCursorMode()
+      -- ESC and G, polled rather than key-mapped.
+      --
+      -- `RegisterKeyMapping` cannot have ESC: the pause menu owns it and takes
+      -- the press first. Disabling the control and reading it directly is the
+      -- only way to offer the key everyone expects to mean "get me out", so
+      -- both live here rather than half the scheme being bindings and half
+      -- being polls.
+      DisableControlAction(0, CONTROL.cancel, true)
+      DisableControlAction(0, CONTROL.back, true)
+      DisableControlAction(0, CONTROL.confirm, true)
+
+      if IsDisabledControlJustPressed(0, CONTROL.confirm) then
+        finish('confirmed')
+        break
+      elseif IsDisabledControlJustPressed(0, CONTROL.cancel) then
+        finish('cancelled')
+        break
+      elseif IsDisabledControlJustPressed(0, CONTROL.back) then
+        finish('back')
+        break
       end
 
-      -- Always disable ALT's default action (character wheel) 
+      -- ALT used to drop cursor mode here so the gameplay camera could turn.
+      -- It never worked: the gizmo native holds the mouse for its handles, so
+      -- letting go of the cursor changed nothing you could see, and it read as
+      -- a key that does nothing. Gone rather than left in.
+      --
+      -- Which leaves precise mode with no camera control at all - you frame
+      -- the shot in rough mode and then work on it. The real answer is an
+      -- orbit camera locked to the entity; until that exists, an honest
+      -- limitation beats a key that pretends.
       DisableControlAction(0, 19, true)
 
-      if not orbiting then
+      do
         if shouldDisable then
           for i = 1, #DISABLED_CONTROLS do
             DisableControlAction(0, DISABLED_CONTROLS[i], true)
@@ -255,21 +336,28 @@ function lib.gizmo(entity, options)
       end
     end
 
-    -- Ensure cursor mode is fully cleared no matter what state we ended in
+    -- ONCE. Cursor mode is counted, not a boolean: this used to leave twice
+    -- against a single enter to mop up the ALT orbit, which entered and left
+    -- on its own. With ALT gone the second call pushed the count below zero,
+    -- so the NEXT gizmo drew its handles with no cursor to grab them — which
+    -- only ever showed up on the second visit, after switching modes twice.
     LeaveCursorMode()
-    LeaveCursorMode()
-    TriggerEvent('dirk_lib:hideGizmoControls')
+    if ownsCard then lib.hideInstructions() end
     clearEntityDraw(entity)
     if resetPedAlpha and DoesEntityExist(entity) then SetEntityAlpha(entity, 255) end
 
     -- If cancelled, revert entity to original position/rotation
-    if cancelled and DoesEntityExist(entity) then
+    if outcome == 'cancelled' and DoesEntityExist(entity) then
       SetEntityCoords(entity, originalPos.x, originalPos.y, originalPos.z, false, false, false, false)
       SetEntityRotation(entity, originalRot.x, originalRot.y, originalRot.z, 2, false)
     end
 
     local result = nil
-    if not cancelled then
+    if outcome == 'back' then
+      -- A string, not a table, so a caller that only checks truthiness still
+      -- does something sensible and one that cares can tell the difference.
+      result = 'back'
+    elseif outcome == 'confirmed' then
       result = {
         entity = entity,
         pos = DoesEntityExist(entity) and GetEntityCoords(entity) or vector3(0, 0, 0),
@@ -283,6 +371,20 @@ function lib.gizmo(entity, options)
 
   return Citizen.Await(p)
 end
+
+--- A stop must not leave the handles up and the cursor captured.
+---
+--- dirk_lib as well as this resource: the gizmo is a dirk_lib module running
+--- inside whichever resource required it, and it draws through dirk_lib's NUI.
+--- Restarting dirk_lib underneath an open gizmo left it drawing over a panel
+--- that no longer existed, with cursor mode still held.
+AddEventHandler('onResourceStop', function(name)
+  if name ~= GetCurrentResourceName() and name ~= 'dirk_lib' then return end
+  if not activeGizmoObj then return end
+  if activeGizmoObj.close then pcall(activeGizmoObj.close, true) end
+  gizmoEnabled = false
+  LeaveCursorMode()
+end)
 
 RegisterKeyMapping('+gizmoSelect', 'Selects the currently highlighted gizmo', 'MOUSE_BUTTON', 'MOUSE_LEFT')
 RegisterKeyMapping('+gizmoTranslation', 'Sets mode of the gizmo to translation', 'keyboard', 'T')

@@ -136,4 +136,8 @@ local test = {
   expect    = expect,
   runLocal  = runLocal,
   report    = report,
+  --- How many tests this VM has. Lets the dispatcher skip a resource that
+  --- loaded lib.test but ships no suite, rather than printing an empty result
+  --- for it on every bare `dirktest`.
+  count     = function() return #registry end,
 }

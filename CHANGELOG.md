@@ -9,9 +9,17 @@
 - **Admins.** One place for who can open the panel, replacing the Access tab scripts used to carry. Grants can be a person (picked from who is online, or by identifier for someone offline) or an ACE group. A new **view** level below edit reads settings and logs but can never save and is never sent server-only values such as webhook URLs. Existing per-script grants fold in automatically on first load.
 - **Bridges page.** The overrides you already had, now next to what dirk_lib actually detected on your server, so auto has a face.
 - **Changelogs and announcements in the panel**, fetched from our repo, so you see what changed without leaving the game.
-- **Better controls throughout** — durations, hour-of-day pickers, two-point range sliders, either/or switches that name both sides, and open maps of values. Coordinates and areas are drawn on a real map rather than typed.
+- **Better controls throughout** — durations, hour-of-day pickers, two-point range sliders, either/or switches that name both sides, and open maps of values. Areas are drawn on a real map, and a coordinate is set by walking to the spot and pressing a key rather than typed.
 - **The panel opens fast.** Opening used to re-download every script's schema and config; now your game keeps the schemas cached and already holds the values, so only a small amount of admin-only data travels - and everything loads at once instead of one script at a time.
-- **A self-check command.** Type dirktest in your server console and the script tests itself against your own inventory and framework — so a bad combination shows up before your players find it, not after.
+- **A Players page, the same in every script that has one.** Searching your character list, putting whoever is online at the top, and paging through the rest is now dirk_lib's job rather than each script writing its own — so it behaves identically wherever it appears, and a character's own name and the account behind it are told apart properly instead of showing the same handle twice.
+- **A self-check command.** Type dirktest in your server console and the script tests itself against your own inventory and framework — so a bad combination shows up before your players find it, not after. Name a script to run just that one — `dirktest dirk_fishing` — and any script shipping tests gets a **Tests** tab in the panel automatically. Console only, because a suite is allowed real side effects.
+
+## New — levels and XP
+
+- **One levelling system, shared by every dirk script.** Fishing's XP curve is now part of dirk_lib, which means any script can have levels without inventing its own — and every one of them is calculated the same way. Same maths in the game and in the panel, so a gate and the bar a player is looking at can never disagree.
+- **Choose the shape of the climb.** Long haul (what fishing has always used), Steady, Classic RPG, or Reachable. **Switching never takes anyone's XP.** A level is worked out from XP each time it is asked for and never written down, so a new shape simply re-reads everyone.
+- **Levels can be held per-something.** A fishing level is one number per player; a reputation is one per place — you are somebody to one man and nobody to the next. Both are the same setting with the same curve.
+- **The panel draws the curve.** Any levelling block shows the climb as you drag it, what real levels cost, the total to max, and how that compares with the default pace.
 
 ## Fixes
 
@@ -19,6 +27,26 @@
 - **Change history listed edits nobody made.** Fields inside a list row take their default from the shipped row rather than the field, which the diff did not know, so saving any row logged a pile of "default → …" lines for values that never changed.
 - Settings the schema does not declare are no longer deleted from your stored config.
 - An empty server-only payload is sent as nothing rather than an empty object.
+
+## Fixes — the settings map
+
+- **Pins could be dragged by accident, and now cannot be dragged at all unless you say so.** Every pin on every settings map was live the whole time it was open, so a missed click nudged a place into the next field with nothing to say it had happened. Dragging is now off by default and turned on with one clearly-marked button — and positions that were set by WALKING to them are never draggable, because a map has no height or heading to give back. Those are shown on the map and edited in the row.
+- **One place stopped looking like several.** A barn find is a car and the man selling it a few metres apart; zoomed out those two pins sat on top of each other and read as two separate finds. They are one pin until you are close enough for the difference to matter, then they separate and label themselves.
+- **"Is this point inside this area?" answered no almost everywhere.** The check was three-dimensional with a five-metre allowance, but an area drawn on a map is flat — so anything at real world height fell outside a boundary drawn at ground level. Every drop rule, area check and "am I at this place" question built on it silently refused. Areas are now flat unless a height is asked for.
+- **Editing a place on the map lost things the list editor had.** The two editors were separate copies that had drifted: the map's could not translate its own field labels, showed a blank where a setting has a default, and opened the wrong picker for a setting nested inside another (a blip's sprite, for instance, opened an empty window). Both now use the same editor, so all three are fixed and cannot drift again.
+
+## Fixes — map blips
+
+- **Changing a blip errored and left the old one stuck on the map.** The update ran against the wrong thing entirely, so the blip it was meant to replace was never removed and the new one was never drawn. Scripts that rename or recolour a blip while the server is running — a property changing hands, a shop opening — piled up duplicates.
+- **Blips that should only show sometimes were on the map permanently.** The visibility check always answered yes, so a blip meant to appear only for its owner, or only while you are on the job, was visible to everyone all the time.
+- **Blips that hide and come back no longer leak.** Each redraw was leaving a shutdown handler behind that was never cleared.
+- **Long-range blips work.** Asking for a blip to show across the whole map was ignored and it was always drawn short-range.
+
+## Fixes — settings panel
+
+- **Sliders name their own steps.** Every slider borrowed fishing's difficulty words whatever it measured, so a blip's SIZE read "Weak" at its smallest. A setting now says what its steps are called — Tiny to Huge, Rarely to Often — and those words translate like everything else. So do dropdown options, which were English-only with no way to change them.
+- **A row editor no longer shows a heading with nothing to say.** Opening one showed the name of the list it came from underneath the title, where a description belongs.
+- **The last sections of a script can be reached.** A rail click or a search result aimed at one of a script's final sections scrolled as far as the page would go, stopped short, and highlighted whichever section happened to be nearest the top — so the link looked broken when it was the page that had run out of room. There is now room past the end, and a jump holds its landing while the rest of the list is still being measured underneath it.
 
 ---
 

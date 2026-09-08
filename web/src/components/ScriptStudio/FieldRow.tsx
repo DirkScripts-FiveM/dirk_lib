@@ -136,13 +136,68 @@ export function FieldRow({
   // the same fallback chain every other label in the panel uses.
   const language = useActiveLanguage();
   const bundles = useBundles();
-  const localised = (field: 'label' | 'description', fallback: string) => (
+  const localised = (suffix: string, fallback: string) => (
     (resource && path)
-      ? translate(bundles, language, resource, `settings.${path}.${column.key}.${field}`, fallback)
+      ? translate(bundles, language, resource, `settings.${path}.${column.key}.${suffix}`, fallback)
       : fallback
   );
   const fieldLabel = localised('label', column.label);
   const fieldHelp = column.help ? localised('description', column.help) : undefined;
+
+  /**
+   * The WORDS a field puts on screen beyond its own name.
+   *
+   * A dropdown's option labels and a slider's band names come from the schema,
+   * which is English - so a fully translated panel still had "Sports Classics"
+   * and "Extra large" in it, with no key anyone could translate. Both are
+   * derived from the field's path like every other string here, so a script
+   * translates them by adding entries, never by annotating the schema:
+   *
+   *   settings.<path>.<key>.enum.<value>
+   *   settings.<path>.<key>.bands.<index>
+   *
+   * By INDEX for bands, because they are a ladder: renaming the English word
+   * should not orphan its translation.
+   */
+  const localisedOptions = useMemo(
+    () => column.options?.map((option) => ({
+      ...option,
+      label: localised(`enum.${option.value}`, option.label),
+    })),
+    [column.options, bundles, language, resource, path, column.key],
+  );
+
+  const localisedBands = useMemo(
+    () => column.bandLabels?.map((band, i) => localised(`bands.${i}`, band)),
+    [column.bandLabels, bundles, language, resource, path, column.key],
+  );
+
+  /**
+   * The two sides of a `boolChoice`, under
+   *
+   *   settings.<path>.<key>.bool.true / .bool.false
+   *
+   * By the SIDE rather than by the English word, for the same reason bands go
+   * by index: rewording the schema should not orphan the translation.
+   */
+  const localisedBools = useMemo(
+    () => column.boolLabels && {
+      true: localised('bool.true', column.boolLabels.true ?? '') || undefined,
+      false: localised('bool.false', column.boolLabels.false ?? '') || undefined,
+    },
+    [column.boolLabels, bundles, language, resource, path, column.key],
+  );
+
+  /** The column as the controls should see it - already in the right language. */
+  const shownColumn = useMemo(
+    () => ({
+      ...column,
+      options: localisedOptions,
+      bandLabels: localisedBands,
+      boolLabels: localisedBools,
+    }),
+    [column, localisedOptions, localisedBands, localisedBools],
+  );
 
   const known = itemName ? items[itemName] : undefined;
   const mirrors = known
@@ -258,7 +313,7 @@ export function FieldRow({
 
       {column.type === 'slider' && (
         <SliderControl value={value} min={column.min} max={column.max ?? 1}
-          disabled={disabled} onChange={onChange} />
+          bands={localisedBands} disabled={disabled} onChange={onChange} />
       )}
 
       {column.type === 'range' && (
@@ -445,7 +500,7 @@ export function FieldRow({
       {!wide && column.type !== 'pickOne' && (
         <SettingControl
           type={column.type}
-          column={column}
+          column={shownColumn}
           value={shown}
           disabled={disabled || mirrors}
           onChange={onChange}

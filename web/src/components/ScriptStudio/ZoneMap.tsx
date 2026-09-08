@@ -5,15 +5,16 @@ import { AnimatePresence, motion } from 'framer-motion';
 import L from 'leaflet';
 import 'leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
-import { Eye, EyeOff, MapPin, Pencil, PenTool, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, Lock, LockOpen, MapPin, Pencil, PenTool, Trash2, X } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Polygon, useMap } from 'react-leaflet';
 import { PANE_HEIGHT, PANE_MIN_HEIGHT } from './Controls';
-import { FieldRow, isWideColumn } from './FieldRow';
+import { RowFields } from './RowFields';
+import { useStudio } from './store';
 import { validateRow } from './rowValidation';
 import { Icon } from './Icon';
 import { PickerDrawer } from './PickerDrawer';
-import { fieldGatedOff, singular, StudioButton } from './ui';
+import { singular, StudioButton } from './ui';
 import type { SettingColumn, SettingEntry } from './types';
 import { useChrome } from './studioLocale';
 import { newRow } from './newRow';
@@ -43,6 +44,14 @@ const ZONE_PALETTE = ['#5FD08A', '#4CC3DE', '#E0B15F', '#E0776B', '#B98FE0', '#8
  * Nothing here asks anyone to type a coordinate: boundaries are drawn with
  * leaflet-draw, the same interaction fishing's ZonesSection uses.
  */
+/**
+ * Zoom at which a place's points stop being one marker and become several.
+ *
+ * Chosen so a barn find's car and its owner — a few metres apart — are one pin
+ * at map scale and two once you are looking at the yard itself.
+ */
+const SPLIT_ZOOM = 6;
+
 export function ZoneMap({
   layers, resource, disabled,
 }: { layers: MapLayerInput[]; resource?: string; disabled?: boolean }) {
@@ -53,8 +62,33 @@ export function ZoneMap({
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<{ path: string; index: number } | null>(null);
   const [editing, setEditing] = useState<{ path: string; index: number } | null>(null);
+
+
   const [confirmDelete, setConfirmDelete] = useState<{ path: string; index: number } | null>(null);
   const [drawInto, setDrawInto] = useState<string | null>(null);
+
+  /**
+   * Pins are LOCKED until you say otherwise — and for most places, always.
+   *
+   * Dragging was how you moved a place, and also how you moved one by accident:
+   * every pin was live the whole time the map was open, so a missed click on a
+   * barn find nudged its owner into the next field with nothing to say it had
+   * happened.
+   *
+   * More than that, most of these positions are not map data at all. A barn
+   * find's owner is somewhere you STOOD — a spot with a height and a heading,
+   * set by walking there and pressing E. A map can express neither, so dragging
+   * one can only ever make it worse. Those layers opt out entirely with
+   * `movable: false` on their `x-mapPaths` entry and this toggle does not reach
+   * them; it exists for the ones a map really can place.
+   */
+  const [movable, setMovable] = useState(false);
+
+  /**
+   * How far in we are, for deciding whether a place's pins are one thing or
+   * several.
+   */
+  const [zoom, setZoom] = useState(4);
   /**
    * A row being made, held OUT of the list until it is saved.
    *
@@ -154,6 +188,27 @@ export function ZoneMap({
     return { ...layer, isMarker, isSingle, polyKey, labelKey, shapes, color, styleFor };
   }), [layers]);
 
+  /**
+   * Somewhere else asked for one of these rows.
+   *
+   * The same request `ListRows` already answers - a validation problem naming
+   * `fish[27]`, a search result naming a yard by its own name. This editor
+   * never listened, so anything pointing at a row that happens to live on a MAP
+   * arrived at the section and stopped, and you finished the job by hand.
+   *
+   * One request, both editors, so it does not matter which kind of list the
+   * thing being pointed at turned out to be in.
+   */
+  const rowRequest = useStudio((state) => state.openRowRequest);
+  useEffect(() => {
+    if (!rowRequest) return;
+    const layer = model.find((l) => l.entry.path === rowRequest.path);
+    if (!layer || !layer.shapes.some((shape) => shape.index === rowRequest.index)) return;
+    setSelected({ path: rowRequest.path, index: rowRequest.index });
+    setEditing({ path: rowRequest.path, index: rowRequest.index });
+    useStudio.setState({ openRowRequest: null });
+  }, [rowRequest, model]);
+
   const layerFor = (path: string) => model.find((l) => l.entry.path === path);
 
   const commitDrawing = (points: Point[]) => {
@@ -249,6 +304,7 @@ export function ZoneMap({
           {mapReady && (
             <DirkMap initialZoom={4}>
               <ExtendZoomRange minZoom={2} />
+              <ZoomWatch onZoom={setZoom} />
               <ZoomControls />
               <FrameAll model={visibleShapes} selected={selected} />
               {drawInto && <DrawPolygon color={layerFor(drawInto)?.color ?? accent} onDone={commitDrawing} />}
@@ -257,11 +313,27 @@ export function ZoneMap({
               {visibleShapes.filter((layer) => layer.isMarker).map((layer) => layer.shapes.flatMap((shape) => {
                 const active = selected?.path === layer.entry.path && selected.index === shape.index;
                 const style = layer.styleFor(shape.row);
-                return shape.pins.map((pin) => (
+                /*
+                  ONE place, one pin — until you are close enough for the
+                  difference to mean anything.
+
+                  A barn find is a car and the man selling it, a few metres
+                  apart. Zoomed out, those two pins sit on top of each other and
+                  read as two separate finds; the map looked like it had twice
+                  as much on it as it did. Past the threshold they separate and
+                  label themselves, which is the point at which "the owner
+                  stands over there" is a thing you can act on.
+                */
+                const pins = zoom >= SPLIT_ZOOM || shape.pins.length < 2
+                  ? shape.pins
+                  : [shape.pins[0]];
+                const collapsed = pins.length < shape.pins.length;
+
+                return pins.map((pin) => (
                   <Marker
                     key={`${layer.entry.path}:${shape.index}:${pin.key ?? ''}`}
                     position={gameToMap(pin.point.x, pin.point.y)}
-                    draggable={!disabled}
+                    draggable={!disabled && movable && layer.entry.mapMovable !== false}
                     eventHandlers={{
                       click: () => setSelected({ path: layer.entry.path, index: shape.index }),
                       // Dragging a pin IS how you move a place. Typing two
@@ -282,7 +354,7 @@ export function ZoneMap({
                     }}
                     icon={(
                       <PlacePin
-                        label={pin.label ? `${shape.title} · ${pin.label}` : shape.title}
+                        label={collapsed || !pin.label ? shape.title : `${shape.title} · ${pin.label}`}
                         hex={pin.color ?? style?.color ?? layer.color}
                         icon={style?.icon}
                         active={active}
@@ -455,6 +527,39 @@ export function ZoneMap({
             ))}
           </Flex>
 
+          {/* The lock. Off by default, loud while on, and absent entirely when
+              no layer on this map can be dragged anyway. */}
+          {model.some((layer) => layer.isMarker && layer.entry.mapMovable !== false) && (
+          <Flex px="xs" pb="xxs" style={{ flexShrink: 0 }}>
+            <motion.button
+              type="button"
+              onClick={() => setMovable((on) => !on)}
+              disabled={disabled}
+              whileTap={{ scale: 0.97 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.6vh',
+                width: '100%', padding: '0.5vh 0.8vh',
+                background: movable ? alpha('#f59e0b', 0.16) : 'transparent',
+                border: `0.1vh solid ${movable ? alpha('#f59e0b', 0.55) : alpha(theme.colors.dark[5], 0.5)}`,
+                borderRadius: theme.radius.xs,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {movable
+                ? <LockOpen size="1.4vh" color="#f59e0b" />
+                : <Lock size="1.4vh" color="rgba(255,255,255,0.4)" />}
+              <Text
+                ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.06em"
+                c={movable ? '#f59e0b' : 'rgba(255,255,255,0.45)'}
+              >
+                {movable
+                  ? t('zoneMap.pins_unlocked', 'Pins can be dragged')
+                  : t('zoneMap.pins_locked', 'Pins locked')}
+              </Text>
+            </motion.button>
+          </Flex>
+          )}
+
           <Flex direction="column" gap="xxs" p="xs" style={{ flexShrink: 0 }}>
             <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.08em" c="rgba(255,255,255,0.3)">
               {model.every((layer) => layer.isMarker)
@@ -573,6 +678,24 @@ export function ZoneMap({
  *
  * Worth folding into the Map component itself later so every consumer gets it.
  */
+/**
+ * Reports the current zoom outward.
+ *
+ * Lives inside the map because `useMap` only works under the container, and
+ * the pin rendering above needs to know how far in we are to decide whether a
+ * place's several points are worth separating.
+ */
+function ZoomWatch({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    const report = () => onZoom(map.getZoom());
+    report();
+    map.on('zoomend', report);
+    return () => { map.off('zoomend', report); };
+  }, [map, onZoom]);
+  return null;
+}
+
 function ExtendZoomRange({ minZoom = 2 }: { minZoom?: number }) {
   const map = useMap();
 
@@ -752,7 +875,18 @@ function ShapeModal({
   const theme = useMantineTheme();
   const color = theme.colors[theme.primaryColor][5];
   const [draft, setDraft] = useState<Row>(() => JSON.parse(JSON.stringify(row)));
-  const [picker, setPicker] = useState<SettingColumn | null>(null);
+  /**
+   * What the picker is editing, and where its answer goes.
+   *
+   * This held the COLUMN alone and `onPick` ignored the child it was handed,
+   * so clicking a blip's sprite inside the `blip` object opened the drawer on
+   * the object itself - a type the drawer has no picker for, hence an empty
+   * modal. The row editor has always carried the child and its accessors;
+   * this is the same shape, so nested fields behave the same in both.
+   */
+  const [picker, setPicker] = useState<
+    { column: SettingColumn; value: unknown; apply: (next: unknown) => void } | null
+  >(null);
 
   const allColumns = (entry.columns ?? []).filter((c) => c.key !== polyKey);
   const points = Array.isArray(draft[polyKey]) ? (draft[polyKey] as Point[]).length : 0;
@@ -844,29 +978,16 @@ function ShapeModal({
             </Flex>
           )}
 
-          <Flex direction="column" gap="xs" p="sm" style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
-            {columns.map((column) => (
-              <FieldRow
-                key={column.key}
-                // A tab that holds exactly one wide control does not need a
-                // titled box inside a titled tab saying the same thing twice.
-                bare={columns.length === 1 && isWideColumn(column.type)}
-                column={column}
-                resource={resource}
-                row={draft}
-                value={draft[column.key]}
-                error={problemFor(column.key)}
-                // `readOnly` too, same as RowModal. A generated id is the
-                // key smartMerge matches rows on, so typing over it silently
-                // orphans anything pointing at the row — and this modal was
-                // letting you, because it only ever checked the gate.
-                disabled={disabled || fieldGatedOff(column, draft) || !!column.readOnly}
-                dimmed={fieldGatedOff(column, draft)}
-                onChange={(v) => setDraft((prev) => ({ ...prev, [column.key]: v }))}
-                onPick={() => setPicker(column)}
-              />
-            ))}
-          </Flex>
+          <RowFields
+            columns={columns}
+            draft={draft}
+            resource={resource}
+            path={entry.path}
+            disabled={disabled}
+            problemFor={problemFor}
+            setField={(key, value) => setDraft((prev) => ({ ...prev, [key]: value }))}
+            onPick={setPicker}
+          />
 
           <Flex
             align="center" justify="space-between" px="sm" py="xs"
@@ -912,12 +1033,12 @@ function ShapeModal({
       <AnimatePresence>
         {picker && (
           <PickerDrawer
-            type={picker.type}
-            label={picker.label}
-            iconSet={picker.iconSet}
-            value={draft[picker.key]}
+            type={picker.column.type}
+            label={picker.column.label}
+            iconSet={picker.column.iconSet}
+            value={picker.value}
             disabled={disabled}
-            onApply={(v) => setDraft((prev) => ({ ...prev, [picker.key]: v }))}
+            onApply={picker.apply}
             onClose={() => setPicker(null)}
           />
         )}

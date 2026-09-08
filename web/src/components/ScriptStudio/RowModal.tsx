@@ -5,9 +5,9 @@ import {
   Activity, Gift, Info, Layers, Leaf, List, Package, Plus, Trash2, TriangleAlert,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { FieldRow } from './FieldRow';
+import { RowFields } from './RowFields';
 import { PickerDrawer } from './PickerDrawer';
-import { fieldGatedOff, ItemArt, StudioButton } from './ui';
+import { ItemArt, StudioButton } from './ui';
 import { validateRow } from './rowValidation';
 import type { SettingColumn, SettingEntry } from './types';
 import { useChrome } from './studioLocale';
@@ -116,18 +116,6 @@ export function RowModal({
     setDraft((prev) => ({ ...prev, [key]: value }));
 
   /**
-   * Is this field switched off by another field in the same row?
-   *
-   * A fish's permit price, interval and limits only mean anything while that
-   * fish needs a permit. The settings list has honoured `x-enabledWhen` all
-   * along; row editors never looked at it, so those fields stayed editable and
-   * read as though they applied. The field a rule POINTS AT is never disabled
-   * by it - the same rule the settings list follows, or a switch would grey
-   * itself out and leave no way back.
-   */
-  const gatedOff = (column: SettingColumn) => fieldGatedOff(column, draft);
-
-  /**
    * What is wrong with this row, if anything.
    *
    * Checked against EVERY column, not just the ones on the tab you are
@@ -163,7 +151,11 @@ export function RowModal({
         title={title}
         icon={List}
         iconColor={color}
-        description={entry.label}
+        // No subtitle. This carried the LIST's label, so editing "Cypress
+        // Flats" was subtitled "Yards" — a word with nothing to say, sitting
+        // where a description should be. You already know which list you
+        // opened; you clicked the row in it.
+
         onClose={askClose}
         width="78vh"
         height="76vh"
@@ -220,30 +212,17 @@ export function RowModal({
             </Flex>
           )}
 
-          <Flex direction="column" gap="xs" p="sm" style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
-            {(current?.columns ?? []).map((column) => (
-              <FieldRow
-                key={column.key}
-                column={column}
-                resource={resource}
-                row={draft}
-                path={entry.path}
-                // `?? column.default`: a row that predates a field has no key
-                // for it, and blank is not what the server will use
-                value={draft[column.key] ?? column.default}
-                disabled={disabled || gatedOff(column) || !!column.readOnly}
-                dimmed={gatedOff(column)}
-                itemName={itemName}
-                error={problemFor(column.key)}
-                onChange={(v) => setField(column.key, v)}
-                onPick={(child, apply) => setPicker({
-                  column: child ?? column,
-                  value: child ? apply?.read() : draft[column.key],
-                  apply: (next) => (apply ? apply.write(next) : setField(column.key, next)),
-                })}
-              />
-            ))}
-          </Flex>
+          <RowFields
+            columns={current?.columns ?? []}
+            draft={draft}
+            resource={resource}
+            path={entry.path}
+            itemName={itemName}
+            disabled={disabled}
+            problemFor={problemFor}
+            setField={setField}
+            onPick={setPicker}
+          />
 
           <Flex
             align="center" justify="space-between" px="sm" py="xs"

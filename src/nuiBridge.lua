@@ -166,96 +166,21 @@ end
 
   -- ── dirk-cfx-react's admin tools ────────────────────────────────────
   --
-  -- The Goto and Set buttons beside a coordinate do NOT call GET_POSITION or
-  -- GOTO_POSITION - those are the older pair. They speak the library's admin
-  -- tool protocol, which dirk_lib had no handler for at all, so both buttons
-  -- did precisely nothing.
+  -- ONE router, and it is not this file.
   --
-  -- The contract, read from the library: `ADMIN_TOOL_BEGIN` starts a tool and
-  -- the panel waits for a NUI message named `<id>_RESULT` (or `<id>_CANCELLED`)
-  -- to resolve it; `ADMIN_TOOL_INVOKE` is fire-and-forget.
-  local activeTool = nil
-
-  local function finishTool(id, data)
-    activeTool = nil
-    lib.hideInstructions()
-    SetNuiFocus(true, true)
-    SendNuiMessage(json.encode({
-      action = ('%s_%s'):format(id, data and 'RESULT' or 'CANCELLED'),
-      data = data,
-    }))
-  end
-
-  RegisterNuiCallback('ADMIN_TOOL_BEGIN', function(data, cb)
-    if not adminUiOpen() then cb({ success = false, _error = 'NotOpen' }) return end
-    local id = type(data) == 'table' and data.id or nil
-    if type(id) ~= 'string' then return cb({ ok = false }) end
-
-    if id ~= 'capturePosition' then
-      -- Nothing else is implemented here yet; say so rather than leaving the
-      -- panel waiting on a promise that will never settle.
-      cb({ ok = false })
-      SendNuiMessage(json.encode({ action = ('%s_CANCELLED'):format(id) }))
-      return
-    end
-
-    cb({ ok = true })
-    activeTool = id
-
-    -- dirk_lib's OWN instruction card, not one drawn by the panel: every
-    -- in-world prompt in every dirk script comes from here, so a coordinate
-    -- pick should look like all of them rather than like a second design.
-    -- The library hands us the wording; this just shows it.
-    local instructions = type(data.instructions) == 'table' and data.instructions or {}
-    lib.showInstructions({
-      title = instructions.title or 'Pick Position',
-      hint = instructions.hint or 'Walk to where you want this set',
-      keys = instructions.keys or {
-        { key = 'E', action = 'Set' },
-        { key = 'BACKSPACE', action = 'Cancel' },
-      },
-    })
-
-    -- Hands the game back to the player: the panel hides itself while a tool
-    -- is running, so this is what lets them walk to the spot.
-    SetNuiFocus(false, false)
-
-    CreateThread(function()
-      while activeTool == id do
-        Wait(0)
-        -- E to set, Backspace to cancel. Drawn from the instructions the
-        -- library shows, so the keys match what is on screen.
-        if IsControlJustPressed(0, 38) then
-          local ped = PlayerPedId()
-          local pos = GetEntityCoords(ped)
-          finishTool(id, {
-            x = pos.x, y = pos.y, z = pos.z, w = GetEntityHeading(ped),
-          })
-        elseif IsControlJustPressed(0, 177) then
-          finishTool(id, nil)
-        end
-      end
-    end)
-  end)
-
-  RegisterNuiCallback('ADMIN_TOOL_INVOKE', function(data, cb)
-    if not adminUiOpen() then cb({ success = false, _error = 'NotOpen' }) return end
-    cb({ ok = true })
-    local id = type(data) == 'table' and data.id or nil
-    if id ~= 'gotoCoord' then return end
-
-    local value = data.value
-    if type(value) ~= 'table' then return end
-    local ped = PlayerPedId()
-    -- The ped root sits about a metre above the visual ground, so drop it by
-    -- one rather than arriving mid-air.
-    SetEntityCoords(ped,
-      (tonumber(value.x) or 0) + 0.0,
-      (tonumber(value.y) or 0) + 0.0,
-      (tonumber(value.z) or 0) - 1.0,
-      false, false, false, false)
-    SetEntityHeading(ped, (tonumber(value.w) or 0.0) % 360.0)
-  end)
+  -- `modules/scriptConfig/admin` is the admin-tool router: `ADMIN_TOOL_BEGIN`
+  -- / `INVOKE` / `QUERY` dispatched by id, tools registered with
+  -- `lib.adminTool.register`, each one plain Lua in `admin/tools/`. This file
+  -- used to carry a SECOND copy of the whole thing - its own capture thread,
+  -- its own instruction card - registered over the top of it, so which one ran
+  -- came down to load order and fixing a tool meant remembering to fix it
+  -- twice.
+  --
+  -- Required rather than reimplemented. dirk_lib boots from `src/init.lua` and
+  -- so never loads `@dirk_lib/init.lua`, which is what pulls the router into
+  -- every CONSUMER's VM - the same gap that once left the Studio's own vehicle
+  -- list empty. One require closes it.
+  require '@dirk_lib/modules/scriptConfig/admin/init'
 
   -- World position, for any coordinate control in the panel.
   --
@@ -269,7 +194,9 @@ end
     if not adminUiOpen() then cb({ success = false, _error = 'NotOpen' }) return end
     local ped = PlayerPedId()
     local pos = GetEntityCoords(ped)
-    cb({ x = pos.x, y = pos.y, z = pos.z, w = GetEntityHeading(ped) })
+    -- The GROUND, not your middle - the same offset the walk-and-set capture
+    -- applies, so both ways of setting a position store the same number.
+    cb({ x = pos.x, y = pos.y, z = pos.z - 1.0, w = GetEntityHeading(ped) })
   end)
 
   RegisterNuiCallback('GOTO_POSITION', function(data, cb)
@@ -281,9 +208,8 @@ end
     local z = tonumber(data.z) or 0.0
     local w = tonumber(data.w) or 0.0
     local ped = PlayerPedId()
-    -- The ped root sits about a metre above the visual ground when standing,
-    -- so drop it by one rather than arriving mid-air.
-    SetEntityCoords(ped, x + 0.0, y + 0.0, z - 1.0, false, false, false, false)
+    -- No offset: the stored number is already the ground.
+    SetEntityCoords(ped, x + 0.0, y + 0.0, z + 0.0, false, false, false, false)
     SetEntityHeading(ped, w % 360.0)
   end)
 

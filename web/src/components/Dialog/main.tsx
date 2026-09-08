@@ -61,6 +61,60 @@ export type ResponseProps = {
   disabled?: boolean;
   empty?: boolean;
   dontClose?: boolean;
+
+  /* ── the card form ──────────────────────────────────────────────────────
+   *
+   * A reply carrying `image` is drawn as a CARD instead of a line of text:
+   * bigger, three across instead of four in a grid, with room for a picture
+   * and three lines under it. One card in the list switches the whole row.
+   *
+   * It exists because some replies are not things you SAY, they are things
+   * you are being OFFERED — three cars a scrapyard wants collecting, three
+   * contracts, three boats. Told as text those read as three near-identical
+   * sentences you have to parse; as cards you pick one at a glance.
+   *
+   * Any `src` the page can load. A `nui://<resource>/…` URL keeps the art in
+   * the script it belongs to — dirk_lib must never learn what a scrapyard
+   * job looks like — and a data: URI works for something generated.
+   */
+  image?: string;
+  /**
+   * What to draw when `image` will not load.
+   *
+   * Art for a specific thing usually comes off a service that has never heard
+   * of half of what a server runs — a custom car, a model somebody renamed —
+   * and a card with a broken picture in it is worse than one with a shape. So
+   * the caller names the specific art AND something generic that always
+   * exists, and the card falls back on its own.
+   *
+   * A LIST is tried in order, because the real chain is usually more than two
+   * links: what this server put in its own folder, then whatever service it
+   * points at, then a shape that is drawn rather than fetched.
+   */
+  imageFallback?: string | string[];
+  /** The quiet second line: where it is, who it is from. */
+  sub?: string;
+  /** The figure, drawn in the accent. Money, distance, a count. */
+  value?: string;
+  /** A small chip over the art. The one word you want read first. */
+  badge?: string;
+  badgeTone?: DialogTone;
+};
+
+/** A level and how far into it — the field names `lib.skill.progress` returns. */
+export type SkillProps = {
+  /** What this standing is CALLED here: "Reputation", "Fishing", a rank name. */
+  label?: string;
+  level: number;
+  xp?: number;
+  currentLevelXp?: number;
+  nextLevelXp?: number;
+  xpToNext?: number;
+  /** 0-100. Already clamped by `lib.skill`. */
+  progress?: number;
+  maxed?: boolean;
+  /** A rank NAME instead of a number, when the script has better words. */
+  rankLabel?: string;
 };
 
 export type IDialogProps = {
@@ -80,6 +134,21 @@ export type IDialogProps = {
   /** Tone for that line, for a refusal that should not read like a greeting. */
   dialogTone?: DialogTone;
   metadata?: MetadataProps[];
+  /**
+   * Standing with whoever is talking, as a bar.
+   *
+   * The shape `lib.skill.progress` returns, plus a label — deliberately, so a
+   * caller hands it straight through with nothing to convert and nothing to get
+   * out of step:
+   *
+   *     skill = { label = 'Reputation', unpack of lib.skill.progressFor(...) }
+   *
+   * Reputation is the first use, but nothing here knows that. Any script with a
+   * level worth showing while somebody is talking to you gets the same bar in
+   * the same place — which is the point of it living in the dialogue rather
+   * than in whichever script asked first.
+   */
+  skill?: SkillProps;
   responses?: ResponseProps[];
   /** Replaces the replies when there is nothing left to say. */
   note?: string;
@@ -101,6 +170,15 @@ export type IDialogProps = {
  * already decided to do.
  */
 const PER_PAGE = 4;
+
+/**
+ * Cards are wider and taller, so three fit where four lines did.
+ *
+ * The pinned reply is NOT one of them. It stays a text tile on its own row
+ * underneath — it is the way out ("nothing today"), not a fourth offer, and
+ * dressing it up as one invites picking it by mistake.
+ */
+const PER_PAGE_CARDS = 3;
 
 /** Lua's json.encode writes `{}` for an empty table, so an empty list arrives as an object. */
 function asArray<T>(value: unknown): T[] {
@@ -134,10 +212,120 @@ function useTone() {
   };
 }
 
+/* ── one thing you are being offered ──────────────────────────────────────── */
+
+/**
+ * A reply with a picture.
+ *
+ * Same button, same disabled rules, same pick — only taller and stacked, so a
+ * row of three can be read as three THINGS rather than three sentences. The
+ * art is given the room and everything else is a caption under it.
+ */
+function ReplyCard({ reply, disabled, onPick }: {
+  reply: ResponseProps; disabled: boolean; onPick: (index: number) => void;
+}) {
+  const theme = useMantineTheme();
+  const accent = theme.colors[theme.primaryColor][5];
+  const tone = useTone();
+  const hot = !!reply.pin;
+  const off = disabled || !!reply.disabled;
+
+  return (
+    <motion.button
+      type="button"
+      disabled={off}
+      onClick={() => onPick(reply.index)}
+      whileHover={off ? undefined : { background: alpha(accent, 0.13) }}
+      whileTap={off ? undefined : { scale: 0.98 }}
+      style={{
+        display: "flex", flexDirection: "column",
+        height: "100%", width: "100%", minWidth: 0, textAlign: "left",
+        padding: "0.9vh",
+        background: hot ? alpha(accent, 0.1) : "rgba(255,255,255,0.05)",
+        border: `0.1vh solid ${hot ? alpha(accent, 0.45) : "rgba(255,255,255,0.1)"}`,
+        borderRadius: theme.radius.xs,
+        cursor: off ? "not-allowed" : "pointer",
+        opacity: off ? 0.4 : 1,
+        overflow: "hidden",
+      }}
+    >
+      {/* the art, and the one word over it */}
+      <div style={{
+        position: "relative", width: "100%", flex: 1, minHeight: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        marginBottom: "0.5vh",
+      }}>
+        <img
+          src={reply.image}
+          alt=""
+          onError={(e) => {
+            const img = e.currentTarget;
+            const chain = Array.isArray(reply.imageFallback)
+              ? reply.imageFallback
+              : reply.imageFallback ? [reply.imageFallback] : [];
+            // Counted, so a chain walks forward and a chain that runs out
+            // stops. Without it a fallback that is ALSO missing re-enters this
+            // handler against itself for as long as the card is up.
+            const step = Number(img.dataset.fell ?? 0);
+            if (step >= chain.length) return;
+            img.dataset.fell = String(step + 1);
+            img.src = chain[step]!;
+          }}
+          style={{
+            // Contain, never cover: a silhouette cropped to fill the box stops
+            // being the shape that was the whole point of it.
+            maxWidth: "100%", maxHeight: "100%", objectFit: "contain",
+            opacity: off ? 0.5 : 0.9,
+          }}
+        />
+        {reply.badge && (
+          <Text style={{
+            position: "absolute", top: 0, left: 0,
+            fontFamily: "Akrobat Bold, sans-serif", fontSize: "0.9vh", fontWeight: 700,
+            letterSpacing: "0.16em", textTransform: "uppercase",
+            color: tone(reply.badgeTone, "rgba(255,255,255,0.5)"),
+          }}>
+            {reply.badge}
+          </Text>
+        )}
+      </div>
+
+      <Text style={{
+        fontSize: "1.3vh", lineHeight: 1.2, color: "#fff",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        width: "100%",
+      }}>
+        {reply.label}
+      </Text>
+
+      {reply.sub && (
+        <Text style={{
+          fontSize: "1.05vh", lineHeight: 1.3, color: "rgba(255,255,255,0.45)",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          width: "100%",
+        }}>
+          {reply.sub}
+        </Text>
+      )}
+
+      {reply.value && (
+        <Text style={{
+          fontFamily: "Akrobat Bold, sans-serif", fontSize: "1.25vh",
+          color: accent, marginTop: "0.15vh",
+        }}>
+          {reply.value}
+        </Text>
+      )}
+    </motion.button>
+  );
+}
+
 /* ── one thing you can say ────────────────────────────────────────────────── */
 
-function ReplyTile({ reply, disabled, onPick }: {
+function ReplyTile({ reply, disabled, onPick, compact }: {
   reply: ResponseProps; disabled: boolean; onPick: (index: number) => void;
+  /** Sized to its words rather than its column. For a reply that sits alone. */
+  compact?: boolean;
 }) {
   const theme = useMantineTheme();
   const accent = theme.colors[theme.primaryColor][5];
@@ -153,7 +341,7 @@ function ReplyTile({ reply, disabled, onPick }: {
       whileTap={off ? undefined : { scale: 0.98 }}
       style={{
         display: "flex", alignItems: "center",
-        height: "100%", width: "100%", textAlign: "left",
+        height: "100%", width: compact ? "auto" : "100%", textAlign: "left",
         padding: "0.9vh 1.3vh",
         background: hot ? alpha(accent, 0.1) : "rgba(255,255,255,0.05)",
         border: `0.1vh solid ${hot ? alpha(accent, 0.45) : "rgba(255,255,255,0.1)"}`,
@@ -232,6 +420,80 @@ function ToneText({ tone: t, fallback, style, children }: {
 
 /* ── one readout on the right ─────────────────────────────────────────────── */
 
+/**
+ * Standing with the person in front of you, as a rank and a bar.
+ *
+ * Sits with the other readouts rather than anywhere new, because it IS one —
+ * the same "here is a number about this conversation" as the price or the mood.
+ * It just happens to be a number with a distance to the next one, and that
+ * distance is the part worth drawing: a rank on its own says where you are,
+ * the bar says whether another job gets you anywhere.
+ *
+ * Animated on the FILL, keyed on the level. A level-up therefore reads as the
+ * bar emptying and the number stepping up, without the caller having to
+ * orchestrate anything or diff before against after — which is what fishing's
+ * two reward screens each do by hand, differently.
+ */
+function SkillReadout({ skill }: { skill: SkillProps }) {
+  const theme = useMantineTheme();
+  const accent = theme.colors[theme.primaryColor][5];
+  const pct = Math.min(100, Math.max(0, skill.progress ?? 0));
+
+  return (
+    <Flex direction="column" align="flex-end" gap="0.2vh" style={{ minWidth: "11vh" }}>
+      <Key>{skill.label ?? "Standing"}</Key>
+
+      <motion.div
+        key={skill.level}
+        initial={{ scale: 1.16 }}
+        animate={{ scale: 1 }}
+        transition={{ duration: 0.28, ease: "easeOut" }}
+      >
+        <Text style={{
+          fontFamily: "Akrobat Bold, sans-serif", fontWeight: 700,
+          fontSize: "1.75vh", lineHeight: 1.15, color: "#fff",
+        }}>
+          {skill.rankLabel ?? skill.level}
+        </Text>
+      </motion.div>
+
+      <div style={{
+        width: "100%", height: "0.4vh", marginTop: "0.25vh",
+        background: "rgba(255,255,255,0.12)", borderRadius: "0.2vh",
+        overflow: "hidden",
+      }}>
+        {/*
+          Grows from EMPTY on open.
+
+          Without an explicit `initial`, framer takes the element's laid-out
+          width as the start — which for a bar in a flex row is whatever it
+          happened to be — and animates from there. Opening a dialogue therefore
+          showed the bar sliding DOWN to the real figure, as though standing
+          had just been taken off you.
+        */}
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${skill.maxed ? 100 : pct}%` }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
+          style={{ height: "100%", background: accent, borderRadius: "0.2vh" }}
+        />
+      </div>
+
+      {/* The number under the bar, only when it says something. At the top of
+          the ladder there is no "to next", and a 0 there reads as a bug. */}
+      <Text style={{
+        fontFamily: "Akrobat SemiBold, sans-serif", fontSize: "0.95vh",
+        letterSpacing: "0.08em", textTransform: "uppercase",
+        color: "rgba(255,255,255,0.34)",
+      }}>
+        {skill.maxed
+          ? "Highest"
+          : skill.xpToNext !== undefined ? `${Math.max(0, Math.round(skill.xpToNext))} to go` : ""}
+      </Text>
+    </Flex>
+  );
+}
+
 function Readout({ row }: { row: MetadataProps }) {
   const tone = useTone();
   const value = row.value ?? row.data ?? "";
@@ -309,12 +571,18 @@ export default function Dialog() {
 
   const pinned = all.find((r) => r.pin);
   const rest = all.filter((r) => !r.pin);
-  const perPage = pinned ? PER_PAGE - 1 : PER_PAGE;
+
+  // ONE reply with a picture puts the whole row into card mode. A row that was
+  // half cards and half lines would be two different kinds of answer sharing a
+  // grid, and neither would read.
+  const cards = rest.some((r) => !!r.image);
+
+  const perPage = cards ? PER_PAGE_CARDS : (pinned ? PER_PAGE - 1 : PER_PAGE);
 
   const pages = Math.max(1, Math.ceil(rest.length / perPage));
   const current = Math.min(page, pages - 1);
   const shown = rest.slice(current * perPage, current * perPage + perPage);
-  const filled = shown.length + (pinned ? 1 : 0);
+  const filled = shown.length + (pinned && !cards ? 1 : 0);
 
   const pick = (index: number) => {
     if (locked) return;
@@ -379,9 +647,10 @@ export default function Dialog() {
               )}
             </Flex>
 
-            {rows.length > 0 && (
+            {(rows.length > 0 || !!data.skill) && (
               <Flex align="flex-end" gap="2.4vh" style={{ flex: "none" }}>
                 {rows.map((row, i) => <Readout key={`${row.label}-${i}`} row={row} />)}
+                {!!data.skill && <SkillReadout skill={data.skill} />}
               </Flex>
             )}
           </Flex>
@@ -415,44 +684,65 @@ export default function Dialog() {
           </Flex>
 
           {/* ── what you can say ── */}
-          <Flex gap="0.8vh" style={{ height: "11.4vh", marginTop: "0.6vh" }}>
+          <Flex gap="0.8vh" style={{ height: cards ? "20vh" : "11.4vh", marginTop: "0.6vh" }}>
             <Pager
               dir="left"
               shown={pages > 1 && current > 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
             />
 
-            <div style={{
-              flex: 1, minWidth: 0, maxWidth: "74vh",
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gridTemplateRows: "1fr 1fr",
-              gap: "0.8vh",
-            }}>
-              {data.note ? (
-                <Flex align="center" style={{ gridColumn: "1 / -1", gridRow: "1 / -1" }}>
-                  <ToneText
-                    tone={data.noteTone}
-                    fallback="rgba(255,255,255,0.45)"
-                    style={{ fontSize: "1.6vh" }}
-                  >
-                    {data.note}
-                  </ToneText>
+            <Flex direction="column" gap="0.8vh" style={{ flex: 1, minWidth: 0, maxWidth: "74vh" }}>
+              <div style={{
+                flex: 1, minHeight: 0,
+                display: "grid",
+                gridTemplateColumns: cards ? "1fr 1fr 1fr" : "1fr 1fr",
+                gridTemplateRows: cards ? "1fr" : "1fr 1fr",
+                gap: "0.8vh",
+              }}>
+                {data.note ? (
+                  <Flex align="center" style={{ gridColumn: "1 / -1", gridRow: "1 / -1" }}>
+                    <ToneText
+                      tone={data.noteTone}
+                      fallback="rgba(255,255,255,0.45)"
+                      style={{ fontSize: "1.6vh" }}
+                    >
+                      {data.note}
+                    </ToneText>
+                  </Flex>
+                ) : cards ? (
+                  <>
+                    {shown.map((r) => (
+                      <ReplyCard key={r.index} reply={r} disabled={locked} onPick={pick} />
+                    ))}
+                    {Array.from({ length: Math.max(0, PER_PAGE_CARDS - shown.length) }, (_, i) => (
+                      <EmptyTile key={`gap${i}`} />
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {pinned && (
+                      <ReplyTile key={`pin-${pinned.index}`} reply={pinned} disabled={locked} onPick={pick} />
+                    )}
+                    {shown.map((r) => (
+                      <ReplyTile key={r.index} reply={r} disabled={locked} onPick={pick} />
+                    ))}
+                    {Array.from({ length: Math.max(0, PER_PAGE - filled) }, (_, i) => (
+                      <EmptyTile key={`gap${i}`} />
+                    ))}
+                  </>
+                )}
+              </div>
+
+              {/* The way out, under the offers rather than among them.
+                  Sized to its own words and pushed to the end: stretched
+                  across all three it read as a fourth, larger choice, and it
+                  would go on reading that way however many offers there are. */}
+              {cards && pinned && !data.note && (
+                <Flex justify="flex-end" style={{ height: "3.4vh", flexShrink: 0 }}>
+                  <ReplyTile key={`pin-${pinned.index}`} reply={pinned} disabled={locked} onPick={pick} compact />
                 </Flex>
-              ) : (
-                <>
-                  {pinned && (
-                    <ReplyTile key={`pin-${pinned.index}`} reply={pinned} disabled={locked} onPick={pick} />
-                  )}
-                  {shown.map((r) => (
-                    <ReplyTile key={r.index} reply={r} disabled={locked} onPick={pick} />
-                  ))}
-                  {Array.from({ length: Math.max(0, PER_PAGE - filled) }, (_, i) => (
-                    <EmptyTile key={`gap${i}`} />
-                  ))}
-                </>
               )}
-            </div>
+            </Flex>
 
             <Pager
               dir="right"

@@ -508,7 +508,110 @@ export function matchesSearch(entry: SettingEntry, groupLabel: string, query: st
   const hay = [entry.label, entry.path, entry.help ?? '', groupLabel];
   for (const option of entry.options ?? []) hay.push(option.label, option.value);
   for (const column of entry.columns ?? []) hay.push(column.label);
-  return hay.some((h) => h.toLowerCase().includes(needle));
+  if (hay.some((h) => h.toLowerCase().includes(needle))) return true;
+
+  // The CONTENTS, not just the shape.
+  //
+  // This matched the name of a setting and never what was stored in it, so a
+  // scrapyard called "Cypress Flats", a store, a fish - the things an admin
+  // actually goes looking for - could not be found by their own names. You had
+  // to already know which section held them, which is the one thing search
+  // exists to answer.
+  return rowMatches(entry, query).length > 0;
+}
+
+/** What a row is CALLED, for a result you can recognise. */
+export function rowTitle(entry: SettingEntry, row: Record<string, unknown>, index: number): string {
+  // A HUMAN name first. `rowLabelKey` is often the array key — `id` — so
+  // asking it first titled a result "palaminoBay" when the row says
+  // "Palamino Bay" two fields along, and you cannot search for what you were
+  // shown.
+  for (const candidate of ['label', 'name', 'title']) {
+    const value = row[candidate];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+
+  const key = entry.rowLabelKey ?? entry.rowItemKey;
+  const named = key ? row[key] : undefined;
+  if (typeof named === 'string' && named.trim()) return named;
+
+  for (const candidate of ['id']) {
+    const value = row[candidate];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return `${entry.label} ${index + 1}`;
+}
+
+/**
+ * Which ROWS of a list match, and where they live.
+ *
+ * Nested tables are searched too — a store's stock, a fish's rewards — but the
+ * result is always attributed to the row you can actually OPEN. "Somewhere
+ * inside this" is not a destination, so a hit on a stock line reports the
+ * store, on the tab that holds the stock, with the thing that matched named
+ * beside it. You land somewhere real and the last step is in front of you.
+ *
+ * One level of nesting, deliberately. Deeper than that and the trail back to
+ * something clickable is longer than the search saved.
+ */
+export function rowMatches(
+  entry: SettingEntry,
+  query: string,
+): { index: number; title: string; tab?: string; within?: string }[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle || !Array.isArray(entry.value)) return [];
+
+  const hits = (row: Record<string, unknown>): string | undefined => {
+    for (const [key, value] of Object.entries(row)) {
+      if (typeof value !== 'string' && typeof value !== 'number') continue;
+      if (String(value).toLowerCase().includes(needle)) return key;
+    }
+    return undefined;
+  };
+
+  const out: { index: number; title: string; tab?: string; within?: string }[] = [];
+
+  (entry.value as Record<string, unknown>[]).forEach((row, index) => {
+    if (!row || typeof row !== 'object') return;
+
+    // Which TAB of the row editor holds the cell that matched, so a result
+    // opens on it rather than on whichever tab happens to be first.
+    const tabFor = (key: string) => entry.rowTabs?.find((t) => t.keys.includes(key))?.label;
+
+    const direct = hits(row);
+    if (direct) {
+      out.push({ index, title: rowTitle(entry, row, index), tab: tabFor(direct) });
+      return;
+    }
+
+    // Nothing on the row itself — look one level in.
+    for (const [key, value] of Object.entries(row)) {
+      if (!Array.isArray(value)) continue;
+
+      const child = entry.columns?.find((c) => c.key === key);
+      for (const nested of value) {
+        if (!nested || typeof nested !== 'object' || Array.isArray(nested)) continue;
+        const inner = hits(nested as Record<string, unknown>);
+        if (!inner) continue;
+
+        out.push({
+          index,
+          title: rowTitle(entry, row, index),
+          tab: tabFor(key),
+          // What was actually found in there, so the card is not just the
+          // parent's name with no clue why it is a result.
+          within: `${child?.label ?? key}: ${rowTitle(
+            { ...entry, rowLabelKey: undefined, rowItemKey: undefined } as SettingEntry,
+            nested as Record<string, unknown>,
+            0,
+          )}`,
+        });
+        return;
+      }
+    }
+  });
+
+  return out;
 }
 
 // Dev-only handle so the converted schema can be inspected from the console (or

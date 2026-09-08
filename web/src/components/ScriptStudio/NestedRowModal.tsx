@@ -3,8 +3,8 @@ import { Modal } from 'dirk-cfx-react';
 import { useState } from 'react';
 import { useItems } from 'dirk-cfx-react';
 import { PickerDrawer } from './PickerDrawer';
-import { FieldRow } from './FieldRow';
-import { fieldGatedOff, ItemArt, rowIdentity, singular, StudioButton } from './ui';
+import { RowFields } from './RowFields';
+import { ItemArt, rowIdentity, singular, StudioButton } from './ui';
 import type { SettingColumn } from './types';
 import { useChrome } from './studioLocale';
 
@@ -58,7 +58,6 @@ export function NestedRowModal({
   const { itemKey } = rowIdentity(children, [draft], items);
   const itemName = itemKey ? String(draft[itemKey] ?? '') : '';
 
-  const gatedOff = (child: SettingColumn) => fieldGatedOff(child, draft);
 
   const one = singular(column.label);
 
@@ -74,46 +73,35 @@ export function NestedRowModal({
       zIndex={10400}
     >
       <Flex direction="column" flex={1} style={{ minHeight: 0 }}>
-        <Flex
-          direction="column" gap="xxs" p="sm"
-          className="studio-scroll"
-          style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}
-        >
-          {itemName && (
-            <Flex align="center" gap="sm" pb="xs">
-              <ItemArt name={itemName} size="5vh" />
-              <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.85)">{itemName}</Text>
-            </Flex>
-          )}
+        {/* The header sits OUTSIDE the scroller now: `RowFields` brings its own
+            padding and its own overflow, so leaving this wrapper as a second
+            scrolling, padded box nested one inside the other double-padded the
+            form and gave it two scrollbars. */}
+        {itemName && (
+          <Flex align="center" gap="sm" px="sm" pt="sm" style={{ flexShrink: 0 }}>
+            <ItemArt name={itemName} size="5vh" />
+            <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.85)">{itemName}</Text>
+          </Flex>
+        )}
 
-          {children.map((child) => (
-            <FieldRow
-              key={child.key}
-              column={child}
-              resource={resource}
-              row={draft}
-              parentRow={parentRow}
-              value={draft[child.key] ?? child.default}
-              itemName={itemName}
-              disabled={disabled || gatedOff(child)}
-              dimmed={gatedOff(child)}
-              onChange={(next) => setDraft((prev) => ({ ...prev, [child.key]: next }))}
-              onPick={(nested, access) => setPicker({
-                column: nested ?? child,
-                value: nested ? access?.read() : draft[child.key],
-                apply: (next) => (access
-                  ? access.write(next)
-                  : setDraft((prev) => ({ ...prev, [child.key]: next }))),
-              })}
-            />
-          ))}
+        <RowFields
+            className="studio-scroll"
+            columns={children}
+            draft={draft}
+            parentRow={parentRow}
+            resource={resource}
+            itemName={itemName}
+            disabled={disabled}
+            gap="xxs"
+            setField={(key, value) => setDraft((prev) => ({ ...prev, [key]: value }))}
+            onPick={setPicker}
+          />
 
-          {children.length === 0 && (
-            <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.35)">
-              {t('nestedRowModal.nothing_to_edit_on_this_entry', 'Nothing to edit on this entry.')}
-            </Text>
-          )}
-        </Flex>
+        {children.length === 0 && (
+          <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.35)" px="sm" pb="sm">
+            {t('nestedRowModal.nothing_to_edit_on_this_entry', 'Nothing to edit on this entry.')}
+          </Text>
+        )}
 
         {picker && (
           <PickerDrawer

@@ -10,9 +10,15 @@ diag_report.json
 Thumbs.db
 *.swp
 
-# The dirk-ui-studio package. Locally this is a symlink to your working copy so
-# edits to the package show up here immediately; in CI the release workflow
-# checks the private repo out to this same path and builds it. Either way
-# web/package.json resolves it as `link:../.studio`, so the path is identical in
-# both places and nothing has to be rewritten at build time.
+# The dirk-ui-studio package, symlinked to your working copy.
+#
+# web/ no longer depends on it. dirk_lib is public and released from a public
+# build, and the only thing that imported it was the Design page's live
+# thumbnails - a page nothing in game can reach until dirk_loading and
+# dirk_multichar ship their design editors. Carrying it meant every build of the
+# library needed credentials for a private repo to render one unreachable tile.
+#
+# The folder is still ignored because it is a working symlink for the resources
+# that DO use the package. Putting the dependency back is one line in
+# web/package.json and one import in LiveThumb.tsx, which says how.
 .studio
