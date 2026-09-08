@@ -5,7 +5,7 @@ rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aw
 use_experimental_fxv2_oal 'yes'
 name         'dirk_lib'
 author       'DirkScripts'
-version      '1.2.83'
+version      '1.3.0'
 description  'A library for FiveM developers to use in their projects, accepting of new features and contributions.'
 
 dirk_lib 'scriptConfig'
