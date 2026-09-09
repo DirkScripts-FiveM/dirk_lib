@@ -1371,7 +1371,10 @@ local function registerScriptConfig(schema, canEditFn, rules)
     if not canViewScript(source) then
       return
     end
-    TriggerClientEvent(('%s:openScriptConfig'):format(scriptName), source)
+    -- Opens Script Studio focused on this script, rather than this script's
+    -- own bespoke panel. Every script's settings live in the one shared panel
+    -- now, so /<resourceName> is a deep link into it, not a separate UI.
+    TriggerClientEvent('dirk_lib:openScriptStudio', source, scriptName)
   end)
 
   return scriptConfig
