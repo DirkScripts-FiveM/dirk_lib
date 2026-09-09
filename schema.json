@@ -47,24 +47,30 @@
           "x-renamedFrom": "localization.language",
           "enum": [
             "en",
-            "es",
-            "lt",
-            "zh-TW",
             "de",
+            "es",
             "fr",
             "it",
+            "lt",
+            "nl",
+            "no",
+            "pl",
             "pt",
-            "no"
+            "zh-CN",
+            "zh-TW"
           ],
           "x-enumLabels": {
             "en": "English (en)",
+            "de": "Deutsch (de)",
             "es": "Español (es)",
             "fr": "Français (fr)",
-            "de": "Deutsch (de)",
-            "pt": "Português (pt)",
             "it": "Italiano (it)",
-            "no": "Norsk (no)",
             "lt": "Lietuvių (lt)",
+            "nl": "Nederlands (nl)",
+            "no": "Norsk (no)",
+            "pl": "Polski (pl)",
+            "pt": "Português (pt)",
+            "zh-CN": "简体中文 (zh-CN)",
             "zh-TW": "繁體中文 (zh-TW)"
           },
           "description": "Locale code used when resolving strings from /locales. A language with no matching file there falls back to English."

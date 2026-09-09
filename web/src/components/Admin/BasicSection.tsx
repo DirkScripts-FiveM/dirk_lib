@@ -5,16 +5,19 @@ import type { BasicSettings, ScriptConfig } from "../../stores/useScriptConfig";
 import { useScriptConfig } from "../../stores/useScriptConfig";
 import { InfoLabel } from "./InfoLabel";
 
+// Must stay in step with schema.json's basic.language enum and the files in
+// /locales - an option with no locale file silently renders English.
 const LANGUAGE_OPTIONS = [
   { value: "en", label: "English (en)" },
+  { value: "de", label: "Deutsch (de)" },
   { value: "es", label: "Español (es)" },
   { value: "fr", label: "Français (fr)" },
-  { value: "de", label: "Deutsch (de)" },
-  { value: "pt", label: "Português (pt)" },
   { value: "it", label: "Italiano (it)" },
+  { value: "lt", label: "Lietuvių (lt)" },
   { value: "nl", label: "Nederlands (nl)" },
   { value: "no", label: "Norsk (no)" },
-  { value: "lt", label: "Lietuvių (lt)" },
+  { value: "pl", label: "Polski (pl)" },
+  { value: "pt", label: "Português (pt)" },
   { value: "zh-CN", label: "简体中文 (zh-CN)" },
   { value: "zh-TW", label: "繁體中文 (zh-TW)" },
 ];
