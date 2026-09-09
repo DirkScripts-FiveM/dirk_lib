@@ -794,5 +794,7 @@
   "studio.zoneMap.none_drawn": "Nic nie narysowano",
   "studio.zoneMap.pins_locked": "Pinezki zablokowane",
   "studio.zoneMap.pins_unlocked": "Pinezki można przeciągać",
-  "studio.zoneMap.save_area": "Zapisz obszar"
+  "studio.zoneMap.save_area": "Zapisz obszar",
+  "Cancel": "Anuluj",
+  "Submit": "Zatwierdź"
 }

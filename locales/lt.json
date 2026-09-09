@@ -794,5 +794,7 @@
   "studio.zoneMap.none_drawn": "Nenupiešta nė viena",
   "studio.zoneMap.pins_locked": "Smeigtukai užrakinti",
   "studio.zoneMap.pins_unlocked": "Smeigtukus galima tempti",
-  "studio.zoneMap.save_area": "Išsaugoti sritį"
+  "studio.zoneMap.save_area": "Išsaugoti sritį",
+  "Cancel": "Atšaukti",
+  "Submit": "Patvirtinti"
 }

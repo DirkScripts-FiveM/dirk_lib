@@ -794,5 +794,7 @@
   "studio.zoneMap.none_drawn": "Ingen tegnet",
   "studio.zoneMap.pins_locked": "Nålene er låst",
   "studio.zoneMap.pins_unlocked": "Nålene kan dras",
-  "studio.zoneMap.save_area": "Lagre området"
+  "studio.zoneMap.save_area": "Lagre området",
+  "Cancel": "Avbryt",
+  "Submit": "Bekreft"
 }

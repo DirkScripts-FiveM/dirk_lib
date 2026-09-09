@@ -794,5 +794,7 @@
   "studio.zoneMap.none_drawn": "Nessuna disegnata",
   "studio.zoneMap.pins_locked": "Segnaposti bloccati",
   "studio.zoneMap.pins_unlocked": "I segnaposti si possono trascinare",
-  "studio.zoneMap.save_area": "Salva l'area"
+  "studio.zoneMap.save_area": "Salva l'area",
+  "Cancel": "Annulla",
+  "Submit": "Conferma"
 }

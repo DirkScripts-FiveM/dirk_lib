@@ -794,5 +794,7 @@
   "studio.zoneMap.none_drawn": "Aucune tracée",
   "studio.zoneMap.pins_locked": "Marqueurs verrouillés",
   "studio.zoneMap.pins_unlocked": "Les marqueurs peuvent être déplacés",
-  "studio.zoneMap.save_area": "Enregistrer la zone"
+  "studio.zoneMap.save_area": "Enregistrer la zone",
+  "Cancel": "Annuler",
+  "Submit": "Valider"
 }

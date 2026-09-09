@@ -794,5 +794,7 @@
   "studio.zoneMap.none_drawn": "None drawn",
   "studio.zoneMap.pins_locked": "Pins locked",
   "studio.zoneMap.pins_unlocked": "Pins can be dragged",
-  "studio.zoneMap.save_area": "Save area"
+  "studio.zoneMap.save_area": "Save area",
+  "Cancel": "Cancel",
+  "Submit": "Submit"
 }

@@ -795,6 +795,8 @@
   "studio.zoneMap.pins_locked": "Marcadores bloqueados",
   "studio.zoneMap.pins_unlocked": "Los marcadores se pueden arrastrar",
   "studio.zoneMap.save_area": "Guardar zona",
+  "Cancel": "Cancelar",
+  "Submit": "Confirmar",
   "cfgpanel_discard": "Descartar",
   "cfgpanel_manual_edit": "Edición manual",
   "cfgpanel_reset_defaults": "Restablecer",

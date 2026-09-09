@@ -794,5 +794,7 @@
   "studio.zoneMap.none_drawn": "Nenhuma desenhada",
   "studio.zoneMap.pins_locked": "Marcadores travados",
   "studio.zoneMap.pins_unlocked": "Os marcadores podem ser arrastados",
-  "studio.zoneMap.save_area": "Salvar área"
+  "studio.zoneMap.save_area": "Salvar área",
+  "Cancel": "Cancelar",
+  "Submit": "Confirmar"
 }

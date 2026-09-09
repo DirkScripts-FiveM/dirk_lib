@@ -794,5 +794,7 @@
   "studio.zoneMap.none_drawn": "尚未畫任何區域",
   "studio.zoneMap.pins_locked": "圖釘已鎖定",
   "studio.zoneMap.pins_unlocked": "圖釘可以拖曳",
-  "studio.zoneMap.save_area": "儲存區域"
+  "studio.zoneMap.save_area": "儲存區域",
+  "Cancel": "取消",
+  "Submit": "確認"
 }

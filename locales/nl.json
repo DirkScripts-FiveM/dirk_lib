@@ -794,5 +794,7 @@
   "studio.zoneMap.none_drawn": "Geen enkel gebied getekend",
   "studio.zoneMap.pins_locked": "Pins vergrendeld",
   "studio.zoneMap.pins_unlocked": "Pins kunnen worden versleept",
-  "studio.zoneMap.save_area": "Gebied opslaan"
+  "studio.zoneMap.save_area": "Gebied opslaan",
+  "Cancel": "Annuleren",
+  "Submit": "Bevestigen"
 }
