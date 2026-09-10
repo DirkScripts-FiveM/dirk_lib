@@ -189,3 +189,26 @@ html[data-shot] [data-studio-panel] {
 html[data-shot] div:has(> [data-studio-panel]) {
   background-color: transparent !important;
 }
+
+/* ── Transparent capture ──────────────────────────────────────────────────
+   The screenshot script sets data-shot on <html>, and Playwright's
+   omitBackground only skips the browser's own white base — anything still
+   PAINTING a background is captured as normal.
+
+   DirkProvider paints a hotlinked backdrop behind everything so browser dev
+   looks like the game. Nothing in the panel's own code paints, so that
+   backdrop is the one thing standing between us and a clean alpha channel.
+
+   Kill the paint, KEEP the element: it is also the layout parent, and
+   display:none collapses the panel with it.
+   ------------------------------------------------------------------------ */
+html[data-shot], html[data-shot] body {
+  background: transparent !important;
+  background-image: none !important;
+}
+html[data-shot] body > div,
+html[data-shot] #root,
+html[data-shot] #root > div {
+  background-image: none !important;
+  background-color: transparent !important;
+}

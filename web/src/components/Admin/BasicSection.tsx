@@ -13,6 +13,7 @@ const LANGUAGE_OPTIONS = [
   { value: "es", label: "Español (es)" },
   { value: "fr", label: "Français (fr)" },
   { value: "it", label: "Italiano (it)" },
+  { value: "ja", label: "日本語 (ja)" },
   { value: "lt", label: "Lietuvių (lt)" },
   { value: "nl", label: "Nederlands (nl)" },
   { value: "no", label: "Norsk (no)" },
