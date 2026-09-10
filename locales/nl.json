@@ -313,7 +313,7 @@
   "settings.access.groups.description": "Namen van ACE-groepen die toegang krijgen tot de instellingen van dirk_lib (gecontroleerd met IsPlayerAceAllowed).",
   "settings.access.identifiers.label": "Identifiers",
   "settings.access.identifiers.description": "Specifieke spelers die toegang krijgen — de blijvende id van het framework (citizenid bij qb/qbx, license bij esx), of een kale FiveM-identifier (license:/discord:/...).",
-  "settings.access.identifiers[].value.label": "Identifiers",
+  "settings.access.identifiers.value.label": "Identifiers",
   "settings.logger.service.label": "Dienst",
   "settings.logger.service.description": "Externe logdienst. off = alleen Discord-webhooks (per resource).",
   "settings.logger.datadog.apiKey.label": "API-sleutel",
@@ -806,5 +806,6 @@
   "studio.duration.days": "dagen",
   "studio.duration.hours": "uren",
   "studio.duration.minutes": "minuten",
-  "studio.duration.seconds": "seconden"
+  "studio.duration.seconds": "seconden",
+  "studio.fieldRow.from_inventory": "uit inventaris"
 }

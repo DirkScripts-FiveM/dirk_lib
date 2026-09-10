@@ -313,7 +313,7 @@
   "settings.access.groups.description": "ACE group names granted dirk_lib config access (checked via IsPlayerAceAllowed).",
   "settings.access.identifiers.label": "Identifiers",
   "settings.access.identifiers.description": "Specific players granted access — framework persistent id (citizenid on qb/qbx, license on esx), or a raw FiveM identifier (license:/discord:/...).",
-  "settings.access.identifiers[].value.label": "Identifiers",
+  "settings.access.identifiers.value.label": "Identifiers",
   "settings.logger.service.label": "Service",
   "settings.logger.service.description": "External log backend. off = Discord webhooks only (per-resource).",
   "settings.logger.datadog.apiKey.label": "Api Key",
@@ -806,5 +806,6 @@
   "studio.duration.days": "days",
   "studio.duration.hours": "hours",
   "studio.duration.minutes": "minutes",
-  "studio.duration.seconds": "seconds"
+  "studio.duration.seconds": "seconds",
+  "studio.fieldRow.from_inventory": "from inventory"
 }

@@ -313,7 +313,7 @@
   "settings.access.groups.description": "获准访问 dirk_lib 设置的 ACE 群组名称（以 IsPlayerAceAllowed 验证）。",
   "settings.access.identifiers.label": "识别码",
   "settings.access.identifiers.description": "获准访问的特定玩家 —— 可填框架的长期 id（qb/qbx 为 citizenid，esx 为 license），或原始的 FiveM 识别码（license:／discord:／…）。",
-  "settings.access.identifiers[].value.label": "识别码",
+  "settings.access.identifiers.value.label": "识别码",
   "settings.logger.service.label": "服务",
   "settings.logger.service.description": "外部日志后端。off = 只使用 Discord webhook（各资源自行处理）。",
   "settings.logger.datadog.apiKey.label": "API 密钥",
@@ -806,5 +806,6 @@
   "studio.duration.days": "天",
   "studio.duration.hours": "小时",
   "studio.duration.minutes": "分钟",
-  "studio.duration.seconds": "秒"
+  "studio.duration.seconds": "秒",
+  "studio.fieldRow.from_inventory": "来自物品栏"
 }

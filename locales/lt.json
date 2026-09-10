@@ -313,7 +313,7 @@
   "settings.access.groups.description": "ACE grupių pavadinimai, kuriems suteikta prieiga prie dirk_lib nustatymų (tikrinama su IsPlayerAceAllowed).",
   "settings.access.identifiers.label": "Identifikatoriai",
   "settings.access.identifiers.description": "Konkretūs žaidėjai, kuriems suteikta prieiga — nuolatinis framework identifikatorius (citizenid qb/qbx, license esx) arba pirminis FiveM identifikatorius (license:/discord:/...).",
-  "settings.access.identifiers[].value.label": "Identifikatoriai",
+  "settings.access.identifiers.value.label": "Identifikatoriai",
   "settings.logger.service.label": "Paslauga",
   "settings.logger.service.description": "Išorinė žurnalų sistema. off = tik Discord webhook'ai (kiekvienam resursui atskirai).",
   "settings.logger.datadog.apiKey.label": "API raktas",
@@ -806,5 +806,6 @@
   "studio.duration.days": "d.",
   "studio.duration.hours": "val.",
   "studio.duration.minutes": "min.",
-  "studio.duration.seconds": "sek."
+  "studio.duration.seconds": "sek.",
+  "studio.fieldRow.from_inventory": "iš inventoriaus"
 }

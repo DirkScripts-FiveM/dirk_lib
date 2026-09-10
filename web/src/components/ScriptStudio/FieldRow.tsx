@@ -288,7 +288,7 @@ export function FieldRow({
           )}
         </Flex>
         <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.28)">
-          {mirrors ? 'from inventory' : column.key}
+          {mirrors ? t('fieldRow.from_inventory', 'from inventory') : column.key}
         </Text>
         {error && (
           <Text ff="Akrobat SemiBold" size="xxs" c="#E0776B" pt="0.2vh">

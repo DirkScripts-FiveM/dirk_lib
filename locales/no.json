@@ -313,7 +313,7 @@
   "settings.access.groups.description": "Navn på ACE-grupper som får tilgang til dirk_lib-konfigurasjonen (sjekket med IsPlayerAceAllowed).",
   "settings.access.identifiers.label": "Identifikatorer",
   "settings.access.identifiers.description": "Enkeltspillere som får tilgang — rammeverkets varige id (citizenid på qb/qbx, license på esx), eller en rå FiveM-identifikator (license:/discord:/...).",
-  "settings.access.identifiers[].value.label": "Identifikatorer",
+  "settings.access.identifiers.value.label": "Identifikatorer",
   "settings.logger.service.label": "Tjeneste",
   "settings.logger.service.description": "Ekstern loggtjeneste. off = bare Discord-webhooks (per ressurs).",
   "settings.logger.datadog.apiKey.label": "API-nøkkel",
@@ -806,5 +806,6 @@
   "studio.duration.days": "dager",
   "studio.duration.hours": "timer",
   "studio.duration.minutes": "minutter",
-  "studio.duration.seconds": "sekunder"
+  "studio.duration.seconds": "sekunder",
+  "studio.fieldRow.from_inventory": "fra inventaret"
 }

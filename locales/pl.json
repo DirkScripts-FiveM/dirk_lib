@@ -313,7 +313,7 @@
   "settings.access.groups.description": "Nazwy grup ACE z dostępem do ustawień dirk_lib (sprawdzane przez IsPlayerAceAllowed).",
   "settings.access.identifiers.label": "Identyfikatory",
   "settings.access.identifiers.description": "Konkretni gracze z przyznanym dostępem — trwały identyfikator frameworka (citizenid na qb/qbx, license na esx) albo surowy identyfikator FiveM (license:/discord:/...).",
-  "settings.access.identifiers[].value.label": "Identyfikatory",
+  "settings.access.identifiers.value.label": "Identyfikatory",
   "settings.logger.service.label": "Usługa",
   "settings.logger.service.description": "Zewnętrzna usługa logowania. off = tylko webhooki Discord (osobno dla każdego zasobu).",
   "settings.logger.datadog.apiKey.label": "Klucz API",
@@ -806,5 +806,6 @@
   "studio.duration.days": "dni",
   "studio.duration.hours": "godziny",
   "studio.duration.minutes": "minuty",
-  "studio.duration.seconds": "sekundy"
+  "studio.duration.seconds": "sekundy",
+  "studio.fieldRow.from_inventory": "z ekwipunku"
 }

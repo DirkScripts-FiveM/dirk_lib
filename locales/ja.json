@@ -313,7 +313,7 @@
   "settings.access.groups.description": "dirk_lib の設定へのアクセスを許可する ACE グループ名です（IsPlayerAceAllowed で判定）。",
   "settings.access.identifiers.label": "識別子",
   "settings.access.identifiers.description": "アクセスを許可する個別のプレイヤーです。フレームワークの永続 ID（qb/qbx は citizenid、esx は license）か、FiveM の生の識別子（license:／discord:／…）で指定します。",
-  "settings.access.identifiers[].value.label": "識別子",
+  "settings.access.identifiers.value.label": "識別子",
   "settings.logger.service.label": "サービス",
   "settings.logger.service.description": "外部ログサービスです。off にすると Discord Webhook のみ（リソースごと）になります。",
   "settings.logger.datadog.apiKey.label": "API キー",
@@ -806,5 +806,6 @@
   "studio.duration.days": "日",
   "studio.duration.hours": "時間",
   "studio.duration.minutes": "分",
-  "studio.duration.seconds": "秒"
+  "studio.duration.seconds": "秒",
+  "studio.fieldRow.from_inventory": "インベントリから"
 }

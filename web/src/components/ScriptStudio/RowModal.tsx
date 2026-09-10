@@ -10,7 +10,7 @@ import { PickerDrawer } from './PickerDrawer';
 import { ItemArt, StudioButton } from './ui';
 import { validateRow } from './rowValidation';
 import type { SettingColumn, SettingEntry } from './types';
-import { useChrome } from './studioLocale';
+import { translate, useActiveLanguage, useBundles, useChrome } from './studioLocale';
 
 type Row = Record<string, unknown>;
 
@@ -41,6 +41,29 @@ export function RowModal({
   disabled?: boolean;
 }) {
   const t = useChrome();
+  const bundles = useBundles();
+  const language = useActiveLanguage();
+  /**
+   * A tab's name belongs to the SCRIPT, like every field name beside it.
+   *
+   * `x-rowTabs` carries an English label and nothing looked it up, so a fully
+   * translated fish opened onto GENERAL / STATS / ECOLOGY / GUTTING. Derived
+   * tabs had the same problem from the other direction - their label is a
+   * column label, which is English until it is resolved.
+   *
+   *   settings.<path>.tabs.<tab id>
+   *
+   * A DERIVED tab is named after the nested table it holds, so its id is that
+   * column's key and the field's own label already says the right thing in
+   * every language. Falling through to it means a nested table needs no second
+   * translation of the same word.
+   */
+  const tabLabel = (id: string, fallback: string) => {
+    if (!resource || !entry.path) return fallback;
+    const declared = translate(bundles, language, resource, `settings.${entry.path}.tabs.${id}`, '');
+    if (declared) return declared;
+    return translate(bundles, language, resource, `settings.${entry.path}.${id}.label`, fallback);
+  };
   const theme = useMantineTheme();
   const color = theme.colors[theme.primaryColor][5];
   const [draft, setDraft] = useState<Row>(() => JSON.parse(JSON.stringify(row)));
@@ -193,7 +216,7 @@ export function RowModal({
                   >
                     <TabIcon size="1.3vh" color={on ? color : 'rgba(255,255,255,0.4)'} />
                     <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.06em" c={on ? color : 'rgba(255,255,255,0.55)'}>
-                      {tab.label}
+                      {tabLabel(tab.id, tab.label)}
                     </Text>
                   </motion.button>
                 );
