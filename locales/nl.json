@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "Pins kunnen worden versleept",
   "studio.zoneMap.save_area": "Gebied opslaan",
   "Cancel": "Annuleren",
-  "Submit": "Bevestigen"
+  "Submit": "Bevestigen",
+  "studio.main.search_settings": "Zoek in deze instellingen...",
+  "studio.main.search_items": "Zoek voorwerpen...",
+  "studio.main.search_vehicles": "Zoek voertuigen...",
+  "studio.main.saving": "Opslaan...",
+  "studio.main.save_changes": "Wijzigingen opslaan",
+  "studio.listRows.filter": "%s filteren",
+  "studio.duration.days": "dagen",
+  "studio.duration.hours": "uren",
+  "studio.duration.minutes": "minuten",
+  "studio.duration.seconds": "seconden"
 }

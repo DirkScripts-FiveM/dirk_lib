@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "Pins can be dragged",
   "studio.zoneMap.save_area": "Save area",
   "Cancel": "Cancel",
-  "Submit": "Submit"
+  "Submit": "Submit",
+  "studio.main.search_settings": "Search these settings...",
+  "studio.main.search_items": "Search items...",
+  "studio.main.search_vehicles": "Search vehicles...",
+  "studio.main.saving": "Saving...",
+  "studio.main.save_changes": "Save changes",
+  "studio.listRows.filter": "Filter %s",
+  "studio.duration.days": "days",
+  "studio.duration.hours": "hours",
+  "studio.duration.minutes": "minutes",
+  "studio.duration.seconds": "seconds"
 }

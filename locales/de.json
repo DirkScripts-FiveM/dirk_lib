@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "Pins lassen sich ziehen",
   "studio.zoneMap.save_area": "Gebiet speichern",
   "Cancel": "Abbrechen",
-  "Submit": "Bestätigen"
+  "Submit": "Bestätigen",
+  "studio.main.search_settings": "Diese Einstellungen durchsuchen …",
+  "studio.main.search_items": "Gegenstände suchen …",
+  "studio.main.search_vehicles": "Fahrzeuge suchen …",
+  "studio.main.saving": "Wird gespeichert …",
+  "studio.main.save_changes": "Änderungen speichern",
+  "studio.listRows.filter": "%s filtern",
+  "studio.duration.days": "Tage",
+  "studio.duration.hours": "Stunden",
+  "studio.duration.minutes": "Minuten",
+  "studio.duration.seconds": "Sekunden"
 }

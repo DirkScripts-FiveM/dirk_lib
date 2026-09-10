@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "Nålene kan dras",
   "studio.zoneMap.save_area": "Lagre området",
   "Cancel": "Avbryt",
-  "Submit": "Bekreft"
+  "Submit": "Bekreft",
+  "studio.main.search_settings": "Søk i disse innstillingene …",
+  "studio.main.search_items": "Søk etter gjenstander …",
+  "studio.main.search_vehicles": "Søk etter kjøretøy …",
+  "studio.main.saving": "Lagrer …",
+  "studio.main.save_changes": "Lagre endringer",
+  "studio.listRows.filter": "Filtrer %s",
+  "studio.duration.days": "dager",
+  "studio.duration.hours": "timer",
+  "studio.duration.minutes": "minutter",
+  "studio.duration.seconds": "sekunder"
 }

@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "圖釘可以拖曳",
   "studio.zoneMap.save_area": "儲存區域",
   "Cancel": "取消",
-  "Submit": "確認"
+  "Submit": "確認",
+  "studio.main.search_settings": "搜尋這些設定…",
+  "studio.main.search_items": "搜尋物品…",
+  "studio.main.search_vehicles": "搜尋載具…",
+  "studio.main.saving": "儲存中…",
+  "studio.main.save_changes": "儲存變更",
+  "studio.listRows.filter": "篩選%s",
+  "studio.duration.days": "天",
+  "studio.duration.hours": "小時",
+  "studio.duration.minutes": "分鐘",
+  "studio.duration.seconds": "秒"
 }

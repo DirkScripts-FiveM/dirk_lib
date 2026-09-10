@@ -819,5 +819,15 @@
   "cfgpanel_cancel": "Cancelar",
   "cfgpanel_apply": "Aplicar",
   "cfgpanel_history_title": "Historial de configuración",
-  "cfgpanel_close": "Cerrar"
+  "cfgpanel_close": "Cerrar",
+  "studio.main.search_settings": "Buscar en estos ajustes...",
+  "studio.main.search_items": "Buscar objetos...",
+  "studio.main.search_vehicles": "Buscar vehículos...",
+  "studio.main.saving": "Guardando...",
+  "studio.main.save_changes": "Guardar cambios",
+  "studio.listRows.filter": "Filtrar %s",
+  "studio.duration.days": "días",
+  "studio.duration.hours": "horas",
+  "studio.duration.minutes": "minutos",
+  "studio.duration.seconds": "segundos"
 }

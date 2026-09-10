@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "ピンをドラッグできます",
   "studio.zoneMap.save_area": "エリアを保存",
   "Cancel": "キャンセル",
-  "Submit": "決定"
+  "Submit": "決定",
+  "studio.main.search_settings": "設定を検索…",
+  "studio.main.search_items": "アイテムを検索…",
+  "studio.main.search_vehicles": "車両を検索…",
+  "studio.main.saving": "保存中…",
+  "studio.main.save_changes": "変更を保存",
+  "studio.listRows.filter": "%s を絞り込む",
+  "studio.duration.days": "日",
+  "studio.duration.hours": "時間",
+  "studio.duration.minutes": "分",
+  "studio.duration.seconds": "秒"
 }

@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "Pinezki można przeciągać",
   "studio.zoneMap.save_area": "Zapisz obszar",
   "Cancel": "Anuluj",
-  "Submit": "Zatwierdź"
+  "Submit": "Zatwierdź",
+  "studio.main.search_settings": "Szukaj w tych ustawieniach...",
+  "studio.main.search_items": "Szukaj przedmiotów...",
+  "studio.main.search_vehicles": "Szukaj pojazdów...",
+  "studio.main.saving": "Zapisywanie...",
+  "studio.main.save_changes": "Zapisz zmiany",
+  "studio.listRows.filter": "Filtruj %s",
+  "studio.duration.days": "dni",
+  "studio.duration.hours": "godziny",
+  "studio.duration.minutes": "minuty",
+  "studio.duration.seconds": "sekundy"
 }

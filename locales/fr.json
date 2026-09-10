@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "Les marqueurs peuvent être déplacés",
   "studio.zoneMap.save_area": "Enregistrer la zone",
   "Cancel": "Annuler",
-  "Submit": "Valider"
+  "Submit": "Valider",
+  "studio.main.search_settings": "Rechercher dans ces réglages…",
+  "studio.main.search_items": "Rechercher des objets…",
+  "studio.main.search_vehicles": "Rechercher des véhicules…",
+  "studio.main.saving": "Enregistrement…",
+  "studio.main.save_changes": "Enregistrer les modifications",
+  "studio.listRows.filter": "Filtrer %s",
+  "studio.duration.days": "jours",
+  "studio.duration.hours": "heures",
+  "studio.duration.minutes": "minutes",
+  "studio.duration.seconds": "secondes"
 }

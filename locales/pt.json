@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "Os marcadores podem ser arrastados",
   "studio.zoneMap.save_area": "Salvar área",
   "Cancel": "Cancelar",
-  "Submit": "Confirmar"
+  "Submit": "Confirmar",
+  "studio.main.search_settings": "Procurar nestas definições...",
+  "studio.main.search_items": "Procurar itens...",
+  "studio.main.search_vehicles": "Procurar veículos...",
+  "studio.main.saving": "A guardar...",
+  "studio.main.save_changes": "Guardar alterações",
+  "studio.listRows.filter": "Filtrar %s",
+  "studio.duration.days": "dias",
+  "studio.duration.hours": "horas",
+  "studio.duration.minutes": "minutos",
+  "studio.duration.seconds": "segundos"
 }

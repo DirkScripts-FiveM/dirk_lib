@@ -133,7 +133,7 @@ export function ListRows({
         <TextInput
           value={query}
           onChange={(e) => setQuery(e.currentTarget.value)}
-          placeholder={`Filter ${entry.label.toLowerCase()}`}
+          placeholder={t('listRows.filter', 'Filter %s').replace('%s', entry.label.toLowerCase())}
           leftSection={<Search size="1.4vh" color="rgba(255,255,255,0.35)" />}
           rightSection={query ? (
             <motion.button

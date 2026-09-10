@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "I segnaposti si possono trascinare",
   "studio.zoneMap.save_area": "Salva l'area",
   "Cancel": "Annulla",
-  "Submit": "Conferma"
+  "Submit": "Conferma",
+  "studio.main.search_settings": "Cerca in queste impostazioni...",
+  "studio.main.search_items": "Cerca oggetti...",
+  "studio.main.search_vehicles": "Cerca veicoli...",
+  "studio.main.saving": "Salvataggio...",
+  "studio.main.save_changes": "Salva modifiche",
+  "studio.listRows.filter": "Filtra %s",
+  "studio.duration.days": "giorni",
+  "studio.duration.hours": "ore",
+  "studio.duration.minutes": "minuti",
+  "studio.duration.seconds": "secondi"
 }

@@ -796,5 +796,15 @@
   "studio.zoneMap.pins_unlocked": "Smeigtukus galima tempti",
   "studio.zoneMap.save_area": "Išsaugoti sritį",
   "Cancel": "Atšaukti",
-  "Submit": "Patvirtinti"
+  "Submit": "Patvirtinti",
+  "studio.main.search_settings": "Ieškoti šiuose nustatymuose...",
+  "studio.main.search_items": "Ieškoti daiktų...",
+  "studio.main.search_vehicles": "Ieškoti transporto...",
+  "studio.main.saving": "Įrašoma...",
+  "studio.main.save_changes": "Įrašyti pakeitimus",
+  "studio.listRows.filter": "Filtruoti %s",
+  "studio.duration.days": "d.",
+  "studio.duration.hours": "val.",
+  "studio.duration.minutes": "min.",
+  "studio.duration.seconds": "sek."
 }

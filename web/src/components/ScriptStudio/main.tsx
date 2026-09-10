@@ -1836,9 +1836,9 @@ function Header({
           setLocal(next);              // paints immediately
           startTransition(() => onQuery(next));  // filtering yields to typing
         }}
-        placeholder={page?.id === 'items' ? 'Search items...'
-          : page?.id === 'vehicles' ? 'Search vehicles...'
-            : 'Search these settings...'}
+        placeholder={page?.id === 'items' ? t('main.search_items', 'Search items...')
+          : page?.id === 'vehicles' ? t('main.search_vehicles', 'Search vehicles...')
+            : t('main.search_settings', 'Search these settings...')}
         leftSection={<Search size="1.6vh" color="rgba(255,255,255,0.35)" />}
         rightSection={local ? (
           <motion.button
@@ -3138,7 +3138,7 @@ function SaveBar({
 
         <StudioButton label={t('main.discard', 'Discard')} onClick={onDiscard} disabled={dirty === 0 || saving} />
         <StudioButton
-          label={saving ? 'Saving...' : 'Save changes'}
+          label={saving ? t('main.saving', 'Saving...') : t('main.save_changes', 'Save changes')}
           primary
           onClick={onSave}
           disabled={dirty === 0 || saving || !canEdit || problems.length > 0}
