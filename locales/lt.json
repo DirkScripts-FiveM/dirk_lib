@@ -807,5 +807,18 @@
   "studio.duration.hours": "val.",
   "studio.duration.minutes": "min.",
   "studio.duration.seconds": "sek.",
-  "studio.fieldRow.from_inventory": "iš inventoriaus"
+  "studio.fieldRow.from_inventory": "iš inventoriaus",
+  "studio.adminsPage.master_hint": "Nustatoma server.cfg faile, visada apima visus skriptus ir iš šio skydelio negali būti atšaukta",
+  "studio.adminsPage.granted_hint": "Žmonės ir grupės, kuriems suteikėte prieigą, be pagrindinės grupės",
+  "studio.adminsPage.access_to_studio": "Prieiga prie Script Studio",
+  "studio.adminsPage.master": "pagrindinis",
+  "studio.adminsPage.has_access": "turi prieigą",
+  "studio.adminsPage.pick_person_hint": "Pasirinkite iš prisijungusių arba įklijuokite identifikatorių",
+  "studio.adminsPage.pick_group_hint": "Visi, turintys tą ACE leidimą",
+  "studio.adminsPage.can_edit_hint": "Keisti ir įrašyti nustatymus",
+  "studio.adminsPage.view_only_hint": "Atidaryti skydelį nieko nekeičiant",
+  "studio.adminsPage.all_scripts_hint": "Įskaitant vėliau įdiegtus skriptus",
+  "studio.adminsPage.scope_hint": "Kuriuos skriptus apima ši prieiga",
+  "studio.adminsPage.all_n_scripts": "Visi %s skriptai",
+  "studio.adminsPage.added_by": "pridėjo %s"
 }

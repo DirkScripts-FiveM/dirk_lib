@@ -807,5 +807,18 @@
   "studio.duration.hours": "horas",
   "studio.duration.minutes": "minutos",
   "studio.duration.seconds": "segundos",
-  "studio.fieldRow.from_inventory": "do inventário"
+  "studio.fieldRow.from_inventory": "do inventário",
+  "studio.adminsPage.master_hint": "Definido no server.cfg, cobre sempre todos os scripts e não pode ser revogado a partir deste painel",
+  "studio.adminsPage.granted_hint": "Pessoas e grupos a quem deste acesso, além do grupo principal",
+  "studio.adminsPage.access_to_studio": "Acesso ao Script Studio",
+  "studio.adminsPage.master": "principal",
+  "studio.adminsPage.has_access": "tem acesso",
+  "studio.adminsPage.pick_person_hint": "Escolhe entre quem está online, ou cola um identificador",
+  "studio.adminsPage.pick_group_hint": "Todos os que têm essa permissão ACE",
+  "studio.adminsPage.can_edit_hint": "Alterar e guardar definições",
+  "studio.adminsPage.view_only_hint": "Abrir o painel sem alterar nada",
+  "studio.adminsPage.all_scripts_hint": "Incluindo scripts instalados mais tarde",
+  "studio.adminsPage.scope_hint": "Que scripts este acesso abrange",
+  "studio.adminsPage.all_n_scripts": "Todos os %s scripts",
+  "studio.adminsPage.added_by": "adicionado por %s"
 }

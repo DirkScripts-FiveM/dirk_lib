@@ -807,5 +807,18 @@
   "studio.duration.hours": "godziny",
   "studio.duration.minutes": "minuty",
   "studio.duration.seconds": "sekundy",
-  "studio.fieldRow.from_inventory": "z ekwipunku"
+  "studio.fieldRow.from_inventory": "z ekwipunku",
+  "studio.adminsPage.master_hint": "Ustawiane w server.cfg, zawsze obejmuje wszystkie skrypty i nie da się go cofnąć z tego panelu",
+  "studio.adminsPage.granted_hint": "Osoby i grupy, którym nadałeś dostęp, poza grupą główną",
+  "studio.adminsPage.access_to_studio": "Dostęp do Script Studio",
+  "studio.adminsPage.master": "główna",
+  "studio.adminsPage.has_access": "ma dostęp",
+  "studio.adminsPage.pick_person_hint": "Wybierz spośród graczy online lub wklej identyfikator",
+  "studio.adminsPage.pick_group_hint": "Wszyscy z tym uprawnieniem ACE",
+  "studio.adminsPage.can_edit_hint": "Zmienianie i zapisywanie ustawień",
+  "studio.adminsPage.view_only_hint": "Otwieranie panelu bez wprowadzania zmian",
+  "studio.adminsPage.all_scripts_hint": "Łącznie ze skryptami zainstalowanymi później",
+  "studio.adminsPage.scope_hint": "Których skryptów dotyczy ten dostęp",
+  "studio.adminsPage.all_n_scripts": "Wszystkie %s skrypty",
+  "studio.adminsPage.added_by": "dodane przez %s"
 }

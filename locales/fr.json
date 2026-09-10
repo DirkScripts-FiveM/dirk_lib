@@ -807,5 +807,18 @@
   "studio.duration.hours": "heures",
   "studio.duration.minutes": "minutes",
   "studio.duration.seconds": "secondes",
-  "studio.fieldRow.from_inventory": "depuis l'inventaire"
+  "studio.fieldRow.from_inventory": "depuis l'inventaire",
+  "studio.adminsPage.master_hint": "Défini dans server.cfg, couvre toujours tous les scripts et ne peut pas être retiré depuis ce panneau",
+  "studio.adminsPage.granted_hint": "Les personnes et groupes à qui vous avez donné accès, en plus du groupe maître",
+  "studio.adminsPage.access_to_studio": "Accès à Script Studio",
+  "studio.adminsPage.master": "maître",
+  "studio.adminsPage.has_access": "a accès",
+  "studio.adminsPage.pick_person_hint": "Choisissez parmi les joueurs en ligne, ou collez un identifiant",
+  "studio.adminsPage.pick_group_hint": "Tous ceux qui ont cette permission ACE",
+  "studio.adminsPage.can_edit_hint": "Modifier et enregistrer les réglages",
+  "studio.adminsPage.view_only_hint": "Ouvrir le panneau sans rien changer",
+  "studio.adminsPage.all_scripts_hint": "Y compris les scripts installés plus tard",
+  "studio.adminsPage.scope_hint": "Quels scripts cet accès couvre",
+  "studio.adminsPage.all_n_scripts": "Les %s scripts",
+  "studio.adminsPage.added_by": "ajouté par %s"
 }

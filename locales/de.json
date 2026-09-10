@@ -807,5 +807,18 @@
   "studio.duration.hours": "Stunden",
   "studio.duration.minutes": "Minuten",
   "studio.duration.seconds": "Sekunden",
-  "studio.fieldRow.from_inventory": "aus dem Inventar"
+  "studio.fieldRow.from_inventory": "aus dem Inventar",
+  "studio.adminsPage.master_hint": "Wird in der server.cfg gesetzt, gilt immer für jedes Skript und kann hier nicht entzogen werden",
+  "studio.adminsPage.granted_hint": "Personen und Gruppen, denen du Zugriff gegeben hast, zusätzlich zur Master-Gruppe",
+  "studio.adminsPage.access_to_studio": "Zugriff auf Script Studio",
+  "studio.adminsPage.master": "Master",
+  "studio.adminsPage.has_access": "hat Zugriff",
+  "studio.adminsPage.pick_person_hint": "Aus den Online-Spielern wählen oder eine Kennung einfügen",
+  "studio.adminsPage.pick_group_hint": "Alle mit dieser ACE-Berechtigung",
+  "studio.adminsPage.can_edit_hint": "Einstellungen ändern und speichern",
+  "studio.adminsPage.view_only_hint": "Nur öffnen und ansehen, nichts ändern",
+  "studio.adminsPage.all_scripts_hint": "Auch später installierte Skripte",
+  "studio.adminsPage.scope_hint": "Für welche Skripte dieser Zugriff gilt",
+  "studio.adminsPage.all_n_scripts": "Alle %s Skripte",
+  "studio.adminsPage.added_by": "hinzugefügt von %s"
 }

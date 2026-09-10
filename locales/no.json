@@ -807,5 +807,18 @@
   "studio.duration.hours": "timer",
   "studio.duration.minutes": "minutter",
   "studio.duration.seconds": "sekunder",
-  "studio.fieldRow.from_inventory": "fra inventaret"
+  "studio.fieldRow.from_inventory": "fra inventaret",
+  "studio.adminsPage.master_hint": "Settes i server.cfg, gjelder alltid alle skript og kan ikke trekkes tilbake herfra",
+  "studio.adminsPage.granted_hint": "Personer og grupper du har gitt tilgang, i tillegg til mastergruppen",
+  "studio.adminsPage.access_to_studio": "Tilgang til Script Studio",
+  "studio.adminsPage.master": "master",
+  "studio.adminsPage.has_access": "har tilgang",
+  "studio.adminsPage.pick_person_hint": "Velg blant de som er pålogget, eller lim inn en identifikator",
+  "studio.adminsPage.pick_group_hint": "Alle med den ACE-rettigheten",
+  "studio.adminsPage.can_edit_hint": "Endre og lagre innstillinger",
+  "studio.adminsPage.view_only_hint": "Åpne panelet uten å endre noe",
+  "studio.adminsPage.all_scripts_hint": "Også skript som installeres senere",
+  "studio.adminsPage.scope_hint": "Hvilke skript denne tilgangen gjelder",
+  "studio.adminsPage.all_n_scripts": "Alle %s skript",
+  "studio.adminsPage.added_by": "lagt til av %s"
 }

@@ -84,7 +84,7 @@ export function AdminsPage({ canEdit }: { canEdit: boolean }) {
       <Block
         icon={Lock}
         title={t('adminsPage.master_group', 'Master group')}
-        description="Set in server.cfg, always has every script, cannot be revoked from this panel"
+        description={t('adminsPage.master_hint', 'Set in server.cfg, always has every script, cannot be revoked from this panel')}
       >
         <Flex direction="column" gap="xxs">
           <Flex align="center" gap="xs">
@@ -115,7 +115,7 @@ export function AdminsPage({ canEdit }: { canEdit: boolean }) {
       <Block
         icon={Users}
         title={t('adminsPage.who_has_access', 'Who has access')}
-        description="People and groups you have granted, beyond the master group"
+        description={t('adminsPage.granted_hint', 'People and groups you have granted, beyond the master group')}
         action={canManage && (
           <StudioButton label={t('adminsPage.add', 'Add')} icon={UserPlus} primary onClick={() => setAdding(true)} />
         )}
@@ -307,11 +307,13 @@ function AdminRow({
       <Flex align="center" gap="xs" style={{ flex: 1, minWidth: 0 }}>
         <Pill
           icon={editLevel ? ShieldCheck : Eye}
-          label={editLevel ? 'Can edit' : 'View only'}
+          label={editLevel ? t('adminsPage.can_edit', 'Can edit') : t('adminsPage.view_only', 'View only')}
           color={editLevel ? color : '#4CC3DE'}
         />
         <Pill
-          label={entry.scripts.length === 0 ? `All ${scripts} scripts` : entry.scripts.join(', ')}
+          label={entry.scripts.length === 0
+            ? t('adminsPage.all_n_scripts', 'All %s scripts').replace('%s', String(scripts))
+            : entry.scripts.join(', ')}
           color="rgba(255,255,255,0.45)"
           muted
         />
@@ -319,7 +321,9 @@ function AdminRow({
 
       {entry.addedBy && (
         <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.28)" style={{ flexShrink: 0 }}>
-          {locked ? entry.addedBy : `added by ${entry.addedBy}${entry.addedAt ? ` · ${entry.addedAt}` : ''}`}
+          {locked
+            ? entry.addedBy
+            : `${t('adminsPage.added_by', 'added by %s').replace('%s', entry.addedBy)}${entry.addedAt ? ` · ${entry.addedAt}` : ''}`}
         </Text>
       )}
 
@@ -443,7 +447,7 @@ function AdminModal({
       title={entry ? `Edit ${entry.name}` : 'Grant access'}
       icon={UserPlus}
       iconColor={color}
-      description="Access to Script Studio"
+      description={t('adminsPage.access_to_studio', 'Access to Script Studio')}
       onClose={onClose}
       width="86vh"
       height="72vh"
@@ -494,9 +498,9 @@ function AdminModal({
                         </Text>
                       </Flex>
                       {player.master ? (
-                        <Pill label="master" color="rgba(255,255,255,0.4)" muted />
+                        <Pill label={t('adminsPage.master', 'master')} color="rgba(255,255,255,0.4)" muted />
                       ) : alreadyGranted.has(player.identifier) && (
-                        <Pill label="has access" color="rgba(255,255,255,0.4)" muted />
+                        <Pill label={t('adminsPage.has_access', 'has access')} color="rgba(255,255,255,0.4)" muted />
                       )}
                       {chosen && <Check size="1.4vh" color={color} />}
                     </motion.button>
@@ -517,13 +521,13 @@ function AdminModal({
                   <Choice
                     active={kind === 'identifier'} icon={Users}
                     label={t('adminsPage.a_person', 'A person')}
-                    description="Pick from online, or paste an identifier"
+                    description={t('adminsPage.pick_person_hint', 'Pick from online, or paste an identifier')}
                     onClick={() => { setKind('identifier'); setIdentifier(''); setName(''); }}
                   />
                   <Choice
                     active={kind === 'principal'} icon={Shield}
                     label={t('adminsPage.a_group', 'A group')}
-                    description="Everyone with an ACE permission"
+                    description={t('adminsPage.pick_group_hint', 'Everyone with an ACE permission')}
                     onClick={() => { setKind('principal'); setIdentifier(''); setName(''); }}
                   />
                 </Flex>
@@ -553,19 +557,19 @@ function AdminModal({
             <Field label={t('adminsPage.level', 'Level')}>
               <Flex gap="xs">
                 <Choice active={level === 'edit'} icon={ShieldCheck} label={t('adminsPage.can_edit', 'Can edit')}
-                  description="Change and save settings" onClick={() => setLevel('edit')} />
+                  description={t('adminsPage.can_edit_hint', 'Change and save settings')} onClick={() => setLevel('edit')} />
                 <Choice active={level === 'view'} icon={Eye} label={t('adminsPage.view_only', 'View only')}
-                  description="Open the panel, change nothing" onClick={() => setLevel('view')} />
+                  description={t('adminsPage.view_only_hint', 'Open the panel, change nothing')} onClick={() => setLevel('view')} />
               </Flex>
             </Field>
 
-            <Field label={t('adminsPage.scope', 'Scope')} hint="Which scripts this grant covers">
+            <Field label={t('adminsPage.scope', 'Scope')} hint={t('adminsPage.scope_hint', 'Which scripts this grant covers')}>
               <Flex direction="column" gap="xxs">
                 <Choice
                   active={scope.length === 0}
                   icon={Shield}
                   label={t('adminsPage.every_script', 'Every script')}
-                  description="Including scripts installed later"
+                  description={t('adminsPage.all_scripts_hint', 'Including scripts installed later')}
                   onClick={() => setScope([])}
                   wide
                 />

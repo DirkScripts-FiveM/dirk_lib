@@ -807,5 +807,18 @@
   "studio.duration.hours": "小時",
   "studio.duration.minutes": "分鐘",
   "studio.duration.seconds": "秒",
-  "studio.fieldRow.from_inventory": "來自物品欄"
+  "studio.fieldRow.from_inventory": "來自物品欄",
+  "studio.adminsPage.master_hint": "在 server.cfg 中設定，始終涵蓋所有腳本，無法從此面板撤銷",
+  "studio.adminsPage.granted_hint": "除主群組之外，你已授權的成員和群組",
+  "studio.adminsPage.access_to_studio": "Script Studio 存取權限",
+  "studio.adminsPage.master": "主群組",
+  "studio.adminsPage.has_access": "已有權限",
+  "studio.adminsPage.pick_person_hint": "從線上玩家中選擇，或貼上一個識別碼",
+  "studio.adminsPage.pick_group_hint": "擁有該 ACE 權限的所有人",
+  "studio.adminsPage.can_edit_hint": "變更並儲存設定",
+  "studio.adminsPage.view_only_hint": "僅可開啟檢視，不能變更",
+  "studio.adminsPage.all_scripts_hint": "包括之後安裝的腳本",
+  "studio.adminsPage.scope_hint": "此授權涵蓋哪些腳本",
+  "studio.adminsPage.all_n_scripts": "全部 %s 個腳本",
+  "studio.adminsPage.added_by": "由 %s 新增"
 }

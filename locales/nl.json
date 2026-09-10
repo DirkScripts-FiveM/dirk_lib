@@ -807,5 +807,18 @@
   "studio.duration.hours": "uren",
   "studio.duration.minutes": "minuten",
   "studio.duration.seconds": "seconden",
-  "studio.fieldRow.from_inventory": "uit inventaris"
+  "studio.fieldRow.from_inventory": "uit inventaris",
+  "studio.adminsPage.master_hint": "Wordt in server.cfg gezet, geldt altijd voor elk script en kan hier niet worden ingetrokken",
+  "studio.adminsPage.granted_hint": "Mensen en groepen die jij toegang hebt gegeven, naast de mastergroep",
+  "studio.adminsPage.access_to_studio": "Toegang tot Script Studio",
+  "studio.adminsPage.master": "master",
+  "studio.adminsPage.has_access": "heeft toegang",
+  "studio.adminsPage.pick_person_hint": "Kies uit wie online is, of plak een identifier",
+  "studio.adminsPage.pick_group_hint": "Iedereen met die ACE-permissie",
+  "studio.adminsPage.can_edit_hint": "Instellingen wijzigen en opslaan",
+  "studio.adminsPage.view_only_hint": "Het paneel openen zonder iets te wijzigen",
+  "studio.adminsPage.all_scripts_hint": "Inclusief later geïnstalleerde scripts",
+  "studio.adminsPage.scope_hint": "Voor welke scripts deze toegang geldt",
+  "studio.adminsPage.all_n_scripts": "Alle %s scripts",
+  "studio.adminsPage.added_by": "toegevoegd door %s"
 }

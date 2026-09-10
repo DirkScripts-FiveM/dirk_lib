@@ -807,5 +807,18 @@
   "studio.duration.hours": "時間",
   "studio.duration.minutes": "分",
   "studio.duration.seconds": "秒",
-  "studio.fieldRow.from_inventory": "インベントリから"
+  "studio.fieldRow.from_inventory": "インベントリから",
+  "studio.adminsPage.master_hint": "server.cfg で設定します。常にすべてのスクリプトが対象で、この画面からは取り消せません。",
+  "studio.adminsPage.granted_hint": "マスターグループとは別に、あなたが権限を与えた人とグループです",
+  "studio.adminsPage.access_to_studio": "Script Studio へのアクセス",
+  "studio.adminsPage.master": "マスター",
+  "studio.adminsPage.has_access": "権限あり",
+  "studio.adminsPage.pick_person_hint": "オンラインの人から選ぶか、識別子を貼り付けます",
+  "studio.adminsPage.pick_group_hint": "その ACE 権限を持つ全員",
+  "studio.adminsPage.can_edit_hint": "設定を変更して保存できます",
+  "studio.adminsPage.view_only_hint": "開いて見るだけで、変更はできません",
+  "studio.adminsPage.all_scripts_hint": "あとから導入するスクリプトも含みます",
+  "studio.adminsPage.scope_hint": "この権限が対象とするスクリプト",
+  "studio.adminsPage.all_n_scripts": "全 %s スクリプト",
+  "studio.adminsPage.added_by": "%s が追加"
 }

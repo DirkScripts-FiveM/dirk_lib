@@ -807,5 +807,18 @@
   "studio.duration.hours": "hours",
   "studio.duration.minutes": "minutes",
   "studio.duration.seconds": "seconds",
-  "studio.fieldRow.from_inventory": "from inventory"
+  "studio.fieldRow.from_inventory": "from inventory",
+  "studio.adminsPage.master_hint": "Set in server.cfg, always has every script, cannot be revoked from this panel",
+  "studio.adminsPage.granted_hint": "People and groups you have granted, beyond the master group",
+  "studio.adminsPage.access_to_studio": "Access to Script Studio",
+  "studio.adminsPage.master": "master",
+  "studio.adminsPage.has_access": "has access",
+  "studio.adminsPage.pick_person_hint": "Pick from online, or paste an identifier",
+  "studio.adminsPage.pick_group_hint": "Everyone with an ACE permission",
+  "studio.adminsPage.can_edit_hint": "Change and save settings",
+  "studio.adminsPage.view_only_hint": "Open the panel, change nothing",
+  "studio.adminsPage.all_scripts_hint": "Including scripts installed later",
+  "studio.adminsPage.scope_hint": "Which scripts this grant covers",
+  "studio.adminsPage.all_n_scripts": "All %s scripts",
+  "studio.adminsPage.added_by": "added by %s"
 }

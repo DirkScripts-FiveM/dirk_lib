@@ -807,5 +807,18 @@
   "studio.duration.hours": "小时",
   "studio.duration.minutes": "分钟",
   "studio.duration.seconds": "秒",
-  "studio.fieldRow.from_inventory": "来自物品栏"
+  "studio.fieldRow.from_inventory": "来自物品栏",
+  "studio.adminsPage.master_hint": "在 server.cfg 中设置，始终涵盖所有脚本，无法从此面板撤销",
+  "studio.adminsPage.granted_hint": "除主组之外，你已授权的成员和群组",
+  "studio.adminsPage.access_to_studio": "Script Studio 访问权限",
+  "studio.adminsPage.master": "主组",
+  "studio.adminsPage.has_access": "已有权限",
+  "studio.adminsPage.pick_person_hint": "从在线玩家中选择，或粘贴一个标识符",
+  "studio.adminsPage.pick_group_hint": "拥有该 ACE 权限的所有人",
+  "studio.adminsPage.can_edit_hint": "更改并保存设置",
+  "studio.adminsPage.view_only_hint": "仅可打开查看，不能更改",
+  "studio.adminsPage.all_scripts_hint": "包括之后安装的脚本",
+  "studio.adminsPage.scope_hint": "此授权涵盖哪些脚本",
+  "studio.adminsPage.all_n_scripts": "全部 %s 个脚本",
+  "studio.adminsPage.added_by": "由 %s 添加"
 }
