@@ -34,6 +34,8 @@ local basicMap = {
   primaryIdentifier = 'primaryIdentifier',
   language          = 'language',
   currency          = 'currency',
+  weightUnit        = 'weightUnit',
+  distanceUnit      = 'distanceUnit',
   debug             = 'debug',
 }
 
@@ -127,7 +129,16 @@ end
 local scriptConfig = lib.scriptConfig
 
 if lib.context == 'server' then
-  lib.callback.register('dirk_lib:getSettingsSnapshot', function()
+  lib.callback.register('dirk_lib:getSettingsSnapshot', function(src)
+    -- A client asking for settings has just come up, which is the one moment
+    -- we reliably know it is listening. Seed its skills here rather than
+    -- leaving each consumer to remember `syncAll` — forgetting it is exactly
+    -- how fishing ended up showing a level that only corrected on relog.
+    --
+    -- Guarded: a resource that registers no skills still calls this.
+    if src and src ~= 0 and lib.skill and lib.skill.syncAll then
+      pcall(lib.skill.syncAll, src)
+    end
     return currentSnapshot()
   end)
 

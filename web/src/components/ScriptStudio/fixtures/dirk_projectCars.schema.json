@@ -56,6 +56,10 @@
       "paths": [
         "scrapyards.enabled",
         "scrapyards.paymentAccount",
+        "scrapyards.dudChance",
+        "scrapyards.modelPriceFactor",
+        "scrapyards.offSpecialityLead",
+        "scrapyards.offSpecialitySurcharge",
         "scrapyards.fullBasketBonus",
         "scrapyards.recoveryFee",
         "scrapyards.truckReturnReward",
@@ -300,6 +304,20 @@
             "false": "Knowledge (number only)"
           },
           "description": "Let players put ANY vehicle on a jack, not just blueprint builds. Jacking a car up turns it into a project so it can be worked on, synced to other players, and — if it is an owned vehicle — remembered. Turn off to restrict work to blueprint builds only."
+        },
+        "partsMode": {
+          "type": "string",
+          "title": "Part fitment",
+          "default": "perModel",
+          "enum": [
+            "perModel",
+            "simple"
+          ],
+          "x-enumLabels": {
+            "perModel": "For a particular car",
+            "simple": "Fits any car"
+          },
+          "description": "Per model: a part is for a particular car, bought for that car and refused on any other. Simple: every part fits everything, which is how this resource behaved before there was a catalogue.\n\nA switch rather than something you turn on part by part — half on is the worst of both, and a player who has learned that parts are car-specific should not find that some of them are not."
         }
       }
     },
@@ -322,7 +340,8 @@
           "x-rowOrder": [
             "name",
             "model",
-            "blueprintItem"
+            "blueprintItem",
+            "price"
           ],
           "description": "Every vehicle this script can build. A row is either a named vehicle or a category rule — chosen when you add it, and stored on the row as `source` (with `category` for a rule). Both are managed by the list, not this form.",
           "items": {
@@ -373,6 +392,13 @@
                 "type": "string",
                 "x-itemPicker": true,
                 "description": "Item that unlocks this build. Leave empty for the generated blueprint_<model>."
+              },
+              "price": {
+                "type": "number",
+                "title": "Car value",
+                "default": 0,
+                "minimum": 0,
+                "description": "What this car is worth. Car-specific parts are priced off it, so an engine for a supercar costs what a supercar's engine should.\n\nFilled in from the framework when it knows the model — qb-core and qbx_core ship vehicle prices; ES Extended and ND Core ship none at all, so on those it is typed. Either way it is yours to edit, and what you type always wins."
               }
             }
           },
@@ -1294,6 +1320,63 @@
           "default": "cash",
           "description": "Which account a yard pays out of and takes recovery fees from."
         },
+        "dudChance": {
+          "type": "object",
+          "title": "Odds a cheap part is dud",
+          "description": "How often a part turns out to be no good, by the grade it was sold at. It shows itself when you would find out in a workshop — a panel as it goes on, an engine the first time the car runs.\n\nThis is the whole reason to ever buy new: a cheap part is a bet on your own hands.",
+          "properties": {
+            "used": {
+              "type": "number",
+              "title": "Used",
+              "default": 0.25,
+              "minimum": 0,
+              "maximum": 1,
+              "x-control": "chance"
+            },
+            "recon": {
+              "type": "number",
+              "title": "Reconditioned",
+              "default": 0.08,
+              "minimum": 0,
+              "maximum": 1,
+              "x-control": "chance"
+            },
+            "oe": {
+              "type": "number",
+              "title": "New / OE",
+              "default": 0,
+              "minimum": 0,
+              "maximum": 1,
+              "x-control": "chance"
+            }
+          }
+        },
+        "modelPriceFactor": {
+          "type": "number",
+          "title": "Model price factor",
+          "default": 0.01,
+          "minimum": 0,
+          "maximum": 0.2,
+          "description": "A car-specific part costs its own price plus this much of what the CAR is worth, so a supercar's engine is dear and a Blista's is not. Read off the framework's own vehicle prices, which means an addon car added tomorrow is priced correctly with nobody touching anything.\n\nA car the framework has no price for falls back to the part's own price."
+        },
+        "offSpecialityLead": {
+          "type": "number",
+          "title": "Off-speciality wait",
+          "default": 2.5,
+          "minimum": 1,
+          "maximum": 10,
+          "x-control": "multiplier",
+          "description": "A yard that does not deal in that sort of car will still send off for the part — it just takes this much longer. Sourced rather than refused, because a flat no on a one-yard server is a car nobody can ever finish."
+        },
+        "offSpecialitySurcharge": {
+          "type": "number",
+          "title": "Off-speciality surcharge",
+          "default": 0.3,
+          "minimum": 0,
+          "maximum": 2,
+          "x-control": "multiplier",
+          "description": "And this much extra on top, for the trouble."
+        },
         "fullBasketBonus": {
           "type": "number",
           "default": 25,
@@ -1417,7 +1500,8 @@
                 "ped",
                 "truck",
                 "laptopModel",
-                "laptop"
+                "laptop",
+                "collection"
               ]
             },
             {
@@ -1549,6 +1633,47 @@
                   }
                 },
                 "x-propModel": "prop_laptop_01a"
+              },
+              "collection": {
+                "type": "object",
+                "title": "Where deliveries land",
+                "x-control": "prop",
+                "x-propModel": "prop_boxpile_06a",
+                "description": "The spot in the yard your orders turn up. Parcels stack here as they come in, and you take them off it — an order that lands straight in your pocket is a timer, not a delivery.\n\nSomewhere with room and somewhere you walk past: a loading bay, the office door, beside the ramp.",
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "y": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "z": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "w": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "rx": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "ry": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "existing": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "model": {
+                    "type": "string",
+                    "default": ""
+                  }
+                }
               },
               "blipEnabled": {
                 "type": "boolean",
@@ -1742,6 +1867,14 @@
                 "ry": 0,
                 "existing": true,
                 "model": "prop_laptop_01a"
+              },
+              "collection": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 0,
+                "rx": 0,
+                "ry": 0
               }
             }
           ]
@@ -1765,7 +1898,9 @@
                 "id",
                 "label",
                 "rep",
-                "payMultiplier"
+                "payMultiplier",
+                "discount",
+                "leadMultiplier"
               ]
             },
             {
@@ -1837,6 +1972,24 @@
                   }
                 },
                 "default": []
+              },
+              "discount": {
+                "type": "number",
+                "title": "Trade discount",
+                "default": 0,
+                "minimum": 0,
+                "maximum": 0.6,
+                "x-control": "chance",
+                "description": "Taken off every list price at this tier. Totalled on the order as a saving, so it is felt on every purchase rather than noticed once."
+              },
+              "leadMultiplier": {
+                "type": "number",
+                "title": "Waiting time",
+                "default": 1,
+                "minimum": 0.1,
+                "maximum": 2,
+                "x-control": "multiplier",
+                "description": "Scales every wait at this tier. Being served first is the reward a regular actually notices — money comes and goes, an afternoon does not."
               }
             }
           },
@@ -1871,7 +2024,9 @@
                   "model": "emperor",
                   "chance": 0.8
                 }
-              ]
+              ],
+              "discount": 0,
+              "leadMultiplier": 1
             },
             {
               "id": "regular",
@@ -1899,7 +2054,9 @@
                   "model": "sentinel",
                   "chance": 0.5
                 }
-              ]
+              ],
+              "discount": 0,
+              "leadMultiplier": 1
             },
             {
               "id": "trusted",
@@ -1927,7 +2084,9 @@
                   "model": "schafter2",
                   "chance": 0.5
                 }
-              ]
+              ],
+              "discount": 0,
+              "leadMultiplier": 1
             }
           ]
         },
@@ -2664,6 +2823,22 @@
           "keys": [
             "consumables"
           ]
+        },
+        {
+          "id": "catalogue",
+          "label": "Catalogue",
+          "icon": "shopping-cart",
+          "keys": [
+            "category",
+            "price",
+            "condition",
+            "leadHours",
+            "needsTier",
+            "universal",
+            "specificModels",
+            "fitsModels",
+            "revealAt"
+          ]
         }
       ],
       "description": "Fittable vehicle parts (data only). `canStart`/`exists`/`removePart`/`addPart` are Lua-side behaviour and NOT part of this config — most parts use sensible built-in defaults; special-cased ones (e.g. wheel bone removal, carpaint colour) are handled in code.",
@@ -2802,6 +2977,125 @@
           },
           "holdRotation": {
             "$ref": "#/definitions/vector3"
+          },
+          "category": {
+            "type": "string",
+            "title": "Shelf",
+            "default": "body",
+            "enum": [
+              "engine",
+              "transmission",
+              "brakes",
+              "suspension",
+              "body",
+              "electrical",
+              "wheels",
+              "fluids"
+            ],
+            "x-enumLabels": {
+              "engine": "Engine",
+              "transmission": "Transmission",
+              "brakes": "Brakes",
+              "suspension": "Suspension",
+              "body": "Body & Panels",
+              "electrical": "Electrical",
+              "wheels": "Wheels & Tyres",
+              "fluids": "Fluids"
+            },
+            "description": "Which shelf it sits on in the catalogue. The rail down the left of the laptop is these, and a part with no shelf would have nowhere to be found."
+          },
+          "price": {
+            "type": "number",
+            "title": "Price",
+            "default": 0,
+            "minimum": 0,
+            "description": "List price before any trade discount. Zero means the yards do not sell it — that is how a part stays something you only ever find."
+          },
+          "condition": {
+            "type": "string",
+            "title": "Condition",
+            "default": "used",
+            "enum": [
+              "used",
+              "recon",
+              "oe"
+            ],
+            "x-enumLabels": {
+              "used": "Used",
+              "recon": "Reconditioned",
+              "oe": "New / OE"
+            },
+            "description": "What grade the yards stock this at. Sets the price band and the odds it turns out to be dud — a cheap part is a bet on your own hands, not a free lunch."
+          },
+          "leadHours": {
+            "type": "array",
+            "title": "Lead time",
+            "default": [
+              0,
+              0
+            ],
+            "x-control": "range",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 72
+            },
+            "description": "How long he reckons it will take, in REAL hours — an order has to survive you logging off. Rolled once when you order, so the laptop shows a time that does not move. [0, 0] is on the shelf.\n\nA fact about the part, not the grade: nothing about buying used makes a gearbox arrive sooner."
+          },
+          "universal": {
+            "type": "boolean",
+            "title": "Fits anything",
+            "default": false,
+            "description": "Oil, coolant, paint, a battery. Ticked on the exceptions, because in Per model everything else already is car-specific and nobody should tick nineteen boxes to say so. Ignored entirely when Parts is set to Simple."
+          },
+          "specificModels": {
+            "type": "boolean",
+            "title": "Only certain models",
+            "default": false,
+            "description": "The escape hatch. Off is the normal case — the part is for whichever car you are looking at, worked out rather than typed. On, it is only ever the models listed below: a supercharger that suits three cars and nothing else."
+          },
+          "fitsModels": {
+            "type": "array",
+            "title": "Models",
+            "default": [],
+            "x-enabledWhen": {
+              "path": "self.specificModels",
+              "equals": true
+            },
+            "items": {
+              "type": "string"
+            },
+            "description": "The only cars this one fits. Picked from the Vehicles list.",
+            "x-optionsFrom": {
+              "path": "blueprints.vehicles",
+              "key": "model",
+              "labelKey": "name"
+            }
+          },
+          "needsTier": {
+            "type": "string",
+            "title": "Needs tier",
+            "default": "",
+            "x-optionsFrom": {
+              "path": "scrapyards.tiers",
+              "key": "id",
+              "labelKey": "label"
+            },
+            "description": "Rep gate. Below this tier the part is still listed and still priced, with the buy button replaced by the tier it wants — stock you cannot have yet is the whole reason to build rep with a man. Empty means anyone can buy it."
+          },
+          "revealAt": {
+            "type": "string",
+            "title": "A dud one shows",
+            "default": "shakedown",
+            "enum": [
+              "fit",
+              "shakedown"
+            ],
+            "x-enumLabels": {
+              "fit": "As it goes on",
+              "shakedown": "When the car first runs"
+            },
+            "description": "When you find out a cheap one was no good. Panels, glass, seats and paint you can SEE — those show as they go on. An engine or a wheel gives nothing away until the car settles and turns over, which is Finish Project."
           }
         }
       },
@@ -2832,7 +3126,19 @@
             "wheel_lr",
             "wheel_rr",
             "wheel_rf"
-          ]
+          ],
+          "price": 260,
+          "condition": "used",
+          "leadHours": [
+            0,
+            2
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "shakedown",
+          "category": "wheels"
         },
         {
           "id": "bonnet",
@@ -2859,7 +3165,19 @@
           "minigame": "ox_skillcheck",
           "applyRange": 1.5,
           "applyAtBone": "bonnet",
-          "isBone": "bonnet"
+          "isBone": "bonnet",
+          "price": 340,
+          "condition": "used",
+          "leadHours": [
+            1,
+            4
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "boot",
@@ -2875,7 +3193,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "boot",
-          "isBone": "boot"
+          "isBone": "boot",
+          "price": 300,
+          "condition": "used",
+          "leadHours": [
+            1,
+            4
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "door_dside_f",
@@ -2898,7 +3228,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "door_dside_f",
-          "isBone": "door_dside_f"
+          "isBone": "door_dside_f",
+          "price": 280,
+          "condition": "used",
+          "leadHours": [
+            1,
+            5
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "door_pside_f",
@@ -2921,7 +3263,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "door_pside_f",
-          "isBone": "door_pside_f"
+          "isBone": "door_pside_f",
+          "price": 280,
+          "condition": "used",
+          "leadHours": [
+            1,
+            5
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "door_dside_r",
@@ -2944,7 +3298,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "door_dside_r",
-          "isBone": "door_dside_r"
+          "isBone": "door_dside_r",
+          "price": 250,
+          "condition": "used",
+          "leadHours": [
+            1,
+            5
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "door_pside_r",
@@ -2967,7 +3333,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "door_pside_r",
-          "isBone": "door_pside_r"
+          "isBone": "door_pside_r",
+          "price": 250,
+          "condition": "used",
+          "leadHours": [
+            1,
+            5
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "seat_dside_f",
@@ -2990,7 +3368,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "seat_dside_f",
-          "isBone": "seat_dside_f"
+          "isBone": "seat_dside_f",
+          "price": 190,
+          "condition": "used",
+          "leadHours": [
+            2,
+            8
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "seat_pside_f",
@@ -3013,7 +3403,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "seat_pside_f",
-          "isBone": "seat_pside_f"
+          "isBone": "seat_pside_f",
+          "price": 190,
+          "condition": "used",
+          "leadHours": [
+            2,
+            8
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "seat_dside_r",
@@ -3036,7 +3438,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "seat_dside_r",
-          "isBone": "seat_dside_r"
+          "isBone": "seat_dside_r",
+          "price": 160,
+          "condition": "used",
+          "leadHours": [
+            2,
+            8
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "seat_pside_r",
@@ -3059,7 +3473,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "seat_pside_r",
-          "isBone": "seat_pside_r"
+          "isBone": "seat_pside_r",
+          "price": 160,
+          "condition": "used",
+          "leadHours": [
+            2,
+            8
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "window_lf",
@@ -3085,7 +3511,19 @@
           ],
           "applyRange": 1.5,
           "applyAtBone": "window_lf",
-          "isBone": "window_lf"
+          "isBone": "window_lf",
+          "price": 85,
+          "condition": "recon",
+          "leadHours": [
+            0,
+            3
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "window_rf",
@@ -3111,7 +3549,19 @@
           ],
           "applyRange": 1.5,
           "applyAtBone": "window_rf",
-          "isBone": "window_rf"
+          "isBone": "window_rf",
+          "price": 85,
+          "condition": "recon",
+          "leadHours": [
+            0,
+            3
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "window_lr",
@@ -3137,7 +3587,19 @@
           ],
           "applyRange": 1.5,
           "applyAtBone": "window_lr",
-          "isBone": "window_lr"
+          "isBone": "window_lr",
+          "price": 75,
+          "condition": "recon",
+          "leadHours": [
+            0,
+            3
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "window_rr",
@@ -3163,7 +3625,19 @@
           ],
           "applyRange": 1.5,
           "applyAtBone": "window_rr",
-          "isBone": "window_rr"
+          "isBone": "window_rr",
+          "price": 75,
+          "condition": "recon",
+          "leadHours": [
+            0,
+            3
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "windscreen",
@@ -3189,7 +3663,19 @@
           ],
           "applyRange": 1.5,
           "applyAtBone": "windscreen",
-          "isBone": "windscreen"
+          "isBone": "windscreen",
+          "price": 210,
+          "condition": "recon",
+          "leadHours": [
+            1,
+            6
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "windscreen_f",
@@ -3212,7 +3698,19 @@
           },
           "applyRange": 1.5,
           "applyAtBone": "windscreen_f",
-          "isBone": "windscreen_f"
+          "isBone": "windscreen_f",
+          "price": 210,
+          "condition": "recon",
+          "leadHours": [
+            1,
+            6
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         },
         {
           "id": "engine",
@@ -3239,7 +3737,19 @@
             -0.3
           ],
           "applyRange": 1.5,
-          "applyAtBone": "engine"
+          "applyAtBone": "engine",
+          "price": 1400,
+          "condition": "recon",
+          "leadHours": [
+            6,
+            24
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "shakedown",
+          "category": "engine"
         },
         {
           "id": "exhaust",
@@ -3273,7 +3783,19 @@
             -0.1
           ],
           "applyRange": 1.5,
-          "applyAtBone": "exhaust"
+          "applyAtBone": "exhaust",
+          "price": 320,
+          "condition": "used",
+          "leadHours": [
+            2,
+            8
+          ],
+          "universal": false,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "shakedown",
+          "category": "engine"
         },
         {
           "id": "battery",
@@ -3291,7 +3813,19 @@
             "time": 10000
           },
           "applyRange": 1.5,
-          "applyAtBone": "engine"
+          "applyAtBone": "engine",
+          "price": 110,
+          "condition": "oe",
+          "leadHours": [
+            0,
+            0
+          ],
+          "universal": true,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "shakedown",
+          "category": "electrical"
         },
         {
           "id": "coolant",
@@ -3309,7 +3843,19 @@
             "time": 10000
           },
           "applyRange": 1.5,
-          "applyAtBone": "engine"
+          "applyAtBone": "engine",
+          "price": 28,
+          "condition": "oe",
+          "leadHours": [
+            0,
+            0
+          ],
+          "universal": true,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "shakedown",
+          "category": "fluids"
         },
         {
           "id": "oil",
@@ -3330,7 +3876,19 @@
             "engine"
           ],
           "applyRange": 1.5,
-          "applyAtBone": "engine"
+          "applyAtBone": "engine",
+          "price": 34,
+          "condition": "oe",
+          "leadHours": [
+            0,
+            0
+          ],
+          "universal": true,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "shakedown",
+          "category": "fluids"
         },
         {
           "id": "carpaint",
@@ -3345,7 +3903,19 @@
             "time": 10000
           },
           "applyRange": 1.5,
-          "applyAtBone": "engine"
+          "applyAtBone": "engine",
+          "price": 150,
+          "condition": "oe",
+          "leadHours": [
+            0,
+            0
+          ],
+          "universal": true,
+          "specificModels": false,
+          "fitsModels": [],
+          "needsTier": "",
+          "revealAt": "fit",
+          "category": "body"
         }
       ]
     },

@@ -2,7 +2,7 @@ import { alpha, Flex, Text, TextInput, Tooltip, useMantineTheme } from '@mantine
 import { ConfirmModal, isEnvBrowser, useSettings } from 'dirk-cfx-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  AlertTriangle, Anchor, ArrowRight, Banknote, Box, Braces, Car, ChevronRight, Droplets, Fish, Gamepad2, History, Home, Image, Info, LayoutTemplate, Library, Lightbulb, Link as LinkIcon, ListRestart, Lock, Map as MapIcon, MessageCircle, Music, Package, Palette, Plug, Radar, Redo2, RefreshCw, RotateCcw, ScrollText, Search, Shield, Shovel, SlidersHorizontal, Sprout, Store, Target, TrendingUp, Trophy, Undo2, User, Users, Utensils, Waves, Wrench, X,
+  AlertTriangle, Anchor, ArrowRight, Banknote, Box, Braces, Car, Check, ChevronRight, Droplets, Fish, Gamepad2, History, Home, Image, Info, LayoutTemplate, Library, Lightbulb, Link as LinkIcon, ListRestart, Lock, Map as MapIcon, MessageCircle, Music, Package, Palette, Plug, Radar, Redo2, RefreshCw, RotateCcw, ScrollText, Search, Shield, Shovel, SlidersHorizontal, Sprout, Store, Target, TrendingUp, Trophy, Undo2, User, Users, Utensils, Waves, Wrench, X,
 } from 'lucide-react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { Fragment, memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
@@ -47,6 +47,7 @@ import {
   commitDraft, dirtyCount, discardDraft, effectiveValue, factoryReset, isEnabled, isModified, isStaged, matchesSearch, redo, revertToDefault, rowMatches, sectionValues, setValue, undo, useStudio,
 } from './store';
 import { loadLocales, sectionKey, settingKey, translate, useActiveLanguage, useBundles, useChrome } from './studioLocale';
+import { SetupWizard } from './SetupWizard';
 import type { SettingEntry, SettingGroup, StudioScript } from './types';
 import { useInputCssVars } from './Controls';
 import { useAdminToolStore } from 'dirk-cfx-react';
@@ -129,8 +130,10 @@ export default function ScriptStudio() {
   const scripts = useStudio((s) => s.scripts);
   const activeResource = useStudio((s) => s.activeResource);
   const canEdit = useStudio((s) => s.canEdit);
+  const askLanguage = useStudio((s) => s.askLanguage);
   const saving = useStudio((s) => s.saving);
   const saveError = useStudio((s) => s.saveError);
+  const saved = useStudio((s) => s.saved);
   const activePage = useStudio((s) => s.activePage);
   const shownList = useStudio((s) => s.shownList);
   const inputVars = useInputCssVars();
@@ -272,11 +275,12 @@ export default function ScriptStudio() {
   // The server sends RAW schemas plus that resource's stored values, not
   // ready-made panel state: layout, controls and validation are all derived
   // from the schema here, which is why adding a script needs no dirk_lib change.
-  useNuiEvent<{ scripts?: LivePayload[]; canEdit?: boolean; focus?: string }>('OPEN_SCRIPT_STUDIO', (data) => {
+  useNuiEvent<{ scripts?: LivePayload[]; canEdit?: boolean; focus?: string; askLanguage?: boolean }>('OPEN_SCRIPT_STUDIO', (data) => {
     if (data?.scripts?.length) applyLivePayload(data.scripts, data.focus);
     useStudio.setState({
       open: true,
       canEdit: data?.canEdit !== false,
+      askLanguage: data?.askLanguage === true,
     });
 
     // Which scripts ship a changelog - one question covering all of them,
@@ -1299,6 +1303,12 @@ export default function ScriptStudio() {
             transition={{ duration: 0.25, ease: 'easeOut' }}
             style={{
               display: 'flex', flexDirection: 'column',
+              // The containing block for the language chooser. Without it the
+              // overlay anchors to the fixed dim behind the panel and covers
+              // the whole screen instead of the thing it belongs to - and CEF
+              // and Chrome disagree about which ancestor wins, so it is pinned
+              // rather than inferred.
+              position: 'relative',
               // Hidden, not unmounted: staged edits, scroll position and the
               // open modal all have to survive walking across the map.
               visibility: activeTool ? 'hidden' : 'visible',
@@ -1605,6 +1615,7 @@ export default function ScriptStudio() {
                   dirty={dirty}
                   saving={saving}
                   saveError={saveError && saveError.resource === script.resource ? saveError.message : null}
+                  saved={!!saved && saved.resource === script.resource}
                   canEdit={canEdit}
                   problems={problems}
                   onShowProblem={(problem) => {
@@ -1637,6 +1648,12 @@ export default function ScriptStudio() {
                 />}
               </Flex>
             </Flex>
+
+            {/* Asked once, before anything else is worth reading - a panel in
+              * the wrong language is the one screen a translation cannot fix. */}
+            {askLanguage && canEdit && (
+              <SetupWizard onDone={() => useStudio.setState({ askLanguage: false })} />
+            )}
           </motion.div>
 
           <AnimatePresence>
@@ -3001,7 +3018,7 @@ const SettingRow = memo(function SettingRow({
 });
 
 function SaveBar({
-  dirty, saving, saveError, canEdit, onDiscard, onSave, onUndo, onRedo, canUndo, canRedo,
+  dirty, saving, saveError, saved, canEdit, onDiscard, onSave, onUndo, onRedo, canUndo, canRedo,
   onJson, onHistory, onReset, onRefresh,
   problems, onShowProblem,
 }: {
@@ -3009,6 +3026,8 @@ function SaveBar({
   saving: boolean;
   /** why the last save was refused, or null */
   saveError: string | null;
+  /** a save of THIS script has succeeded since the panel opened */
+  saved: boolean;
   canEdit: boolean;
   problems: { path: string; label: string; group: string; message: string }[];
   onShowProblem: (problem: { group: string; path: string }) => void;
@@ -3051,8 +3070,14 @@ function SaveBar({
               style={{ display: 'flex', alignItems: 'center', gap: '0.7vh', minWidth: 0 }}
             >
               <AlertTriangle size="1.5vh" color="#ef4444" />
+              {/* Counts were written straight into the markup in English, so a
+                  panel translated into every other language still said
+                  "2 problems" here. Same for the unsaved count below. */}
               <Text ff="Akrobat Bold" size="xs" c="#ef4444" style={{ flexShrink: 0 }}>
-                {problems.length} {problems.length === 1 ? 'problem' : 'problems'}
+                {(problems.length === 1
+                  ? t('main.problem_count_one', '1 problem')
+                  : t('main.problem_count_other', '{n} problems')
+                ).replace('{n}', String(problems.length))}
               </Text>
               {/* name the first one and offer to go there - a count alone
                   leaves you hunting through twenty sections */}
@@ -3081,7 +3106,33 @@ function SaveBar({
             >
               <Flex w="0.7vh" h="0.7vh" style={{ background: color, borderRadius: '50%' }} />
               <Text ff="Akrobat Bold" size="xs" c="rgba(255,255,255,0.8)">
-                {dirty} unsaved {dirty === 1 ? 'change' : 'changes'}
+                {(dirty === 1
+                  ? t('main.unsaved_count_one', '1 unsaved change')
+                  : t('main.unsaved_count_other', '{n} unsaved changes')
+                ).replace('{n}', String(dirty))}
+              </Text>
+              {/* The nudge to press Save belongs HERE, where there is something
+                  to save. It used to be the RESTING text instead, so the panel
+                  announced "Changes are staged until you save." at the exact
+                  moment nothing was staged - including straight after a
+                  successful save, which made a save that worked read as one
+                  that had not happened yet. */}
+              <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.4)">
+                {t('main.changes_are_staged_until_you_save', 'Changes are staged until you save.')}
+              </Text>
+            </motion.div>
+          ) : saved ? (
+            <motion.div
+              key="saved"
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.6vh' }}
+            >
+              <Check size="1.4vh" color="#22c55e" />
+              <Text ff="Akrobat Bold" size="xs" c="#22c55e">
+                {t('main.all_changes_saved', 'Saved.')}
               </Text>
             </motion.div>
           ) : (
@@ -3093,7 +3144,7 @@ function SaveBar({
               transition={{ duration: 0.15 }}
             >
               <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.3)">
-                {t('main.changes_are_staged_until_you_save', 'Changes are staged until you save.')}
+                {t('main.nothing_to_save', 'No unsaved changes.')}
               </Text>
             </motion.div>
           )}

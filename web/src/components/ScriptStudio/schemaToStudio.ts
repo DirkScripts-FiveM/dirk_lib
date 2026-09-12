@@ -139,7 +139,7 @@ function keysAcross(rows: unknown[]): string[] {
 const CONTROL_TYPES = new Set<string>([
   'boolean', 'number', 'integer', 'percent', 'string', 'secret', 'weekdays',
   'text', 'enum', 'enumList', 'pickList', 'pickOne', 'color', 'blipColor', 'blipSprite',
-  'blipDisplay', 'ped', 'peds', 'vehicle', 'coords', 'positions', 'time', 'keybind',
+  'blipDisplay', 'ped', 'peds', 'vehicle', 'vehicles', 'coords', 'positions', 'time', 'keybind',
   'control', 'controls', 'item', 'list', 'zones', 'palette', 'slider', 'range',
   'chance', 'multiplier', 'difficulty', 'forgiveness', 'rarity', 'balance', 'progression',
   'generosity',
@@ -154,6 +154,18 @@ const CONTROL_TYPES = new Set<string>([
   // nor with the `object` TYPE, which is a nested block of sub-fields and is
   // inferred from the shape, never declared.
   'prop',
+]);
+
+/**
+ * Declared controls that still have to go through inference.
+ *
+ * Not because the declaration is in doubt, but because these are assembled
+ * from the schema below: `rows` needs its child columns, `pickList` its source
+ * list, `range` its bounds. Returning one early gives you the right control
+ * with nothing in it.
+ */
+const ENRICHED_BY_INFERENCE = new Set<string>([
+  'rows', 'pickList', 'pickOne', 'weightMap', 'enumList', 'range', 'positions',
 ]);
 
 /**
@@ -646,6 +658,27 @@ function buildColumnInner(
   const isArray = child.type === 'array' || arrayValue !== undefined;
 
   if (isArray && !looksLikeCoords(value, child)) {
+    /**
+     * A DECLARED control beats shape inference. The same rule the nested-object
+     * branch had to learn.
+     *
+     * Everything below this line reads the VALUE to work out what kind of list
+     * this is — and every one of those guesses used to run before `x-control`
+     * was consulted at all, so declaring one on an array did precisely nothing.
+     * `fitsModels` asked for a vehicle picker and got free-text chips, with no
+     * error to say why.
+     *
+     * The exceptions are the controls that are NOT self-sufficient: the
+     * branches below are what give them their options, their columns or their
+     * bounds, and short-circuiting would hand back an empty one.
+     */
+    const declared = child['x-control'];
+    if (typeof declared === 'string'
+      && CONTROL_TYPES.has(declared)
+      && !ENRICHED_BY_INFERENCE.has(declared)) {
+      return { key, label, type: declared as SettingColumn['type'] };
+    }
+
     const rows = arrayValue ?? [];
     const sample = rows.find((r) => r && typeof r === 'object' && !Array.isArray(r)) as Record<string, unknown> | undefined;
     const itemProps: JsonSchema | undefined = child?.items?.properties;

@@ -3,7 +3,8 @@
     "bridging",
     "access",
     "logger.local",
-    "logger.routes"
+    "logger.routes",
+    "basic.languagePrompted"
   ],
   "x-label": "Shared Settings",
   "x-icon": "library",
@@ -76,6 +77,30 @@
             "zh-TW": "繁體中文 (zh-TW)"
           },
           "description": "Locale code used when resolving strings from /locales. A language with no matching file there falls back to English."
+        },
+        "languagePrompted": {
+          "type": "boolean",
+          "default": false,
+          "title": "Language Prompted",
+          "description": "Whether an admin has been asked to pick a language yet. Set by the one-time chooser, never edited by hand — the value of `language` cannot answer this on its own, because a server sitting on the English default is indistinguishable from one that chose English."
+        },
+        "weightUnit": {
+          "type": "string",
+          "default": "lb",
+          "enum": ["kg", "lb"],
+          "x-enumLabels": { "kg": "Kilograms (kg)", "lb": "Pounds (lb)" },
+          "x-adoptFromConsumers": true,
+          "title": "Weight Unit",
+          "description": "Unit every dirk script displays weights in. Shared here rather than set per script, so a server that runs in kilograms says kilograms everywhere."
+        },
+        "distanceUnit": {
+          "type": "string",
+          "default": "m",
+          "enum": ["m", "ft"],
+          "x-enumLabels": { "m": "Metres (m)", "ft": "Feet (ft)" },
+          "x-adoptFromConsumers": true,
+          "title": "Distance Unit",
+          "description": "Unit every dirk script displays distances in."
         },
         "currency": {
           "type": "string",

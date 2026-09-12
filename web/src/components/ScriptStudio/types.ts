@@ -33,6 +33,8 @@ export type ControlType =
   /** several ped models, shown as pictures rather than names */
   | 'peds'
   | 'vehicle'
+  /** several vehicle models, the way `peds` is several peds */
+  | 'vehicles'
   | 'coords'
   /**
    * A PROP, placed in the world.
@@ -87,9 +89,7 @@ export type ControlType =
   | 'shade'
   | 'rows'
   /** a nested object of sub-fields, rendered as a small stack of them */
-  | 'object'
-  /** a PROP placed in the world - see the note on the setting-type union */
-  | 'prop';
+  | 'object';
 
 export type SettingOption = {
   /**

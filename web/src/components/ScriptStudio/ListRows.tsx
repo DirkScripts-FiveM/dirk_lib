@@ -281,7 +281,7 @@ export function ListRows({
           } : {}),
         }}
       >
-        <StudioButton label={`Add ${singular(entry.label)}`} icon={Plus} onClick={addRow} disabled={disabled} grow />
+        <StudioButton label={t('listRows.add', 'Add {name}').replace('{name}', singular(entry.label))} icon={Plus} onClick={addRow} disabled={disabled} grow />
       </Flex>
 
       <AnimatePresence>
@@ -321,9 +321,11 @@ export function ListRows({
       <AnimatePresence>
         {confirmDelete !== null && rows[confirmDelete] && (
           <ConfirmModal
-            title={`Delete ${singular(entry.label).toLowerCase()}`}
-            description={`"${rowTitle(rows[confirmDelete], confirmDelete)}" is removed from ${entry.label} when you save.`}
-            confirmLabel="Delete"
+            title={t('listRows.delete_title', 'Delete {name}').replace('{name}', singular(entry.label).toLowerCase())}
+            description={t('listRows.delete_description', '"{row}" is removed from {list} when you save.')
+              .replace('{row}', rowTitle(rows[confirmDelete], confirmDelete))
+              .replace('{list}', entry.label)}
+            confirmLabel={t('listRows.delete', 'Delete')}
             onConfirm={() => deleteRow(confirmDelete)}
             onClose={() => setConfirmDelete(null)}
             zIndex={10200}

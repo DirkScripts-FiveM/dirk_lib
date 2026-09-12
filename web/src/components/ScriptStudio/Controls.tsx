@@ -15,7 +15,7 @@ import { Icon } from './Icon';
 import { notify } from './Toasts';
 import { AnyIcon } from './Icon';
 import { ModelControl } from './ModelControl';
-import { VehicleControl } from './VehicleControl';
+import { VehicleControl, VehiclesControl } from './VehicleControl';
 import { PedField, PedsField } from './PedControl';
 import type { ControlType, SettingColumn, SettingEntry } from './types';
 import { DiscordChannelControl } from './DiscordChannelControl';
@@ -631,6 +631,20 @@ export function SettingControl({ type, value, onChange, entry, column, disabled,
       return (
         <ControlShell>
           <PedsField value={value} onChange={(next) => onChange(next)} disabled={disabled} />
+        </ControlShell>
+      );
+
+    // Several of them. Wide, like `peds` and `tags` — a row of chips does not
+    // belong squeezed into the right-hand control column.
+    case 'vehicles':
+      return (
+        <ControlShell>
+          <VehiclesControl
+            value={value}
+            onChange={(next) => onChange(next)}
+            disabled={disabled}
+            compact={compact}
+          />
         </ControlShell>
       );
 

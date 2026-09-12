@@ -217,7 +217,7 @@ local function buildStudioPayload()
   return scripts
 end
 
-RegisterNetEvent('dirk_lib:openScriptStudio', function(focus)
+RegisterNetEvent('dirk_lib:openScriptStudio', function(focus, askLanguage)
   if studioOpen then return end
   studioOpen = true
 
@@ -231,7 +231,7 @@ RegisterNetEvent('dirk_lib:openScriptStudio', function(focus)
   SetNuiFocus(true, true)
   SendNuiMessage(json.encode({
     action = 'OPEN_SCRIPT_STUDIO',
-    data = { scripts = scripts, focus = focus },
+    data = { scripts = scripts, focus = focus, askLanguage = askLanguage or false },
   }))
 end)
 

@@ -44,6 +44,18 @@ type StudioState = {
   saving: boolean;
   /** why the last save was refused, or null */
   saveError: SaveError | null;
+  /**
+   * Which script was last saved successfully, and when.
+   *
+   * A save that WORKED used to produce no signal at all: the staged chips
+   * cleared, the bar dropped back to its resting text, and that was the whole
+   * of the feedback. A refused save at least said so. So the two outcomes a
+   * person most needs to tell apart looked nearly identical, and the resting
+   * text - "Changes are staged until you save." - reads as though the save
+   * still has not happened. Reported by a customer as "changes are not saved",
+   * on a server where they were being saved correctly the whole time.
+   */
+  saved: { resource: string; at: number } | null;
   /** path of the list currently opened in the drill-in pane */
   drillPath: string | null;
   /**
@@ -108,6 +120,14 @@ type StudioState = {
    * rail drops and the breadcrumb becomes the way back.
    */
   editingDesign: string | null;
+  /**
+   * Ask this editor to pick a language before showing them the panel.
+   *
+   * Decided by the server on open, not here: it is the answer to "has anyone
+   * ever been asked", which is a stored flag rather than anything the payload
+   * would otherwise carry.
+   */
+  askLanguage: boolean;
 };
 
 export const useStudio = create<StudioState>(() => ({
@@ -128,6 +148,7 @@ export const useStudio = create<StudioState>(() => ({
   redoStack: {},
   saving: false,
   saveError: null,
+  saved: null,
   drillPath: null,
   activeList: null,
   shownList: null,
@@ -137,6 +158,7 @@ export const useStudio = create<StudioState>(() => ({
   changelogs: [],
   tests: [],
   editingDesign: null,
+  askLanguage: false,
 }));
 
 /** Stable stringify so array/object comparisons don't depend on key order. */
@@ -431,7 +453,7 @@ export async function commitDraft(resource: string): Promise<boolean> {
   const staged = state.draft[resource] ?? {};
   if (!script || Object.keys(staged).length === 0) return true;
 
-  useStudio.setState({ saving: true, saveError: null });
+  useStudio.setState({ saving: true, saveError: null, saved: null });
   // Once written, the pre-save drafts describe a server state that is gone.
   useStudio.setState((s) => ({
     undoStack: { ...s.undoStack, [resource]: [] },
@@ -441,6 +463,7 @@ export async function commitDraft(resource: string): Promise<boolean> {
   if (isEnvBrowser()) {
     await new Promise((r) => setTimeout(r, 450));
     applyStagedLocally(resource);
+    useStudio.setState({ saved: { resource, at: Date.now() } });
     return true;
   }
 
@@ -466,6 +489,10 @@ export async function commitDraft(resource: string): Promise<boolean> {
   }
 
   applyStagedLocally(resource);
+  // Say so. See the `saved` field: this is the only positive confirmation the
+  // panel gives, and without it a successful save and a save that never
+  // happened look the same.
+  useStudio.setState({ saved: { resource, at: Date.now() } });
 
   // A save is exactly the thing that adds a change-log entry, so the cached
   // history for this script is now wrong. Nothing dropped it, and history is

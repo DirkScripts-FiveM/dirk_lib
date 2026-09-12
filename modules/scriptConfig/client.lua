@@ -315,10 +315,35 @@ local reportedFailure = false
 ---
 --- Treating a bare nil as a failure would put every healthy cached client into
 --- a permanent retry loop and warn about a server that is working fine.
+local reportedSilence = false
+
 local function fetchFromServer()
   attempts += 1
   lastAttemptAt = GetGameTimer()
-  local reply, reason = lib.callback.await(('%s:getScriptConfig'):format(scriptName), clientVersion or -1)
+  -- A request the server never answers is a THROW, not a reply: the callback
+  -- module rejects its promise after five minutes and `await` raises. Unwrapped,
+  -- that raise killed this retry thread, so one dropped request left the client
+  -- on defaults for the whole session with a bare "timed out" in F8.
+  --
+  -- And "never answered" is a specific thing. Every server-side path replies -
+  -- a handler error comes back as `false`, a config still building comes back
+  -- as NotReady within 20s - so total silence means the request was dropped
+  -- before it reached the handler. In practice that is an anti-cheat or event
+  -- filter blocking the `__dirk_cb_` event, or the server half not running.
+  -- Say that, once, and keep retrying.
+  local ok, reply, reason = pcall(lib.callback.await, ('%s:getScriptConfig'):format(scriptName), clientVersion or -1)
+  if not ok then
+    if not reportedSilence then
+      reportedSilence = true
+      lib.print.error(('scriptConfig [%s]: the server never answered the config request (%s). '
+        .. 'This is not a slow server - a slow one replies NotReady. Something dropped the event '
+        .. '`__dirk_cb_%s:getScriptConfig` before it reached the script: check any anti-cheat or '
+        .. 'event filter for it, and that %s is started server-side. Still retrying.')
+        :format(scriptName, tostring(reply), scriptName, scriptName))
+      TriggerServerEvent('dirk_lib:scriptConfigFetch', scriptName, 'silent', attempts)
+    end
+    return false
+  end
   debugLog(('fetchFromServer returned (type=%s, reason=%s, attempt=%d)')
     :format(type(reply), tostring(reason), attempts))
 

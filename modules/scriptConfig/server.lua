@@ -45,7 +45,13 @@ local function filterByVisibility(data, basePath, allowServerOnly)
     if allowServerOnly or not locked then
       if type(value) == 'table' then
         local sub = filterByVisibility(value, path, allowServerOnly)
-        if next(sub) ~= nil then
+        -- Drop a table only when the FILTER emptied it (every child was
+        -- server-only). A table that was empty to begin with is a value - an
+        -- admin cleared that list - and dropping it made the key vanish from
+        -- what every client receives, so the panel and the players fell back
+        -- to the shipped default. Delete all seven random rewards, save, and
+        -- watch all seven come back: the server held [] the whole time.
+        if next(sub) ~= nil or next(value) == nil then
           out[key] = sub
         end
       else
@@ -185,6 +191,22 @@ local function extractRenames(schema, path, result)
   if schema.properties then
     for k, propSchema in pairs(schema.properties) do
       extractRenames(propSchema, path and (path .. '.' .. k) or k, result)
+    end
+  end
+  return result
+end
+
+-- Collects all 'x-adoptFromConsumers' paths: settings that used to live in a
+-- consumer's own config and have since moved into the shared one.
+local function extractAdoptions(schema, path, result)
+  result = result or {}
+  if type(schema) ~= 'table' then return result end
+  if schema['x-adoptFromConsumers'] and path then
+    result[#result + 1] = path
+  end
+  if schema.properties then
+    for k, propSchema in pairs(schema.properties) do
+      extractAdoptions(propSchema, path and (path .. '.' .. k) or k, result)
     end
   end
   return result
@@ -561,6 +583,121 @@ local function loadOverrides(scriptName)
   return data, #rows
 end
 
+--- Take over a value a CONSUMER already had, for a setting that has since
+--- moved into the shared config.
+---
+--- `weightUnit` and `distanceUnit` used to live in dirk_fishing. Moving them up
+--- into dirk_lib without this would quietly reset every server that had chosen
+--- kilograms back to pounds: the value is still in the database, just filed
+--- under a script that no longer declares it, so nothing would error and the
+--- units would simply be wrong one restart later.
+---
+--- Only fills a path this script has NOT set, and MOVES the value rather than
+--- copying it: the consumer's rows are deleted once adopted.
+---
+--- That last part is what makes this one-time, and it is not optional. An
+--- override row only exists for a value that DIFFERS from the default, so an
+--- admin who deliberately picks the default has no row - indistinguishable
+--- from never having chosen. Copy instead of move and the sequence is:
+--- adopt kg, admin sets lb, lb equals the default so its row is dropped, next
+--- restart re-adopts kg. Their choice silently reverts on every boot and reads
+--- as "the setting will not save". Moving leaves nothing to re-adopt.
+--- Does `resource`'s own schema.json still describe `path`? Read from disk,
+--- not from a running instance: the consumer may not have started yet when
+--- dirk_lib boots, and an unstarted script still owns its rows.
+local function consumerDeclaresPath(resource, path)
+  local raw = LoadResourceFile(resource, 'schema.json')
+  if not raw then return false end
+  local ok, schema = pcall(json.decode, raw)
+  if not ok or type(schema) ~= 'table' then return false end
+
+  local node = schema
+  for segment in tostring(path):gmatch('[^.]+') do
+    local props = type(node) == 'table' and node.properties
+    if type(props) ~= 'table' or props[segment] == nil then return false end
+    node = props[segment]
+  end
+  return true
+end
+
+local function adoptFromConsumers(scriptName, data, paths)
+  if not paths or #paths == 0 then return 0 end
+  local adopted = 0
+
+  for i = 1, #paths do
+    local path = paths[i]
+    -- Already answered here. Nothing to inherit.
+    if getNestedValue(data, path) == nil then
+      local rows = MySQL.query.await(
+        ('SELECT script, value FROM %s WHERE path = ? AND script != ?'):format(OVERRIDES_TABLE),
+        { path, scriptName }
+      ) or {}
+
+      -- Count the distinct answers rather than taking the first row: two
+      -- scripts CAN disagree, and picking by row order would make which one
+      -- wins depend on insertion order.
+      local tally, best, bestCount = {}, nil, 0
+      for j = 1, #rows do
+        local raw = rows[j].value
+        if raw then
+          tally[raw] = (tally[raw] or 0) + 1
+          if tally[raw] > bestCount then best, bestCount = raw, tally[raw] end
+        end
+      end
+
+      if best then
+        local ok, decoded = pcall(json.decode, best)
+        if ok and decoded ~= nil then
+          setNestedValue(data, path, decoded)
+          adopted = adopted + 1
+
+          local sources = {}
+          for j = 1, #rows do sources[#sources + 1] = rows[j].script end
+
+          -- Move, not copy - but only from a script that has stopped asking.
+          -- A consumer whose schema STILL declares this path is an older build
+          -- that reads its own row, and taking the row away from it resets that
+          -- script to its default. That is how updating dirk_lib on its own
+          -- would have turned every kilogram server back to pounds until
+          -- fishing was updated too. So: copy now, and the row moves the first
+          -- time this boots after the consumer has dropped the key.
+          -- (The "already answered" check above means this never re-adopts, so
+          -- a row left behind cannot overrule the admin later.)
+          local stillDeclared = {}
+          for j = 1, #rows do
+            if consumerDeclaresPath(rows[j].script, path) then
+              stillDeclared[#stillDeclared + 1] = rows[j].script
+            end
+          end
+
+          if #stillDeclared == 0 then
+            MySQL.query.await(
+              ('DELETE FROM %s WHERE path = ? AND script != ?'):format(OVERRIDES_TABLE),
+              { path, scriptName }
+            )
+            lib.print.info(('scriptConfig [%s]: adopted `%s` = %s from %s (moved, not copied)')
+              :format(scriptName, path, best, table.concat(sources, ', ')))
+          else
+            lib.print.info(('scriptConfig [%s]: adopted `%s` = %s from %s (copied - %s still declares it and keeps its own row until updated)')
+              :format(scriptName, path, best, table.concat(sources, ', '), table.concat(stillDeclared, ', ')))
+          end
+
+          -- Disagreement is worth saying out loud - the winner is a guess, and
+          -- an admin who sees this can settle it in one click.
+          local distinct = 0
+          for _ in pairs(tally) do distinct = distinct + 1 end
+          if distinct > 1 then
+            lib.print.warn(('scriptConfig [%s]: `%s` disagreed across scripts, took %s (%d of %d)')
+              :format(scriptName, path, best, bestCount, #rows))
+          end
+        end
+      end
+    end
+  end
+
+  return adopted
+end
+
 --- One-time move of a legacy whole-blob row into override rows.
 ---
 --- Only paths that DIFFER from the shipped defaults become rows - copying the
@@ -587,8 +724,16 @@ local function migrateBlobToOverrides(scriptName, blob, defaults, editor)
     }
   end
 
+  -- Upsert, not insert. A plain INSERT threw `Duplicate entry ... for key
+  -- 'PRIMARY'` the moment any (script, path) row already existed - which it
+  -- does after a previous attempt died partway, or when a second consumer
+  -- booting in the same batch beat this one to a shared path. That throw
+  -- killed the whole init, and the presence of the rows it did manage to write
+  -- then suppressed the migration on every later boot: permanently half a
+  -- config, and nothing but "Callback getScriptConfig timed out" to show for it.
   MySQL.prepare.await(
-    ('INSERT INTO %s (script, path, value, updated_by) VALUES (?, ?, ?, ?)'):format(OVERRIDES_TABLE),
+    ([[INSERT INTO %s (script, path, value, updated_by) VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE value = VALUES(value), updated_by = VALUES(updated_by)]]):format(OVERRIDES_TABLE),
     inserts
   )
 
@@ -1214,7 +1359,16 @@ local function registerScriptConfig(schema, canEditFn, rules)
   -- left where it is: it is the rollback.
   local rawData, overrideCount = loadOverrides(scriptName)
   if overrideCount == 0 and next(legacyBlob) then
-    migrateBlobToOverrides(scriptName, legacyBlob, defaultData, json.encode({ name = 'migration' }))
+    -- Never let this kill init. An unguarded throw here left the callback
+    -- registered but the config nil forever, and every client on defaults with
+    -- nothing in the server console pointing at the migration. Whatever did
+    -- land is reloaded below; the blob is untouched, so the next boot simply
+    -- tries again - and with the upsert above, it now succeeds.
+    local ok, err = pcall(migrateBlobToOverrides, scriptName, legacyBlob, defaultData, json.encode({ name = 'migration' }))
+    if not ok then
+      lib.print.error(('scriptConfig [%s]: migrating the legacy config blob failed: %s'):format(scriptName, tostring(err)))
+      lib.print.error(('scriptConfig [%s]: the blob is still in dirk_scriptConfig.data and will be retried next restart. Until then some settings may show their defaults.'):format(scriptName))
+    end
     rawData = loadOverrides(scriptName)
   end
 
@@ -1233,6 +1387,12 @@ local function registerScriptConfig(schema, canEditFn, rules)
 
   -- 1. Apply declarative renames from schema x-renamedFrom
   rawData = applyRenames(rawData, renames)
+
+  -- 1.5 Adopt settings that moved UP into this config from a consumer's own.
+  -- Deliberately after the hash above, so an adoption is seen as a change and
+  -- gets written - inheriting a value and then not persisting it would repeat
+  -- the lookup on every boot and lose the moment an admin edits the old row.
+  adoptFromConsumers(scriptName, rawData, extractAdoptions(schema))
 
   -- 2. Run any code migrations (handles complex structural transforms)
   rawData = runMigrations(rawData, storedVer, currentVer, migrations)
@@ -1863,6 +2023,16 @@ local toRet = {
     end
 
     return cloneValue(getValueAtPath(scriptConfig, path))
+  end,
+
+  ---@function lib.scriptConfig.clientView
+  ---@description What a PLAYER receives - the visibility-filtered config that
+  --- is broadcast and cached, as opposed to `get`, which is what the server
+  --- holds. The two are meant to differ only by server-only keys; when they
+  --- differ by anything else, that is the bug. Read-only, for tests and
+  --- diagnostics.
+  clientView = function()
+    return cloneValue(clientVisibleView or filterByVisibility(scriptConfig, nil, false))
   end,
 
   on = onScriptConfig,

@@ -32,6 +32,12 @@ export function PickListControl({
   const entries = useStudio((state) => state.scripts.find((s) => s.resource === resource)?.entries ?? []);
   const draft = useStudio((state) => state.draft[resource]);
 
+  /** What the source list is CALLED, falling back to the last path segment. */
+  const sourceLabel = useMemo(() => {
+    const source = entries.find((entry) => entry.path === sourcePath);
+    return source?.label || sourcePath?.split('.').pop() || 'the list';
+  }, [entries, sourcePath]);
+
   const options = useMemo(() => {
     const source = entries.find((entry) => entry.path === sourcePath);
     if (!source) return [];
@@ -73,7 +79,10 @@ export function PickListControl({
       disabled={disabled}
       searchable
       clearable
-      placeholder={options.length ? `Pick from ${sourcePath}` : `Nothing in ${sourcePath} yet`}
+      // The SETTING'S name, not its path. "Pick from blueprints.vehicles" is
+      // how a developer says it; the person filling the form knows that list
+      // as Vehicles, which is what the rail calls it two clicks away.
+      placeholder={options.length ? `Pick from ${sourceLabel}` : `Nothing in ${sourceLabel} yet`}
       comboboxProps={{ zIndex: 10800 }}
       styles={{ ...styles, input: { ...styles.input, height: undefined, minHeight: '3.2vh' } }}
       style={{ width: '100%' }}

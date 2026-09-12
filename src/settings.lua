@@ -59,6 +59,10 @@ local settings = {
   -- ── localization ───────────────────────────────────────────────────
   language = 'en',
   currency = '$',
+  -- Display units live with currency because they are the same kind of thing:
+  -- a presentation choice the whole server shares, not a per-script setting.
+  weightUnit   = 'lb',
+  distanceUnit = 'm',
 
   -- ── branding ───────────────────────────────────────────────────────
   serverName  = 'DirkRP',

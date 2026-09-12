@@ -192,6 +192,17 @@ if context == 'client' and (GetNumResourceMetadata(cache.resource, 'ui_page') or
       resourceVersion = GetResourceMetadata(cache.resource, 'version', 0),
       framework       = s.framework,
       inventory       = s.inventory,
+      -- Presentation the whole server shares. These were missing, and the
+      -- omission was invisible: cfx-react's useSettings has its own defaults,
+      -- so a consumer reading `currency` got "$" and looked fine on a server
+      -- that had set it to EUR. Every price in every consumer NUI was wrong
+      -- and nothing errored.
+      currency        = s.currency,
+      weightUnit      = s.weightUnit,
+      distanceUnit    = s.distanceUnit,
+      language        = s.language,
+      serverName      = s.serverName,
+      logo            = s.logo,
     })
   end)
 

@@ -12,6 +12,7 @@ import { KeybindMapControl } from './KeybindMapControl';
 import { GroupGradeControl } from './GroupGradeControl';
 import { WeekdayControl } from './WeekdayControl';
 import { PedsField } from './PedControl';
+import { VehiclesControl } from './VehicleControl';
 import { FieldAction } from './FieldAction';
 import { PositionListControl } from './PositionListControl';
 import { PickListControl, PickOneControl } from './PickListControl';
@@ -32,6 +33,7 @@ type Row = Record<string, unknown>;
 /** Types that need their own block rather than a right-hand control. */
 export function isWideColumn(type: SettingColumn['type']): boolean {
   return type === 'slider' || type === 'range' || type === 'tags' || type === 'peds'
+    || type === 'vehicles'
     || type === 'rows' || type === 'object'
     || type === 'keyvalue' || type === 'groups'
     || type === 'keybindMap' || type === 'mantineColor' || type === 'shade'
@@ -364,6 +366,17 @@ export function FieldRow({
 
       {column.type === 'redirectKind' && (
         <RedirectKindControl value={value} disabled={disabled} onChange={onChange} />
+      )}
+
+      {/* Wide, so it needs its own block — a wide column never reaches the
+        * SettingControl fallback below, which is how the prop placer ended up
+        * rendering as a label with nothing beside it. */}
+      {column.type === 'vehicles' && (
+        <VehiclesControl
+          value={value}
+          disabled={disabled}
+          onChange={(next) => onChange(next)}
+        />
       )}
 
       {column.type === 'tags' && (

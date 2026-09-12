@@ -454,9 +454,29 @@ lib.callback.register('dirk_lib:getScriptStudio', function(source, knownHashes)
 end)
 
 --- Open the hub for this player, optionally focused on one script.
+---
+--- `askLanguage` rides along because the panel cannot work it out for itself.
+--- It is a flag of its own rather than a look at `basic.language`, because the
+--- language value cannot answer the question: a server still on the English
+--- default is indistinguishable from one that chose English on purpose, and an
+--- override row is only written for a value that DIFFERS from the default - so
+--- "I picked English" would never be recorded and the chooser would nag forever.
+---
+--- Only editors are asked. The language is a dirk_lib setting and therefore
+--- server-wide, so a view-level admin being shown a chooser they cannot save
+--- would be a dead end.
 local function openScriptStudio(src, focus)
   if not src or src == 0 then return end
-  TriggerClientEvent('dirk_lib:openScriptStudio', src, focus)
+
+  local askLanguage = false
+  if canEditResource(src, 'dirk_lib') then
+    local ok, prompted = pcall(function()
+      return lib.scriptConfig.get('basic.languagePrompted')
+    end)
+    askLanguage = ok and not prompted
+  end
+
+  TriggerClientEvent('dirk_lib:openScriptStudio', src, focus, askLanguage)
 end
 
 -- Every registered script keeps a `/resourceName` command, as it always had -
