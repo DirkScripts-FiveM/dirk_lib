@@ -67,10 +67,17 @@ lib.settings = settings
 --## FRAMEWORK/SETTINGS
 local frameworkBridge = lib.loadBridge('framework', settings.framework, 'shared')
 
+-- Resolve the framework core object ONCE (lazily, on first access) and cache
+-- it - the same as the consumer shim in init.lua. getObject() is a
+-- cross-resource export call, and it used to run on every single `lib.FW.x`
+-- access in dirk_lib's own VM, so anything reading the framework in a loop
+-- paid that call per read. A nil result isn't cached, so it self-heals if
+-- something touches lib.FW before the framework is ready.
+local fwObj
 lib.FW = setmetatable({}, {
 	__index = function(self, index)
-		local fwObj = frameworkBridge.getObject()
-		return fwObj[index]
+		fwObj = fwObj or frameworkBridge.getObject()
+		return fwObj and fwObj[index]
 	end
 })
 

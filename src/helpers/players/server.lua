@@ -9,21 +9,9 @@
 --   { id = number|nil, citizenId = string, name = string,
 --     charName = string, online = boolean }
 
-local CACHE_TTL_MS        = 3000   -- online list — refreshed every few seconds
 local SEARCH_CACHE_TTL_MS = 30000  -- search — stable enough to cache longer
 
-local onlineCache = { at = 0, value = nil }
 local searchCache = {}
-
-local function freshOnline()
-  local now = GetGameTimer()
-  if onlineCache.value and (now - onlineCache.at) < CACHE_TTL_MS then
-    return onlineCache.value
-  end
-  local value = lib.framework.getOnlinePlayers()
-  onlineCache = { at = now, value = value }
-  return value
-end
 
 local function freshSearch(search, limit)
   local key = (search or '') .. '|' .. tostring(limit or 50)
@@ -37,10 +25,10 @@ local function freshSearch(search, limit)
   return value
 end
 
-lib.callback.register('dirk_lib:getOnlinePlayers', function(src)
-  if not IsPlayerAceAllowed(src, 'admin') then return {} end
-  return freshOnline()
-end)
+-- `dirk_lib:getOnlinePlayers` is registered in src/scriptConfig/server.lua,
+-- gated on the master editor. A second registration used to live here, gated
+-- on the 'admin' ACE and returning a different shape; the glob loads that file
+-- last, so this one never answered and only made the gate look ambiguous.
 
 lib.callback.register('dirk_lib:searchPlayers', function(src, opts)
   if not IsPlayerAceAllowed(src, 'admin') then return {} end

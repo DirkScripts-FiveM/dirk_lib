@@ -95,6 +95,11 @@ local function closeStudio()
   studioOpen = false
   SendNuiMessage(json.encode({ action = 'CLOSE_SCRIPT_STUDIO' }))
   SetNuiFocus(false, false)
+  -- The admin pickers (position, object, door) fade the blur back IN when
+  -- they hand control back, on the assumption the panel had blurred on open.
+  -- Script Studio never does, and nothing here ever faded it out - so picking
+  -- a shop location and closing left the whole screen blurred until a relog.
+  TriggerScreenblurFadeOut(0)
 end
 
 -- Schemas cache locally, keyed by CONTENT hash - so a repeat open transfers

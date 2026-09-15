@@ -91,7 +91,7 @@ local function startProgress(data)
   end
 
   if data.prop then
-      playerState:set('lib:progressProps', data.prop, true)
+      playerState:set('dirk_lib:progressProps', data.prop, true)
   end
 
   local disable = data.disable
@@ -137,7 +137,7 @@ local function startProgress(data)
   end
 
   if data.prop then
-    playerState:set('lib:progressProps', nil, true)
+    playerState:set('dirk_lib:progressProps', nil, true)
   end
 
   if anim then
@@ -266,7 +266,7 @@ RegisterNetEvent('onPlayerDropped', function(serverId)
   deleteProgressProps(serverId)
 end)
 
-AddStateBagChangeHandler('lib:progressProps', nil, function(bagName, key, value, reserved, replicated)
+AddStateBagChangeHandler('dirk_lib:progressProps', nil, function(bagName, key, value, reserved, replicated)
   if replicated then return end
 
   local ply = GetPlayerFromStateBagName(bagName)

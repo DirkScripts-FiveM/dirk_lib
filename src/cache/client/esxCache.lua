@@ -45,8 +45,25 @@ RegisterNetEvent('esx:setJob', function(job)
   parseJob(job)
 end)
 
+-- Only the keys this cache is built from. ESX fires esx:setPlayerData for
+-- EVERY key it sets - and for any table value even when unchanged - and other
+-- resources call ESX.SetPlayerData freely. Re-parsing the whole cache on each
+-- one meant an export call into es_extended plus a rebuild for keys we never
+-- read. (Reported by a customer as dirk_lib CPU rising while walking.)
+local CACHED_KEYS = {
+  job = true, dead = true, identifier = true, firstName = true, lastName = true,
+}
+
 AddEventHandler('esx:setPlayerData', function(key, val, last)
-  parsePlayerCache()
+  if not CACHED_KEYS[key] then return end
+  if key == 'job' then
+    if type(val) == 'table' then parseJob(val) end
+  elseif key == 'dead' then
+    cache:set('dead', val)
+  else
+    -- identifier / name: rare, take the full snapshot.
+    parsePlayerCache()
+  end
 end)
 
 RegisterNetEvent('esx:onPlayerDeath', function()
