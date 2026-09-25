@@ -47,6 +47,9 @@ local lastCheckin = nil   -- { at, ok, support }
 local lastBundle = nil    -- { at, ok, summary, ticket }
 local answered = {}       -- requestId → true, so a request is never sent twice
 local checkingIn = false
+--- the open tickets the panel was last shown (id → ticket), so "send" only goes to one of them
+local offered = {}
+local sendingByHand = false
 
 local function readLink()
   local raw = GetResourceKvpString(KVP_KEY)
@@ -62,7 +65,7 @@ end
 
 local function forgetLink()
   DeleteResourceKvp(KVP_KEY)
-  lastCheckin, lastBundle, answered = nil, nil, {}
+  lastCheckin, lastBundle, answered, offered = nil, nil, {}, {}
 end
 
 local function serverName()
@@ -290,11 +293,7 @@ end
 -- ─── check-in and bundles ────────────────────────────────────────────────────
 
 local function sendBundle(link, req)
-  local script = type(req.script) == 'table' and req.script or {}
-  local resource = type(script.resource) == 'string' and script.resource ~= '' and script.resource
-    or (type(script.name) == 'string' and script.name:match('^dirk_[%w_%-]+$')) or nil
-
-  local bundle = support.build(gatherFacts(resource))
+  local bundle = support.build(gatherFacts(support.scriptResource(req.script)))
   local body, dropped = support.encode(req.id, bundle, json.encode)
   local status, data = request('POST', link.host, '/api/servers/bundle', body, link.key)
 
@@ -468,6 +467,72 @@ lib.callback.register('dirk_lib:link:cancel', function(source)
   if not allowed(source) then return nil, 'NotAuthorized' end
   pending, lastError = nil, nil
   return status()
+end)
+
+-- ─── sending a bundle by hand ─────────────────────────────────────────────────
+-- /dirk_config → Linked account → "Send a support bundle": the admin picks one of
+-- the account's open tickets and this server sends its bundle there. It works
+-- with the support switch off - it's the owner choosing to send one - and the
+-- site checks the ticket belongs to the account this key is linked to.
+
+--- The account's open tickets, for the picker.
+lib.callback.register('dirk_lib:link:tickets', function(source)
+  if not allowed(source) then return nil, 'NotAuthorized' end
+  local link = readLink()
+  if not link then return { error = 'notLinked' } end
+
+  local status, data = request('GET', link.host, '/api/servers/tickets', nil, link.key)
+  if status == 401 then
+    forgetLink()
+    lastError = 'revoked'
+    return { error = 'revoked' }
+  end
+  if status ~= 200 or not data then return { error = (status == 0 or status >= 500) and 'unreachable' or 'refused' } end
+
+  local tickets = support.ticketChoices(data.tickets)
+  offered = {}
+  for i = 1, #tickets do offered[tickets[i].id] = tickets[i] end
+  return {
+    tickets = tickets,
+    newTicketUrl = type(data.newTicketUrl) == 'string' and data.newTicketUrl or (link.host .. '/tickets?new=true'),
+  }
+end)
+
+--- Send this server's bundle to one of the tickets the picker was just shown.
+lib.callback.register('dirk_lib:link:send', function(source, ticketId)
+  if not allowed(source) then return nil, 'NotAuthorized' end
+  local link = readLink()
+  if not link then return { ok = false, error = 'notLinked' } end
+  local ticket = type(ticketId) == 'string' and offered[ticketId] or nil
+  if not ticket then return { ok = false, error = 'notFound' } end
+  if sendingByHand then return { ok = false, error = 'busy' } end
+
+  sendingByHand = true
+  local ok, result = pcall(function()
+    local bundle = support.build(gatherFacts(support.scriptResource(ticket.script)))
+    local body, dropped = support.encode({ ticketId = ticket.id }, bundle, json.encode)
+    local status, data = request('POST', link.host, '/api/servers/bundle', body, link.key)
+    local sent = support.sendResult(status, data)
+    if status == 401 then
+      forgetLink()
+      lastError = 'revoked'
+    end
+    if sent.ok then
+      sent.dropped = dropped
+      lastBundle = { at = os.time(), ok = true, ticket = ticket.number, summary = sent.summary }
+      lib.print.info(('[linked account] %s sent a support bundle to ticket #%s.'):format(GetPlayerName(source), tostring(ticket.number or ticket.id)))
+      logEvent(source, 'link:bundle', ('%s sent a support bundle to ticket #%s'):format(GetPlayerName(source), tostring(ticket.number or ticket.id)))
+    end
+    return sent
+  end)
+  sendingByHand = false
+
+  if not ok then
+    lib.print.error(('[linked account] Could not build a support bundle: %s'):format(result))
+    return { ok = false, error = 'failed' }
+  end
+  result.ticket = ticket.number
+  return result
 end)
 
 lib.callback.register('dirk_lib:link:unlink', function(source)

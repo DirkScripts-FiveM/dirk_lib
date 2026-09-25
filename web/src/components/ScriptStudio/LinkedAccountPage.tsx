@@ -2,7 +2,7 @@ import { alpha, Flex, Loader, Text, useMantineTheme } from '@mantine/core';
 import { ConfirmModal, copyToClipboard, fetchNui, isEnvBrowser } from 'dirk-cfx-react';
 import { AnimatePresence } from 'framer-motion';
 import {
-  Check, CircleAlert, Clock, Copy, ExternalLink, LifeBuoy, Link as LinkIcon, Lock, Server, Unlink, User,
+  Check, CircleAlert, Clock, Copy, ExternalLink, LifeBuoy, Link as LinkIcon, Lock, RefreshCw, Send, Server, Ticket, Unlink, User,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useChrome } from './studioLocale';
@@ -34,11 +34,28 @@ export type LinkStatus = {
   error?: LinkError;
 };
 
-type Reply = { success: boolean; data?: LinkStatus; _error?: string };
+type Reply<T = LinkStatus> = { success: boolean; data?: T; _error?: string };
+
+/** One of the linked account's open tickets, as the send picker lists it. */
+export type OpenTicket = {
+  id: string;
+  number?: number;
+  subject: string;
+  updatedAt?: string;
+  script?: { name?: string; resource?: string };
+};
+type TicketsAnswer = { tickets?: OpenTicket[] | Record<string, never>; newTicketUrl?: string; error?: string };
+type SendAnswer = { ok: boolean; summary?: string; ticket?: number; dropped?: number; error?: string; message?: string };
+
+type Event = 'LINK_STATUS' | 'LINK_START' | 'LINK_CANCEL' | 'LINK_UNLINK';
 
 /** Enough to design against in a browser; obviously not a real server. */
 let preview: LinkStatus = { linked: false, serverName: 'Browser preview' };
-function previewCall(event: string): Reply {
+const previewTickets: OpenTicket[] = [
+  { id: 'preview-1', number: 1042, subject: 'Crab pots vanish after a restart', updatedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), script: { name: 'Fishing Sim V2', resource: 'dirk_fishing' } },
+  { id: 'preview-2', number: 1051, subject: 'Character select camera clips into the wall', updatedAt: new Date(Date.now() - 26 * 3600_000).toISOString(), script: { name: 'Multicharacter', resource: 'dirk_multichar' } },
+];
+function previewCall(event: string): Reply<unknown> {
   const now = Math.floor(Date.now() / 1000);
   if (event === 'LINK_START') {
     preview = { linked: false, serverName: preview.serverName, pending: { code: 'DEV-000', verifyUrl: 'https://www.dirkscripts.com/link?code=DEV-000', expiresIn: 600 } };
@@ -49,15 +66,31 @@ function previewCall(event: string): Reply {
   } else if (event === 'LINK_STATUS' && preview.pending) {
     // approve itself after a few seconds so the linked screen can be looked at too
     preview = { linked: true, account: 'DirkScriptz', serverName: preview.serverName, linkedAt: now, linkedBy: 'You', checkin: { at: now, ok: true, support: false } };
+  } else if (event === 'LINK_TICKETS') {
+    return { success: true, data: { tickets: previewTickets, newTicketUrl: 'https://www.dirkscripts.com/tickets?new=true' } };
+  } else if (event === 'LINK_SEND') {
+    const summary = '1 error, 2 warnings · dirk_lib 1.3.6 (out of date) · qbx_core · 1 script out of date';
+    preview = { ...preview, bundle: { at: now, ok: true, summary, ticket: 1042 } };
+    return { success: true, data: { ok: true, summary, ticket: 1042, dropped: 0 } };
   }
   return { success: true, data: preview };
 }
 
-async function call(event: 'LINK_STATUS' | 'LINK_START' | 'LINK_CANCEL' | 'LINK_UNLINK'): Promise<Reply> {
-  if (isEnvBrowser()) return previewCall(event);
-  const reply = await fetchNui<Reply>(event, {});
+async function call<T = LinkStatus>(event: Event | 'LINK_TICKETS' | 'LINK_SEND', data: Record<string, unknown> = {}): Promise<Reply<T>> {
+  if (isEnvBrowser()) {
+    // a beat of latency, so the loading states can be looked at too
+    if (event === 'LINK_TICKETS' || event === 'LINK_SEND') await new Promise((r) => setTimeout(r, 600));
+    return previewCall(event) as Reply<T>;
+  }
+  const reply = await fetchNui<Reply<T>>(event, data);
   return reply ?? { success: false, _error: 'NoAnswer' };
 }
+
+const openUrl = (url: string) => {
+  const native = (window as unknown as { invokeNative?: (name: string, arg: string) => void }).invokeNative;
+  if (native) native('openUrl', url);
+  else window.open(url, '_blank');
+};
 
 function ago(seconds: number | undefined, t: ReturnType<typeof useChrome>): string {
   if (!seconds) return t('linkPage.never', 'not yet');
@@ -124,12 +157,6 @@ export function LinkedAccountPage() {
       })
       .catch(() => setFailed(true))
       .finally(() => setBusy(null));
-  };
-
-  const openUrl = (url: string) => {
-    const native = (window as unknown as { invokeNative?: (name: string, arg: string) => void }).invokeNative;
-    if (native) native('openUrl', url);
-    else window.open(url, '_blank');
   };
 
   const secondsLeft = deadline ? Math.max(0, Math.round((deadline - Date.now()) / 1000)) : 0;
@@ -213,7 +240,7 @@ export function LinkedAccountPage() {
         ) : (
           <Card>
             <Flex direction="column" gap="sm" align="flex-start">
-              <Muted>{t('linkPage.what', 'Linking lets you publish your designs to the DirkScripts shelf, and lets our support fetch a support bundle (versions, bridges, problems found and recent console, with IPs, keys and tokens removed) when you switch that on for this server on the website. Nothing is sent otherwise.')}</Muted>
+              <Muted>{t('linkPage.what', 'Linking lets you publish your designs to the DirkScripts shelf, and send a support bundle (versions, bridges, problems found and recent console, with IPs, keys and tokens removed) to one of your tickets from here. Our support can also fetch one for your tickets if you switch that on for this server on the website. Nothing is sent otherwise.')}</Muted>
               <StudioButton
                 label={busy === 'LINK_START' ? t('linkPage.starting', 'Asking for a code…') : t('linkPage.link', 'Link to DirkScripts')}
                 icon={LinkIcon}
@@ -246,13 +273,14 @@ export function LinkedAccountPage() {
             <Flex direction="column" gap="xs">
               <Muted>{status.checkin?.support
                 ? t('linkPage.supportOn', 'When a ticket asks for one, this server sends a bundle within about a minute. It shows on the ticket, so you can see exactly what was sent.')
-                : t('linkPage.supportOff', 'Nothing is sent. Switch it on on the website if you want support to be able to fetch a bundle for your tickets.')}
+                : t('linkPage.supportOff', 'Support can\'t fetch one on their own. Switch it on on the website if you want them to, or send one yourself below.')}
               </Muted>
               {status.bundle && (
                 <Muted>{`${t('linkPage.lastBundle', 'Last bundle')}: ${ago(status.bundle.at, t)}${status.bundle.ticket ? ` · ${t('linkPage.ticket', 'ticket')} #${status.bundle.ticket}` : ''}${status.bundle.ok ? (status.bundle.summary ? ` · ${status.bundle.summary}` : '') : ` · ${t('linkPage.notDelivered', 'not delivered')}`}`}</Muted>
               )}
             </Flex>
           </Card>
+          <SendBundle onSent={refresh} />
         </Block>
       )}
 
@@ -272,6 +300,194 @@ export function LinkedAccountPage() {
         )}
       </AnimatePresence>
     </Flex>
+  );
+}
+
+type SendError =
+  | 'denied' | 'notLinked' | 'revoked' | 'unreachable' | 'refused' | 'notFound'
+  | 'closed' | 'tooLarge' | 'tooSoon' | 'busy' | 'failed';
+
+/**
+ * "Send a support bundle": pick one of the account's open tickets and this
+ * server sends its bundle there. Works with the support switch off - the owner
+ * choosing to send one is the point. The server only sends to a ticket it has
+ * just listed, and the site checks the ticket is this account's and still open.
+ */
+function SendBundle({ onSent }: { onSent: () => void }) {
+  const t = useChrome();
+  const theme = useMantineTheme();
+  const color = theme.colors[theme.primaryColor][5];
+
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [tickets, setTickets] = useState<OpenTicket[] | null>(null);
+  const [newTicketUrl, setNewTicketUrl] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<SendError | null>(null);
+  const [sent, setSent] = useState<{ ticket?: number; summary?: string } | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    call<TicketsAnswer>('LINK_TICKETS')
+      .then((reply) => {
+        if (!reply.success || !reply.data) return setError(reply._error === 'NotAuthorized' ? 'denied' : 'failed');
+        if (reply.data.error) return setError(reply.data.error as SendError);
+        // Lua sends an empty list as {}
+        const list = Array.isArray(reply.data.tickets) ? reply.data.tickets : [];
+        setTickets(list);
+        setNewTicketUrl(reply.data.newTicketUrl ?? null);
+        setPicked((p) => (p && list.some((x) => x.id === p) ? p : list[0]?.id ?? null));
+        return undefined;
+      })
+      .catch(() => setError('failed'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const start = () => {
+    setOpen(true);
+    setSent(null);
+    load();
+  };
+
+  const send = () => {
+    if (!picked) return;
+    setSending(true);
+    setError(null);
+    call<SendAnswer>('LINK_SEND', { ticketId: picked })
+      .then((reply) => {
+        const answer = reply.data;
+        if (!reply.success || !answer) return setError(reply._error === 'NotAuthorized' ? 'denied' : 'failed');
+        if (!answer.ok) {
+          setError((answer.error as SendError) ?? 'failed');
+          if (answer.error === 'revoked') onSent();
+          if (answer.error === 'notFound' || answer.error === 'closed') load();
+          return undefined;
+        }
+        setSent({ ticket: answer.ticket, summary: answer.summary });
+        setOpen(false);
+        notify('success', t('linkPage.sent', 'Support bundle sent'));
+        onSent();
+        return undefined;
+      })
+      .catch(() => setError('failed'))
+      .finally(() => setSending(false));
+  };
+
+  const errorLine: Record<SendError, string> = {
+    denied: t('linkPage.send_denied', 'Only admins who can edit dirk_lib\'s own settings can send a bundle.'),
+    notLinked: t('linkPage.send_notLinked', 'This server isn\'t linked any more.'),
+    revoked: t('linkPage.err_revoked', 'This server was unlinked from the website, so it no longer checks in.'),
+    unreachable: t('linkPage.err_unreachable', 'Could not reach dirkscripts.com from this server. Check it has internet access and try again.'),
+    refused: t('linkPage.err_refused', 'dirkscripts.com refused the request. Try again in a minute.'),
+    notFound: t('linkPage.send_notFound', 'That ticket isn\'t open on your account any more. Pick another.'),
+    closed: t('linkPage.send_closed', 'That ticket is resolved or closed. Open a new one on dirkscripts.com and send it there.'),
+    tooLarge: t('linkPage.send_tooLarge', 'The bundle came out too large to send.'),
+    tooSoon: t('linkPage.send_tooSoon', 'This server sent that ticket a bundle under a minute ago. Give it a minute.'),
+    busy: t('linkPage.send_busy', 'A bundle is already on its way.'),
+    failed: t('linkPage.send_failed', 'Could not build the bundle. The server console says why.'),
+  };
+
+  const chosen = tickets?.find((x) => x.id === picked);
+  const since = (iso?: string) => (iso ? ago(Math.floor(Date.parse(iso) / 1000), t) : '');
+
+  return (
+    <Card>
+      {!open ? (
+        <Flex direction="column" gap="xs">
+          <Flex align="center" gap="md">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Muted>{t('linkPage.sendWhat', 'Send one to a ticket yourself: pick one of your open tickets and this server sends its bundle there. It shows on the ticket, so you see exactly what was sent.')}</Muted>
+            </div>
+            <StudioButton label={t('linkPage.send', 'Send a support bundle')} icon={Send} primary onClick={start} />
+          </Flex>
+          {sent && (
+            <Flex align="center" gap="xs">
+              <Check size="1.4vh" color="#22c55e" />
+              <Muted>{`${t('linkPage.sentTo', 'Sent to ticket')}${sent.ticket ? ` #${sent.ticket}` : ''}${sent.summary ? ` · ${sent.summary}` : ''}`}</Muted>
+            </Flex>
+          )}
+        </Flex>
+      ) : (
+        <Flex direction="column" gap="sm">
+          <Flex align="center" gap="xs">
+            <Ticket size="1.5vh" color={color} />
+            <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.9)" style={{ flex: 1 }}>
+              {t('linkPage.pickTicket', 'Which ticket is it for?')}
+            </Text>
+            <StudioButton label={t('linkPage.refresh', 'Refresh')} icon={RefreshCw} disabled={loading || sending} onClick={load} />
+          </Flex>
+
+          {loading && !tickets ? (
+            <Flex align="center" gap="xs"><Loader size="xs" color={color} /><Muted>{t('linkPage.loadingTickets', 'Asking dirkscripts.com for your open tickets…')}</Muted></Flex>
+          ) : tickets && tickets.length === 0 ? (
+            <Flex direction="column" gap="xs" align="flex-start">
+              <Notice icon={Ticket} tone={color}>
+                {t('linkPage.noTickets', 'You have no open tickets. Open one on dirkscripts.com, then come back here and send the bundle to it.')}
+              </Notice>
+              {newTicketUrl && (
+                <StudioButton label={t('linkPage.openTicket', 'Open a ticket')} icon={ExternalLink} primary onClick={() => openUrl(newTicketUrl)} />
+              )}
+            </Flex>
+          ) : tickets ? (
+            <Flex direction="column" gap="0.6vh" className="studio-scroll" style={{ maxHeight: '28vh', overflowY: 'auto' }}>
+              {tickets.map((ticket) => {
+                const on = ticket.id === picked;
+                const sub = [ticket.script?.name, ticket.updatedAt ? `${t('linkPage.updated', 'updated')} ${since(ticket.updatedAt)}` : ''].filter(Boolean).join(' · ');
+                return (
+                  <Flex
+                    key={ticket.id}
+                    align="center"
+                    gap="sm"
+                    px="sm"
+                    py="0.8vh"
+                    onClick={() => !sending && setPicked(ticket.id)}
+                    style={{
+                      cursor: sending ? 'default' : 'pointer',
+                      borderRadius: theme.radius.xs,
+                      background: on ? alpha(color, 0.12) : alpha(theme.colors.dark[6], 0.5),
+                      border: `0.1vh solid ${on ? alpha(color, 0.6) : alpha(theme.colors.dark[4], 0.5)}`,
+                    }}
+                  >
+                    <Flex
+                      align="center" justify="center"
+                      style={{ width: '1.6vh', height: '1.6vh', flexShrink: 0, borderRadius: '50%', border: `0.2vh solid ${on ? color : 'rgba(255,255,255,0.3)'}` }}
+                    >
+                      {on && <div style={{ width: '0.7vh', height: '0.7vh', borderRadius: '50%', background: color }} />}
+                    </Flex>
+                    {ticket.number !== undefined && (
+                      <Text ff="monospace" fw={700} size="sm" c={on ? color : 'rgba(255,255,255,0.6)'}>{`#${ticket.number}`}</Text>
+                    )}
+                    <Flex direction="column" style={{ flex: 1, minWidth: 0 }}>
+                      <Text ff="Akrobat SemiBold" size="sm" c="rgba(255,255,255,0.92)" truncate>{ticket.subject || t('linkPage.noSubject', 'No subject')}</Text>
+                      {sub && <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.45)" truncate>{sub}</Text>}
+                    </Flex>
+                  </Flex>
+                );
+              })}
+            </Flex>
+          ) : null}
+
+          {error && <Notice icon={CircleAlert} tone="#f59e0b">{errorLine[error] ?? error}</Notice>}
+
+          <Flex gap="xs" justify="flex-end">
+            <StudioButton label={t('linkPage.cancel', 'Cancel')} disabled={sending} onClick={() => { setOpen(false); setError(null); }} />
+            {!!tickets?.length && (
+              <StudioButton
+                label={sending
+                  ? t('linkPage.sending', 'Sending…')
+                  : `${t('linkPage.sendTo', 'Send to')} ${chosen?.number !== undefined ? `#${chosen.number}` : t('linkPage.thisTicket', 'this ticket')}`}
+                icon={Send}
+                primary
+                disabled={!picked || sending || loading}
+                onClick={send}
+              />
+            )}
+          </Flex>
+        </Flex>
+      )}
+    </Card>
   );
 }
 

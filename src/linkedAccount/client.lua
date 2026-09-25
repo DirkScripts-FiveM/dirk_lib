@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Linked account: the NUI's four calls, relayed to the server.
+-- Linked account: the NUI's calls, relayed to the server.
 --
 -- Nothing is decided here. The server checks the player may edit dirk_lib's
 -- settings on every call, and the answers carry no secret (the key and the poll
@@ -18,13 +18,18 @@ local CALLS = {
   LINK_START  = 'dirk_lib:link:start',
   LINK_CANCEL = 'dirk_lib:link:cancel',
   LINK_UNLINK = 'dirk_lib:link:unlink',
+  LINK_TICKETS = 'dirk_lib:link:tickets',
+  LINK_SEND   = 'dirk_lib:link:send',
 }
 
 for nuiName, callback in pairs(CALLS) do
-  RegisterNuiCallback(nuiName, function(_, cb)
+  RegisterNuiCallback(nuiName, function(data, cb)
     if not adminUiOpen() then cb({ success = false, _error = 'NotOpen' }) return end
+    -- the one argument any of them takes: which ticket LINK_SEND sends to (the
+    -- server only sends to a ticket it just offered, so this can't be steered)
+    local ticketId = type(data) == 'table' and type(data.ticketId) == 'string' and data.ticketId or nil
     CreateThread(function()
-      local ok, result, err = pcall(lib.callback.await, callback)
+      local ok, result, err = pcall(lib.callback.await, callback, ticketId)
       if not ok or type(result) ~= 'table' then
         cb({ success = false, _error = (ok and err) or 'NoAnswer' })
         return

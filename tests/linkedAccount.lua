@@ -331,6 +331,72 @@ lib.test.add('link: a bundle under the cap is sent whole', function(t)
   t.expect(has(body, '"oldest"')).toBeTruthy()
 end, { context = 'server' })
 
+lib.test.add('link: a bundle sent by hand is addressed to its ticket, not a request', function(t)
+  local s = support()
+  local body = s.encode({ ticketId = 'cm_ticket' }, s.build(sampleFacts()), json.encode)
+  t.expect(has(body, '"ticketId":"cm_ticket"')).toBeTruthy()
+  t.expect(has(body, 'requestId')).toBeFalsy()
+  -- and trimmed to fit the same way
+  local lines = {}
+  for i = 1, 400 do lines[i] = ('%03d '):format(i) .. ('y'):rep(990) end
+  local trimmed, dropped = s.encode({ ticketId = 'cm_ticket' }, s.build(sampleFacts(lines)), json.encode, 100 * 1024)
+  t.expect(#trimmed <= 100 * 1024).toBeTruthy()
+  t.expect(dropped).toBeGreaterThan(0)
+  t.expect(has(trimmed, '"ticketId":"cm_ticket"')).toBeTruthy()
+end, { context = 'server' })
+
+lib.test.add('link: the script a ticket or request is about', function(t)
+  local r = support().scriptResource
+  t.expect(r({ name = 'Fishing Sim V2', resource = 'dirk_fishing' })).toBe('dirk_fishing')
+  t.expect(r({ name = 'dirk_multichar' })).toBe('dirk_multichar')
+  t.expect(r({ name = 'Fishing Sim V2' })).toBeNil()
+  -- a resource name is a folder name, nothing that could reach a path or a query
+  t.expect(r({ resource = '../dirk_lib' })).toBeNil()
+  t.expect(r(nil)).toBeNil()
+  t.expect(r('dirk_fishing')).toBeNil()
+end, { context = 'server' })
+
+lib.test.add('link: the ticket picker takes only well-formed tickets', function(t)
+  local choices = support().ticketChoices
+  local list = choices({
+    { id = 'cm1', number = 1042, subject = 'Crab pots vanish', script = { name = 'Fishing Sim V2', resource = 'dirk_fishing' }, updatedAt = '2026-09-25T10:00:00Z', extra = 'dropped' },
+    { id = 'cm2', number = '1043', subject = 'No script' },
+    { subject = 'no id' },
+    'not a ticket',
+    { id = 'cm3', subject = ('x'):rep(300) },
+  })
+  t.expect(#list).toBe(3)
+  t.expect(list[1].number).toBe(1042)
+  t.expect(list[1].script.resource).toBe('dirk_fishing')
+  t.expect(list[1].extra).toBeNil()
+  t.expect(list[2].number).toBe(1043)
+  t.expect(list[2].script).toBeNil()
+  t.expect(list[3].number).toBeNil()
+  t.expect(#list[3].subject).toBe(120)
+  -- none: an empty table (JSON's [] or {}) or no list at all
+  t.expect(#choices({})).toBe(0)
+  t.expect(#choices(nil)).toBe(0)
+  local many = {}
+  for i = 1, 30 do many[i] = { id = 'cm' .. i, subject = 's' } end
+  t.expect(#choices(many)).toBe(support().MAX_TICKETS)
+end, { context = 'server' })
+
+lib.test.add('link: what the panel says about a sent bundle', function(t)
+  local r = support().sendResult
+  local ok = r(200, { ok = true, summary = '1 warning · dirk_lib 1.3.7' })
+  t.expect(ok.ok).toBe(true)
+  t.expect(ok.summary).toBe('1 warning · dirk_lib 1.3.7')
+  local soon = r(429, { error = 'This server sent that ticket a bundle under a minute ago.' })
+  t.expect(soon.error).toBe('tooSoon')
+  t.expect(soon.message).toBe('This server sent that ticket a bundle under a minute ago.')
+  t.expect(r(409).error).toBe('closed')
+  t.expect(r(404).error).toBe('notFound')
+  t.expect(r(401).error).toBe('revoked')
+  t.expect(r(0).error).toBe('unreachable')
+  t.expect(r(502).error).toBe('unreachable')
+  t.expect(r(400, { error = 'Invalid bundle' }).error).toBe('refused')
+end, { context = 'server' })
+
 lib.test.add('link: redacting a full console stays fast on the server thread', function(t)
   -- The bundle is built on the server's one thread. A redaction pattern that
   -- backtracks over a long word is quadratic in the line length, and the first
@@ -368,12 +434,24 @@ lib.test.add('link: every link callback checks permission on the server', functi
   t.expect(#src > 0).toBeTruthy()
   local count = 0
   for _ in src:gmatch("lib%.callback%.register%('dirk_lib:link:") do count = count + 1 end
-  t.expect(count).toBe(4)
+  t.expect(count).toBe(6)
   local guarded = 0
-  for _ in src:gmatch("lib%.callback%.register%('dirk_lib:link:[%w_]+',%s*function%(source%)%s*\n%s*if not allowed%(source%) then return nil, 'NotAuthorized' end") do
+  for _ in src:gmatch("lib%.callback%.register%('dirk_lib:link:[%w_]+',%s*function%(source[%w_, ]*%)%s*\n%s*if not allowed%(source%) then return nil, 'NotAuthorized' end") do
     guarded = guarded + 1
   end
-  t.expect(guarded).toBe(4)
+  t.expect(guarded).toBe(count)
+end, { context = 'server' })
+
+lib.test.add('link: a bundle sent by hand only goes to a ticket the panel was just offered', function(t)
+  -- The NUI names the ticket; the server only sends to one the site listed for
+  -- this account a moment ago, and the site checks the ticket is that account's.
+  local src = LoadResourceFile('dirk_lib', 'src/linkedAccount/server.lua') or ''
+  local body = src:match("lib%.callback%.register%('dirk_lib:link:send'(.-)\nend%)")
+  t.expect(body).notToBeNil()
+  t.expect(body:find('offered%[ticketId%]') ~= nil).toBeTruthy()
+  t.expect(body:find('if not ticket then return', 1, true) ~= nil).toBeTruthy()
+  -- and the list it was offered is replaced each time the picker asks
+  t.expect(src:find('offered = {}', 1, true) ~= nil).toBeTruthy()
 end, { context = 'server' })
 
 lib.test.add('link: what the panel is sent never carries the key or poll secret', function(t)

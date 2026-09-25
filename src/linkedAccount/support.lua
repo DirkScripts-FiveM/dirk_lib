@@ -577,13 +577,20 @@ function M.build(facts)
   return bundle
 end
 
---- Encode `{ requestId, bundle }` under the size cap, giving up the oldest
---- console lines first, then the Studio overrides. Returns the JSON text and
---- how many console lines had to go.
+--- Encode the upload under the size cap, giving up the oldest console lines
+--- first, then the Studio overrides. Returns the JSON text and how many console
+--- lines had to go.
+---   a request id (string)  → `{ requestId, bundle }`, the answer to a check-in's request
+---   `{ ticketId = … }`      → `{ ticketId, bundle }`, sent by hand to an open ticket
+---@param target string|{ ticketId: string }
 ---@param encode fun(v: any): string json.encode
-function M.encode(requestId, bundle, encode, maxBytes)
+function M.encode(target, bundle, encode, maxBytes)
   maxBytes = maxBytes or M.MAX_BYTES
-  local body = encode({ requestId = requestId, bundle = bundle })
+  local function wrap()
+    if type(target) == 'table' then return encode({ ticketId = target.ticketId, bundle = bundle }) end
+    return encode({ requestId = target, bundle = bundle })
+  end
+  local body = wrap()
   local dropped = 0
 
   local console = bundle.console or {}
@@ -597,15 +604,71 @@ function M.encode(requestId, bundle, encode, maxBytes)
     dropped = dropped + cut
     console = kept
     bundle.console = console
-    body = encode({ requestId = requestId, bundle = bundle })
+    body = wrap()
   end
 
   if #body > maxBytes and bundle.studio then
     bundle.studio = { script = bundle.studio.script, overrides = {} }
-    body = encode({ requestId = requestId, bundle = bundle })
+    body = wrap()
   end
 
   return body, dropped
+end
+
+-- ─── sending one by hand ─────────────────────────────────────────────────────
+
+--- The resource a request or ticket is about, for its Script Studio settings:
+--- `script.resource`, or a `script.name` that is itself a dirk_ resource.
+---@param script { name: string?, resource: string? }?
+---@return string?
+function M.scriptResource(script)
+  if type(script) ~= 'table' then return nil end
+  if type(script.resource) == 'string' and script.resource:match('^[%w_%-]+$') then return script.resource end
+  if type(script.name) == 'string' and script.name:match('^dirk_[%w_%-]+$') then return script.name end
+  return nil
+end
+
+--- The most tickets the picker shows (the site sends at most 20).
+M.MAX_TICKETS = 20
+
+--- The site's GET /api/servers/tickets answer as the picker's rows: only
+--- well-formed tickets, only the fields the panel draws, at most MAX_TICKETS.
+--- An empty list may arrive as {} (Lua) or [] (JSON); both are "none".
+---@return { id: string, number: integer?, subject: string, script: { name: string?, resource: string? }?, updatedAt: string? }[]
+function M.ticketChoices(list)
+  local out = {}
+  if type(list) ~= 'table' then return out end
+  for i = 1, #list do
+    local t = list[i]
+    if #out >= M.MAX_TICKETS then break end
+    if type(t) == 'table' and type(t.id) == 'string' and t.id ~= '' and #t.id <= 64 then
+      local script = type(t.script) == 'table' and {
+        name = type(t.script.name) == 'string' and t.script.name or nil,
+        resource = type(t.script.resource) == 'string' and t.script.resource or nil,
+      } or nil
+      out[#out + 1] = {
+        id = t.id,
+        number = tonumber(t.number or '') and math.tointeger(tonumber(t.number)) or nil,
+        subject = type(t.subject) == 'string' and t.subject:sub(1, 120) or '',
+        script = script,
+        updatedAt = type(t.updatedAt) == 'string' and t.updatedAt or nil,
+      }
+    end
+  end
+  return out
+end
+
+--- What the panel says about a sent bundle, from the site's answer to it.
+---@param status integer HTTP status (0 = never answered)
+---@param data table? the decoded answer
+---@return { ok: boolean, summary: string?, error: string?, message: string? }
+function M.sendResult(status, data)
+  data = type(data) == 'table' and data or {}
+  if status == 200 then return { ok = true, summary = type(data.summary) == 'string' and data.summary or nil } end
+  local code = ({
+    [0] = 'unreachable', [401] = 'revoked', [404] = 'notFound', [409] = 'closed', [413] = 'tooLarge', [429] = 'tooSoon',
+  })[status] or (status >= 500 and 'unreachable' or 'refused')
+  return { ok = false, error = code, message = type(data.error) == 'string' and data.error or nil }
 end
 
 return M
