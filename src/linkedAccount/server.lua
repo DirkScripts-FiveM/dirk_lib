@@ -50,6 +50,8 @@ local checkingIn = false
 --- the open tickets the panel was last shown (id → ticket), so "send" only goes to one of them
 local offered = {}
 local sendingByHand = false
+--- the script list the site last kept (encoded), so a check-in only carries it when it changed
+local scriptsSent = nil
 
 local function readLink()
   local raw = GetResourceKvpString(KVP_KEY)
@@ -65,7 +67,7 @@ end
 
 local function forgetLink()
   DeleteResourceKvp(KVP_KEY)
-  lastCheckin, lastBundle, answered, offered = nil, nil, {}, {}
+  lastCheckin, lastBundle, answered, offered, scriptsSent = nil, nil, {}, {}, nil
 end
 
 local function serverName()
@@ -214,15 +216,9 @@ end
 ---@param requested string? the resource the request is about
 local function gatherFacts(requested)
   local names = allResources()
-  local known, scripts = {}, {}
-  for i = 1, #names do
-    local name = names[i]
-    known[name] = true
-    if name:lower():sub(1, 5) == 'dirk_' then
-      scripts[#scripts + 1] = { name = name, version = versionOf(name), state = GetResourceState(name) }
-    end
-  end
-  table.sort(scripts, function(a, b) return a.name < b.name end)
+  local known = {}
+  for i = 1, #names do known[names[i]] = true end
+  local scripts = support.scriptRows(names, versionOf, GetResourceState)
 
   -- dependencies: what the running dirk scripts declare, plus each bridge resource
   local deps, depIndex = {}, {}
@@ -323,7 +319,18 @@ local function checkIn()
   checkingIn = true
 
   local ok, wait = pcall(function()
-    local status, data = request('GET', link.host, '/api/servers/checkin', nil, link.key)
+    -- The check-in carries this server's dirk scripts (for Account → Linked
+    -- servers) only when the list changed since the site last kept it: after a
+    -- start, an update, a script started or stopped. Otherwise it's a bare GET.
+    local scripts = support.scriptRows(allResources(), versionOf, GetResourceState)
+    local listed = json.encode(scripts)
+    local status, data
+    if listed ~= scriptsSent then
+      status, data = request('POST', link.host, '/api/servers/checkin', { scripts = scripts }, link.key)
+      if status == 200 and data and data.scripts == 'saved' then scriptsSent = listed end
+    else
+      status, data = request('GET', link.host, '/api/servers/checkin', nil, link.key)
+    end
 
     if status == 401 then
       forgetLink()
@@ -385,7 +392,7 @@ local function pollUntilDone(mine)
           linkedAt = os.time(),
           linkedBy = mine.by,
         })
-        pending, lastError, answered = nil, nil, {}
+        pending, lastError, answered, scriptsSent = nil, nil, {}, nil
         lib.print.info(('[linked account] Linked to DirkScripts%s.'):format(
           type(data.account) == 'string' and (' account ' .. data.account) or ''))
         logEvent(0, 'link:linked', ('Server linked to DirkScripts account %s (started by %s)'):format(

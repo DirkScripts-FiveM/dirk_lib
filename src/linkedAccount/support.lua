@@ -615,6 +615,28 @@ function M.encode(target, bundle, encode, maxBytes)
   return body, dropped
 end
 
+-- ─── the check-in's script list ──────────────────────────────────────────────
+
+--- The most scripts a check-in lists (the site keeps 100).
+M.MAX_SCRIPTS = 100
+
+--- The server's dirk_ resources as the check-in (and the bundle) list them:
+--- `{ name, version, state }`, A-Z, at most MAX_SCRIPTS. The site shows them in
+--- Account → Linked servers, marked against our releases.
+---@param names string[] every resource on the server
+---@param versionOf fun(name: string): string? its fxmanifest version
+---@param stateOf fun(name: string): string GetResourceState
+function M.scriptRows(names, versionOf, stateOf)
+  local rows = {}
+  for i = 1, #(names or {}) do
+    local name = names[i]
+    if isDirk(name) then rows[#rows + 1] = { name = name, version = versionOf(name), state = stateOf(name) } end
+  end
+  table.sort(rows, function(a, b) return a.name < b.name end)
+  for i = #rows, M.MAX_SCRIPTS + 1, -1 do rows[i] = nil end
+  return rows
+end
+
 -- ─── sending one by hand ─────────────────────────────────────────────────────
 
 --- The resource a request or ticket is about, for its Script Studio settings:

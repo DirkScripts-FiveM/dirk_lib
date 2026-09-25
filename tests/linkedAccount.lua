@@ -345,6 +345,40 @@ lib.test.add('link: a bundle sent by hand is addressed to its ticket, not a requ
   t.expect(has(trimmed, '"ticketId":"cm_ticket"')).toBeTruthy()
 end, { context = 'server' })
 
+lib.test.add('link: the check-in lists the dirk scripts, A-Z, capped', function(t)
+  local s = support()
+  local versions = { dirk_fishing = '2.1.4', dirk_lib = '1.3.7' }
+  local rows = s.scriptRows(
+    { 'ox_lib', 'dirk_lib', 'qbx_core', 'dirk_fishing', 'DIRK_Upper', 'dirk_noversion' },
+    function(name) return versions[name] end,
+    function(name) return name == 'dirk_noversion' and 'stopped' or 'started' end)
+  t.expect(#rows).toBe(4)
+  t.expect(rows[1].name).toBe('DIRK_Upper')
+  t.expect(rows[2].name).toBe('dirk_fishing')
+  t.expect(rows[2].version).toBe('2.1.4')
+  t.expect(rows[3].name).toBe('dirk_lib')
+  t.expect(rows[4].version).toBeNil()
+  t.expect(rows[4].state).toBe('stopped')
+
+  local many = {}
+  for i = 1, 130 do many[i] = ('dirk_s%03d'):format(i) end
+  local capped = s.scriptRows(many, function() return '1.0.0' end, function() return 'started' end)
+  t.expect(#capped).toBe(s.MAX_SCRIPTS)
+  t.expect(capped[#capped].name).toBe('dirk_s100')
+  t.expect(#s.scriptRows(nil, function() end, function() end)).toBe(0)
+end, { context = 'server' })
+
+lib.test.add('link: the check-in carries the script list only when it changed', function(t)
+  local src = LoadResourceFile('dirk_lib', 'src/linkedAccount/server.lua') or ''
+  local body = src:match('local function checkIn%(%)(.-)\nend\n')
+  t.expect(body).notToBeNil()
+  t.expect(body:find('if listed ~= scriptsSent then', 1, true) ~= nil).toBeTruthy()
+  -- only a list the site says it kept counts as sent, so a refused one goes again
+  t.expect(body:find("data.scripts == 'saved' then scriptsSent = listed", 1, true) ~= nil).toBeTruthy()
+  -- a new link (or an unlink) sends it afresh
+  t.expect(select(2, src:gsub('scriptsSent = nil', '')) + select(2, src:gsub(', scriptsSent = [^\n]*nil', ''))).toBeGreaterThan(0)
+end, { context = 'server' })
+
 lib.test.add('link: the script a ticket or request is about', function(t)
   local r = support().scriptResource
   t.expect(r({ name = 'Fishing Sim V2', resource = 'dirk_fishing' })).toBe('dirk_fishing')
