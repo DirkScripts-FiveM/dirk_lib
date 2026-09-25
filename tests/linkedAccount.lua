@@ -147,6 +147,24 @@ lib.test.add('link: console problems name the dirk script, fold repeats, skip ot
   t.expect(problems[4].resource).toBe('oxmysql')
 end, { context = 'server' })
 
+lib.test.add('link: console problems work on GetConsoleBuffer text, which has no channel tags', function(t)
+  -- Measured on a live server: the buffer keeps each message but drops the
+  -- `[script:…]` column, so the resource has to come from the line itself.
+  local s = support()
+  local known = { dirk_fishing = true, dirk_projectCars = true }
+  local problems = s.consoleProblems({
+    'SCRIPT ERROR: @dirk_fishing/server/crabPots.lua:212: attempt to index a nil value',
+    '> fn (@dirk_fishing/server/crabPots.lua:212)',
+    '[ERROR] \tAttempting to use stores but its either not started or starting after dirk_projectCars',
+    '[ERROR] something from a resource that is not ours',
+    'SCRIPT ERROR: @ox_inventory/modules/x.lua:1: not ours',
+  }, known)
+  t.expect(#problems).toBe(2)
+  t.expect(problems[1].resource).toBe('dirk_fishing')
+  t.expect(problems[1].kind).toBe('script_error')
+  t.expect(problems[2].resource).toBe('dirk_projectCars')
+end, { context = 'server' })
+
 -- ─── problems ────────────────────────────────────────────────────────────────
 
 lib.test.add('link: problems list missing dependencies, bridges and stopped scripts', function(t)
@@ -311,6 +329,34 @@ lib.test.add('link: a bundle under the cap is sent whole', function(t)
   local body, dropped = s.encode('req_2', s.build(sampleFacts()), json.encode)
   t.expect(dropped).toBe(0)
   t.expect(has(body, '"oldest"')).toBeTruthy()
+end, { context = 'server' })
+
+lib.test.add('link: redacting a full console stays fast on the server thread', function(t)
+  -- The bundle is built on the server's one thread. A redaction pattern that
+  -- backtracks over a long word is quadratic in the line length, and the first
+  -- version of the token rule hitched a live server for 21 seconds on exactly
+  -- this input. Every line is one of the shapes that used to hurt.
+  local s = support()
+  local shapes = {
+    ('y'):rep(990),
+    ('1234567890'):rep(99),
+    ('deadbeef'):rep(124),
+    ('abc.'):rep(248),
+    ('http://a'):rep(124),
+    ('token=' .. ('z'):rep(100) .. ' '):rep(9),
+  }
+  local lines = {}
+  for i = 1, s.CONSOLE_KEEP do lines[i] = shapes[(i % #shapes) + 1] end
+  local pauses = 0
+  local started = os.clock()
+  local console = s.consoleLines(table.concat(lines, '\n'), s.CONSOLE_KEEP, function() pauses = pauses + 1 end)
+  local bundle = s.build({ lib = { version = '1' }, console = console, bridges = { framework = 'qbx_core', inventory = 'x', target = 'y' } })
+  s.encode('perf', bundle, json.encode)
+  local took = os.clock() - started
+  t.expect(#console).toBe(s.CONSOLE_KEEP)
+  -- and it offers to yield on the way, so the server never does it in one go
+  t.expect(pauses).toBe(s.CONSOLE_KEEP // 50)
+  t.expect(took < 0.5).toBeTruthy()
 end, { context = 'server' })
 
 -- ─── wiring ──────────────────────────────────────────────────────────────────

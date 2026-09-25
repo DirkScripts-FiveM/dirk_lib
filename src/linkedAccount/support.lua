@@ -50,22 +50,29 @@ for i = 1, #SECRET_CONVARS do
 end
 
 -- key=value and key: value secrets
+-- each with the lowercase word that must be in the text for it to be worth running
 local SECRET_KEYS = {
-  ci('api') .. '[_%-]?' .. ci('key'),
-  ci('access') .. '[_%-]?' .. ci('token'),
-  ci('auth') .. '[_%-]?' .. ci('token'),
-  ci('client') .. '[_%-]?' .. ci('secret'),
-  ci('token'), ci('secret'), ci('password'), ci('passwd'), ci('pwd'),
+  { ci('api') .. '[_%-]?' .. ci('key'), 'key' },
+  { ci('access') .. '[_%-]?' .. ci('token'), 'token' },
+  { ci('auth') .. '[_%-]?' .. ci('token'), 'token' },
+  { ci('client') .. '[_%-]?' .. ci('secret'), 'secret' },
+  { ci('token'), 'token' },
+  { ci('secret'), 'secret' },
+  { ci('password'), 'password' },
+  { ci('passwd'), 'passwd' },
+  { ci('pwd'), 'pwd' },
 }
-local KEY_PATTERNS = {}
+local KEY_PATTERNS, KEY_GUARDS = {}, {}
 for i = 1, #SECRET_KEYS do
-  KEY_PATTERNS[i] = '%f[%w](' .. SECRET_KEYS[i] .. ')(["\']?%s*[:=]%s*["\']?)([^%s"\',;&}]+)'
+  KEY_PATTERNS[i] = '%f[%w](' .. SECRET_KEYS[i][1] .. ')(["\']?%s*[:=]%s*["\']?)([^%s"\',;&}]+)'
+  KEY_GUARDS[i] = SECRET_KEYS[i][2]
 end
 
 -- player identifiers (license2 before license only for readability; either order works)
+local ID_PREFIXES = { 'license2', 'license', 'steam', 'discord', 'fivem', 'xbl', 'live', 'ip' }
 local ID_PATTERNS = {}
-for _, prefix in ipairs({ 'license2', 'license', 'steam', 'discord', 'fivem', 'xbl', 'live', 'ip' }) do
-  ID_PATTERNS[#ID_PATTERNS + 1] = '%f[%w](' .. ci(prefix) .. '):[%w%.:]+'
+for i, prefix in ipairs(ID_PREFIXES) do
+  ID_PATTERNS[i] = '%f[%w](' .. ci(prefix) .. '):[%w%.:]+'
 end
 
 local WEBHOOK = '(' .. ci('discord') .. '[aA]?[pP]?[pP]?%.' .. ci('com') .. '/' .. ci('api') .. '/' .. ci('webhooks') .. '/)%d+/[%w_%-]+'
@@ -81,8 +88,14 @@ local function octet(o)
   return tonumber(o) <= 255
 end
 
+-- Every pattern here has to stay LINEAR in the line length. This runs on the
+-- server thread over 400 console lines of up to 1000 characters; a pattern that
+-- backtracks across a long run (`[%w]+%.` tried from every position of a long
+-- word) measured 21 seconds of hitch for one bundle. Hence the frontiers, the
+-- literal anchors, and the token rule splitting runs by hand.
+
 local function redactIPv4(s)
-  return (s:gsub('()(%d+)%.(%d+)%.(%d+)%.(%d+)()', function(i, a, b, c, d, j)
+  return (s:gsub('%f[%d]()(%d+)%.(%d+)%.(%d+)%.(%d+)()', function(i, a, b, c, d, j)
     local ip = ('%s.%s.%s.%s'):format(a, b, c, d)
     -- not part of a version (v1.0.0.1234) or a longer dotted number
     local before = i > 1 and s:sub(i - 1, i - 1) or ''
@@ -133,37 +146,72 @@ end
 function M.redact(s)
   if type(s) ~= 'string' or s == '' then return s end
   local out = s
+  -- Each rule only runs when the text could hold what it looks for: a plain
+  -- `find` is far cheaper than a pattern pass, and most console lines hold
+  -- nothing secret at all.
+  local lower = s:lower()
+  local function has(needle) return lower:find(needle, 1, true) ~= nil end
 
-  for i = 1, #CONVAR_PATTERNS do out = out:gsub(CONVAR_PATTERNS[i], '%1%2[redacted]') end
+  if has('sv_') or has('rcon_') or has('steam_') or has('mysql_') then
+    for i = 1, #CONVAR_PATTERNS do out = out:gsub(CONVAR_PATTERNS[i], '%1%2[redacted]') end
+  end
 
   -- Cfx.re license keys
-  out = out:gsub('cfxk_[%w_]+', 'cfxk_[redacted]')
+  if has('cfxk_') then out = out:gsub('cfxk_[%w_]+', 'cfxk_[redacted]') end
 
   -- our own server keys, link secrets and assistant keys (dirk_ + 40 is no resource name)
-  out = out:gsub('%f[%w](dsk)_([%w_%-]+)', function(p, rest) if #rest >= 20 then return p .. '_[redacted]' end end)
-  out = out:gsub('%f[%w](lnk)_([%w_%-]+)', function(p, rest) if #rest >= 20 then return p .. '_[redacted]' end end)
-  out = out:gsub('%f[%w](dirk)_([%w_%-]+)', function(p, rest) if #rest >= 40 then return p .. '_[redacted]' end end)
+  if has('dsk_') then
+    out = out:gsub('%f[%w](dsk)_([%w_%-]+)', function(p, rest) if #rest >= 20 then return p .. '_[redacted]' end end)
+  end
+  if has('lnk_') then
+    out = out:gsub('%f[%w](lnk)_([%w_%-]+)', function(p, rest) if #rest >= 20 then return p .. '_[redacted]' end end)
+  end
+  if #s >= 45 and has('dirk_') then
+    out = out:gsub('%f[%w](dirk)_([%w_%-]+)', function(p, rest) if #rest >= 40 then return p .. '_[redacted]' end end)
+  end
 
   -- Discord webhooks: the id and token are the whole secret
-  out = out:gsub(WEBHOOK, '%1[redacted]')
+  if has('webhooks/') then out = out:gsub(WEBHOOK, '%1[redacted]') end
 
   -- Authorization headers
-  for i = 1, #AUTH_HEADERS do out = out:gsub(AUTH_HEADERS[i], '%1 [redacted]') end
+  if has('bearer') or has('basic') then
+    for i = 1, #AUTH_HEADERS do out = out:gsub(AUTH_HEADERS[i], '%1 [redacted]') end
+  end
 
-  -- JWTs and Discord bot tokens: three dot-separated base64url parts
-  out = out:gsub('[%w_%-]+%.[%w_%-]+%.[%w_%-]+', function(m)
-    local a, b, c = m:match('^([^%.]+)%.([^%.]+)%.([^%.]+)$')
-    if a and #a >= 20 and #b >= 6 and #c >= 20 then return '[token]' end
-  end)
+  -- JWTs and Discord bot tokens: three dot-separated base64url parts (20+, 6+, 20+).
+  -- Only dotted runs, found from the start of each word (the frontier), so a
+  -- long word is walked once rather than once per character.
+  if #s >= 48 and has('.') then out = out:gsub('%f[%w_%-][%w_%-]+%.[%w_%-%.]*', function(run)
+    local parts = {}
+    for part in (run .. '.'):gmatch('([^%.]*)%.') do parts[#parts + 1] = part end
+    local changed, i = false, 1
+    while i <= #parts - 2 do
+      if #parts[i] >= 20 and #parts[i + 1] >= 6 and #parts[i + 2] >= 20 then
+        parts[i] = '[token]'
+        table.remove(parts, i + 2)
+        table.remove(parts, i + 1)
+        changed = true
+      end
+      i = i + 1
+    end
+    if changed then return table.concat(parts, '.') end
+  end) end
 
   -- user:password@ inside a URL
-  out = out:gsub('(%a[%w%+%.%-]*://)[^%s:@/]+:[^%s@/]+@', '%1[redacted]@')
+  if has('://') then out = out:gsub('(://)[^%s:@/]+:[^%s@/]+@', '%1[redacted]@') end
 
-  for i = 1, #KEY_PATTERNS do out = out:gsub(KEY_PATTERNS[i], '%1%2[redacted]') end
-  for i = 1, #ID_PATTERNS do out = out:gsub(ID_PATTERNS[i], '%1:[redacted]') end
+  for i = 1, #KEY_PATTERNS do
+    if has(KEY_GUARDS[i]) then out = out:gsub(KEY_PATTERNS[i], '%1%2[redacted]') end
+  end
+  if has(':') then
+    for i = 1, #ID_PATTERNS do
+      if has(ID_PREFIXES[i] .. ':') then out = out:gsub(ID_PATTERNS[i], '%1:[redacted]') end
+    end
+  end
 
-  out = redactIPv4(out)
-  out = redactIPv6(out)
+  if out:find('%d%.%d') then out = redactIPv4(out) end
+  -- `%x:` can only start right before a colon, so this pre-check is linear too
+  if has('::') or out:find('%x:%x+:%x+:%x+:%x') then out = redactIPv6(out) end
   return out
 end
 
@@ -188,13 +236,14 @@ end
 
 --- GetConsoleBuffer's text as the newest `keep` lines, oldest first: colours
 --- stripped, each line cut to LINE_MAX and redacted.
-function M.consoleLines(buffer, keep)
+---@param pause fun()? called every few lines, so the server can yield (`Wait(0)`) mid-way
+function M.consoleLines(buffer, keep, pause)
   keep = keep or M.CONSOLE_KEEP
   if type(buffer) ~= 'string' or buffer == '' then return {} end
 
   local all = {}
   for line in (buffer:gsub('\r', '') .. '\n'):gmatch('([^\n]*)\n') do
-    if line:match('%S') then all[#all + 1] = line end
+    if line:find('%S') then all[#all + 1] = line end
   end
 
   local out = {}
@@ -202,6 +251,7 @@ function M.consoleLines(buffer, keep)
     local line = M.stripColours(all[i])
     if #line > M.LINE_MAX then line = line:sub(1, M.LINE_MAX) end
     out[#out + 1] = M.redact(line)
+    if pause and #out % 50 == 0 then pause() end
   end
   return out
 end
@@ -264,9 +314,16 @@ function M.consoleProblems(lines, known)
       local fromPath = scriptError:match('@([%w_%-]+)/')
       local resource = (isDirk(channel) and channel) or (isDirk(fromPath) and fromPath) or nil
       if resource then add('error', 'script_error', resource, scriptError) end
-    elseif isDirk(channel) and body:match('^%[ERROR%]') then
-      -- lib.print.error: the script reporting something it could not do
-      add('warning', 'other', channel, (body:gsub('^%[ERROR%]%s*', 'Reported: ')))
+    elseif body:match('^%[ERROR%]') then
+      -- lib.print.error: the script reporting something it could not do.
+      -- GetConsoleBuffer keeps the text but NOT the `[script:…]` channel, so
+      -- without one the line has to name a dirk_ resource itself to count.
+      local resource = isDirk(channel) and channel or nil
+      if not resource and not tag then
+        local named = body:match('(dirk_[%w_%-]+)')
+        resource = named and resolveResource(named, known) or nil
+      end
+      if resource then add('warning', 'other', resource, (body:gsub('^%[ERROR%]%s*', 'Reported: '))) end
     else
       local failed = line:match("Couldn't start resource ([%w_%-]+)")
       if isDirk(failed) then
@@ -501,9 +558,10 @@ end
 ---   collectedAt, server{}, lib{ version, language }, scripts[], dependencies[]
 ---   (with neededBy), bridges{}, ui{}, requested, requestedFound, studio?,
 ---   console[] (already cleaned), consoleProblems[]
---- Every string in it is redacted.
+--- Every string in it is redacted. The console is taken as M.consoleLines left
+--- it (already redacted, line by line), so it isn't walked a second time.
 function M.build(facts)
-  local bundle = {
+  local bundle = M.redactDeep({
     version = 1,
     collectedAt = facts.collectedAt,
     server = facts.server or {},
@@ -514,9 +572,9 @@ function M.build(facts)
     ui = facts.ui or {},
     problems = M.problems(facts),
     studio = facts.studio,
-    console = facts.console or {},
-  }
-  return M.redactDeep(bundle)
+  })
+  bundle.console = facts.console or {}
+  return bundle
 end
 
 --- Encode `{ requestId, bundle }` under the size cap, giving up the oldest
