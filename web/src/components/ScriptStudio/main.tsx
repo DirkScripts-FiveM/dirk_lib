@@ -1832,7 +1832,7 @@ function Header({
               YOU ARE was the part that never held still - and the rail already
               says which script is selected. */}
           <Text ff="Akrobat Bold" size="md" c="rgba(255,255,255,0.92)" truncate>
-            {t('header.title', 'Script Studio')}
+            {t('header.title', 'Config Studio')}
           </Text>
           <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.3)" truncate>
             {t('header.description', 'Every dirk script, in one place')}

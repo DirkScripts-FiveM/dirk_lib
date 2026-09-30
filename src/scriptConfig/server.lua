@@ -492,7 +492,7 @@ CreateThread(function()
       if name and not registered[name] and GetResourceState(name) == 'started' and hasScriptConfigTag(name) then
         registered[name] = true
         lib.addCommand(name, {
-          help = ('Open %s settings in Script Studio'):format(name),
+          help = ('Open %s settings in Config Studio'):format(name),
         }, function(source)
           if source == 0 then return end
           if not canEditResource(source, name) then

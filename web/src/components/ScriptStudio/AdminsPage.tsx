@@ -150,7 +150,7 @@ export function AdminsPage({ canEdit }: { canEdit: boolean }) {
         {revoking && (
           <ConfirmModal
             title={t('adminsPage.revoke_access', 'Revoke access')}
-            description={`${revoking.name} loses access to Script Studio immediately. Anything they already saved stays.`}
+            description={`${revoking.name} loses access to Config Studio immediately. Anything they already saved stays.`}
             confirmLabel="Revoke"
             onConfirm={() => {
               remove.mutate(Number(revoking.id));
@@ -447,7 +447,7 @@ function AdminModal({
       title={entry ? `Edit ${entry.name}` : 'Grant access'}
       icon={UserPlus}
       iconColor={color}
-      description={t('adminsPage.access_to_studio', 'Access to Script Studio')}
+      description={t('adminsPage.access_to_studio', 'Access to Config Studio')}
       onClose={onClose}
       width="86vh"
       height="72vh"
