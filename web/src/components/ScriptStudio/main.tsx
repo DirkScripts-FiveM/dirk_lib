@@ -46,7 +46,7 @@ import { Chip, StudioButton } from './ui';
 import {
   commitDraft, dirtyCount, discardDraft, effectiveValue, factoryReset, isEnabled, isModified, isStaged, matchesSearch, redo, revertToDefault, rowMatches, sectionValues, setValue, undo, useStudio,
 } from './store';
-import { loadLocales, sectionKey, settingKey, translate, useActiveLanguage, useBundles, useChrome } from './studioLocale';
+import { forgetLocales, loadLocales, sectionKey, settingKey, translate, useActiveLanguage, useBundles, useChrome } from './studioLocale';
 import { SetupWizard } from './SetupWizard';
 import type { SettingEntry, SettingGroup, StudioScript } from './types';
 import { useInputCssVars } from './Controls';
@@ -314,7 +314,10 @@ export default function ScriptStudio() {
    * without this the panel would keep rendering the module it imported before.
    */
   useNuiEvent<{ resource?: string }>('SCRIPT_STUDIO_RESOURCES_CHANGED', (data) => {
-    if (data?.resource) forgetComponents(data.resource);
+    if (data?.resource) {
+      forgetComponents(data.resource);
+      forgetLocales(data.resource);         // its locale files may be new too
+    }
     void reloadFromServer();
   });
 

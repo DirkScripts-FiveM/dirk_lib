@@ -133,6 +133,22 @@ export async function loadLocales(language: string) {
 }
 
 /**
+ * Drop one script's bundles when that resource restarts. "Immutable for the
+ * life of the resource" ends there: a script that gained or fixed a locale
+ * file kept the empty bundle the panel recorded before, and showed English
+ * until the player reconnected (dirk_containers, 30/09). The next loadLocales
+ * (it runs when the script list reloads) fetches it again.
+ */
+export function forgetLocales(resource: string) {
+  useStudio.setState((current) => {
+    if (!current.locales[resource]) return {};
+    const next: LocaleBundles = { ...current.locales };
+    delete next[resource];
+    return { locales: next };
+  });
+}
+
+/**
  * A translator for the panel's OWN strings.
  *
  * Setting labels belong to the script that owns them; the panel's furniture
