@@ -6,6 +6,7 @@
 
 local chooserOpen = false
 local studioOpen = false
+local startedAt = {}                 -- resource -> GetGameTimer() at its last start (see onClientResourceStart below)
 
 local function closeChooser()
   if not chooserOpen then return end
@@ -182,6 +183,7 @@ local function buildStudioPayload()
   local pending = 0
   for i = 1, #scripts do
     local entry = scripts[i]
+    entry.startedAt = startedAt[entry.resource] or 0
     pending += 1
     CreateThread(function()
       local ok, snap = pcall(function()
@@ -221,6 +223,16 @@ local function buildStudioPayload()
 
   return scripts
 end
+
+--- When each resource last started on this client.
+---
+--- Sent with every payload so the panel can tell a script restarted while it
+--- was SHUT - scriptStudioResourcesChanged below only reaches an open panel,
+--- and without this the next open rendered that script's page from before the
+--- restart (the browser keeps an imported module for the life of the page).
+AddEventHandler('onClientResourceStart', function(resource)
+  startedAt[resource] = GetGameTimer()
+end)
 
 RegisterNetEvent('dirk_lib:openScriptStudio', function(focus, askLanguage)
   if studioOpen then return end

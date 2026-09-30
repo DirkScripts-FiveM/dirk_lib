@@ -5,6 +5,8 @@ import { useStudio } from './store';
 import { notify } from './Toasts';
 import type { DraftValue } from './store';
 import type { StudioScript } from './types';
+import { forgetComponents } from './CustomControl';
+import { forgetLocales } from './studioLocale';
 
 /**
  * One script as the server hands it over: its schema read from disk by
@@ -13,6 +15,8 @@ import type { StudioScript } from './types';
  */
 export type LivePayload = {
   resource: string;
+  /** When dirk_lib last saw this resource start on this client - changes on every restart. */
+  startedAt?: number;
   label: string;
   icon: string;
   version: string;
@@ -127,8 +131,32 @@ export async function loadLiveScripts(focus?: string) {
   applyLivePayload(payload, focus);
 }
 
+/**
+ * When each script last started, as of the last payload.
+ *
+ * A restart under an OPEN panel is announced (SCRIPT_STUDIO_RESOURCES_CHANGED)
+ * and drops that script's pages and locales there and then. A restart while the
+ * panel was SHUT was not: the next open rendered the page imported before it,
+ * until a rejoin. Every payload says when each script started, so a changed
+ * stamp is the restart, however long ago it happened.
+ */
+const STARTED = new Map<string, number>();
+
+function noticeRestarts(payload: LivePayload[]) {
+  for (const entry of payload) {
+    if (typeof entry.startedAt !== 'number') continue;
+    const seen = STARTED.get(entry.resource);
+    if (seen !== undefined && seen !== entry.startedAt) {
+      forgetComponents(entry.resource);
+      forgetLocales(entry.resource);
+    }
+    STARTED.set(entry.resource, entry.startedAt);
+  }
+}
+
 export function applyLivePayload(payload: LivePayload[], focus?: string) {
   if (!Array.isArray(payload) || payload.length === 0) return;
+  noticeRestarts(payload);
 
   const scripts = toStudioScripts(payload);
   const wanted = focus && scripts.some((s) => s.resource === focus) ? focus : null;

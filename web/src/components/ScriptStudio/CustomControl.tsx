@@ -160,6 +160,18 @@ export type CustomProps = {
 const CACHE = new Map<string, Promise<React.ComponentType<CustomProps>>>();
 
 /**
+ * How many times each resource has restarted under this page.
+ *
+ * Dropping our own cache is not enough on its own: the browser keeps every ES
+ * module it has imported, keyed by URL, for the life of the page, so importing
+ * the same nui:// path again hands back the module from before the restart.
+ * Each restart therefore imports under a new `?v=`, which the browser treats as
+ * a new module. (A component split into chunks would still get its chunks from
+ * before - which is why a component is built as one file.)
+ */
+const GENERATION = new Map<string, number>();
+
+/**
  * Forget every component loaded from one resource.
  *
  * A restarted resource may be serving a NEW build of its component, but the
@@ -168,6 +180,7 @@ const CACHE = new Map<string, Promise<React.ComponentType<CustomProps>>>();
  * render yesterday's code.
  */
 export function forgetComponents(resource: string) {
+  GENERATION.set(resource, (GENERATION.get(resource) ?? 0) + 1);
   for (const key of [...CACHE.keys()]) {
     if (key.startsWith(`${resource}:`)) CACHE.delete(key);
   }
@@ -203,9 +216,10 @@ export function load(resource: string, path: string): Promise<React.ComponentTyp
     // browser has no such scheme, so dev serves the same file from the
     // resource folder next door (see the middleware in vite.config.ts) -
     // otherwise a script's own pages cannot be opened in dev at all.
-    const url = isEnvBrowser()
+    const generation = GENERATION.get(resource) ?? 0;
+    const url = (isEnvBrowser()
       ? `/__nui/${resource}/${path}`
-      : `nui://${resource}/${path}`;
+      : `nui://${resource}/${path}`) + (generation > 0 ? `?v=${generation}` : '');
 
     let module_: { default?: React.ComponentType<CustomProps> };
     try {
