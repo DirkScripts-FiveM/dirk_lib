@@ -37,7 +37,8 @@ function object:__init()
 
   local stock_funcs = {
     onEnter = function()
-      local can_spawn = self.canSpawn and self.canSpawn() or true
+      -- `canSpawn and canSpawn() or true` was always true: a canSpawn returning false still spawned
+      local can_spawn = not self.canSpawn or self.canSpawn()
       if not can_spawn then return end
       self:spawn()
     end,
@@ -101,7 +102,9 @@ end
 
 function object:spawn()
   if self.entity and self.entity ~= 0 then return end
-  local model_hash = joaat(self.model)
+  -- self.model becomes the hash after the first spawn: joaat(number) hashes its DIGITS, so every respawn (leave the render
+  -- distance and come back) asked for a model that does not exist and the assert below fired
+  local model_hash = type(self.model) == 'number' and self.model or joaat(self.model)
   local model_loaded = false
   if self.type ~= 'weapon' then 
     model_loaded = lib.request.model(model_hash, 15000)
@@ -110,7 +113,7 @@ function object:spawn()
   end
 
   assert(model_loaded, 'Failed to load model : ' .. self.model)
-  self.model = joaat(self.model)
+  self.model = model_hash
   if self.type == 'ped' then 
     self.entity = CreatePed(1, self.model, self.pos, false, false)
     if self.entity and cache.game == 'redm' then 
