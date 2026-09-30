@@ -1,5 +1,5 @@
 import { Marker } from '@adamscybot/react-leaflet-component-marker';
-import { alpha, Flex, Text, useMantineTheme } from '@mantine/core';
+import { alpha, Flex, Switch, Text, useMantineTheme } from '@mantine/core';
 import { ConfirmModal, Map as DirkMap, Modal, ZoomControls, gameToMap, mapToGame } from 'dirk-cfx-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import L from 'leaflet';
@@ -16,7 +16,7 @@ import { Icon } from './Icon';
 import { PickerDrawer } from './PickerDrawer';
 import { singular, StudioButton } from './ui';
 import type { SettingColumn, SettingEntry } from './types';
-import { useChrome } from './studioLocale';
+import { settingKey, translate, useActiveLanguage, useBundles, useChrome } from './studioLocale';
 import { newRow } from './newRow';
 
 type Row = Record<string, unknown>;
@@ -58,6 +58,10 @@ export function ZoneMap({
   const t = useChrome();
   const theme = useMantineTheme();
   const accent = theme.colors[theme.primaryColor][5];
+  // an area switched off by its row's `toggle` column draws in this instead of its layer colour
+  const offColor = theme.colors.dark[2];
+  const bundles = useBundles();
+  const language = useActiveLanguage();
 
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<{ path: string; index: number } | null>(null);
@@ -185,7 +189,18 @@ export function ZoneMap({
       return column?.options?.find((option) => option.value === String(row[styleKey]));
     };
 
-    return { ...layer, isMarker, isSingle, polyKey, labelKey, shapes, color, styleFor };
+    /**
+     * `toggle` / `readOnly` on the x-mapPaths entry.
+     *
+     * Some map lists are not drawn by the admin at all - dirk_containers' collision areas are fixed by files it ships, and
+     * the one thing to decide per area is on or off. `toggle` names a boolean column shown as a switch on each row (off =
+     * greyed on the map); `readOnly` drops add, draw, edit, delete and the modal, since there is nothing else to edit.
+     */
+    const toggleKey = layer.entry.mapToggle;
+    const readOnly = layer.entry.mapReadOnly === true;
+    const isOff = (row: Row | undefined) => Boolean(toggleKey && row && row[toggleKey] === false);
+
+    return { ...layer, isMarker, isSingle, polyKey, labelKey, shapes, color, styleFor, toggleKey, readOnly, isOff };
   }), [layers]);
 
   /**
@@ -205,7 +220,7 @@ export function ZoneMap({
     const layer = model.find((l) => l.entry.path === rowRequest.path);
     if (!layer || !layer.shapes.some((shape) => shape.index === rowRequest.index)) return;
     setSelected({ path: rowRequest.path, index: rowRequest.index });
-    setEditing({ path: rowRequest.path, index: rowRequest.index });
+    if (!layer.readOnly) setEditing({ path: rowRequest.path, index: rowRequest.index });
     useStudio.setState({ openRowRequest: null });
   }, [rowRequest, model]);
 
@@ -368,24 +383,26 @@ export function ZoneMap({
                 if (shape.points.length < 3) return null;
                 const active = selected?.path === layer.entry.path && selected.index === shape.index;
                 const positions = shape.points.map((p) => gameToMap(p.x, p.y));
+                const off = layer.isOff(shape.row);
+                const hex = off ? offColor : layer.color;
                 return (
                   <Fragment key={`${layer.entry.path}:${shape.index}`}>
                     <Polygon
                       positions={positions}
                       pathOptions={{
-                        color: layer.color,
+                        color: hex,
                         weight: active ? 2.5 : 1.5,
-                        opacity: active ? 1 : 0.7,
-                        fillColor: layer.color,
-                        fillOpacity: active ? 0.3 : 0.1,
-                        dashArray: layer.isSingle ? '6 4' : undefined,
+                        opacity: off ? 0.5 : active ? 1 : 0.7,
+                        fillColor: hex,
+                        fillOpacity: off ? 0.04 : active ? 0.3 : 0.1,
+                        dashArray: layer.isSingle || off ? '6 4' : undefined,
                       }}
                       eventHandlers={{ click: () => setSelected({ path: layer.entry.path, index: shape.index }) }}
                     />
                     <Marker
                       position={centroid(positions)}
                       eventHandlers={{ click: () => setSelected({ path: layer.entry.path, index: shape.index }) }}
-                      icon={<ShapeLabel label={shape.title} hex={layer.color} active={active} points={shape.points.length} />}
+                      icon={<ShapeLabel label={shape.title} hex={hex} active={active} />}
                     />
                   </Fragment>
                 );
@@ -428,9 +445,9 @@ export function ZoneMap({
                   <Text ff="Akrobat Bold" size="xxs" c="rgba(255,255,255,0.75)" style={{ flex: 1 }}>
                     {layer.entry.label}
                   </Text>
-                  <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.35)">
-                    {layer.isSingle ? `${layer.shapes[0]?.points.length ?? 0} pts` : layer.shapes.length}
-                  </Text>
+                  {!layer.isSingle && (
+                    <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.35)">{layer.shapes.length}</Text>
+                  )}
                   {off ? <EyeOff size="1.2vh" color="rgba(255,255,255,0.4)" /> : <Eye size="1.2vh" color="rgba(255,255,255,0.4)" />}
                 </Flex>
               );
@@ -484,8 +501,19 @@ export function ZoneMap({
                   <Flex h="0.1vh" style={{ flex: 1, background: alpha(theme.colors.dark[5], 0.5) }} />
                 </Flex>
 
+                {layer.readOnly && layer.entry.help && (
+                  <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.45)" px="xs" style={{ lineHeight: 1.3 }}>
+                    {translate(bundles, language, resource ?? '', settingKey(layer.entry.path, 'description'), layer.entry.help)}
+                  </Text>
+                )}
+
                 {layer.shapes.map((shape) => {
                   const active = selected?.path === layer.entry.path && selected.index === shape.index;
+                  const off = layer.isOff(shape.row);
+                  const extras = [
+                    shape.row?.depth !== undefined ? `${shape.row.depth}m` : '',
+                    shape.row?.lvlRequired ? `lvl ${shape.row.lvlRequired}` : '',
+                  ].filter(Boolean).join(' · ');
                   return (
                     <Flex
                       key={shape.index}
@@ -499,22 +527,36 @@ export function ZoneMap({
                       }}
                     >
                       <Flex direction="column" style={{ flex: 1, minWidth: 0, lineHeight: 1.15 }}>
-                        <Text ff="Akrobat Bold" size="xs" c={active ? layer.color : 'rgba(255,255,255,0.85)'} truncate>
+                        <Text ff="Akrobat Bold" size="xs" truncate
+                          c={off ? 'rgba(255,255,255,0.4)' : active ? layer.color : 'rgba(255,255,255,0.85)'}>
                           {shape.title}
                         </Text>
-                        <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.3)">
-                          {shape.points.length} points
-                          {shape.row?.depth !== undefined ? ` · ${shape.row.depth}m` : ''}
-                          {shape.row?.lvlRequired ? ` · lvl ${shape.row.lvlRequired}` : ''}
-                        </Text>
+                        {extras && (
+                          <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.3)">{extras}</Text>
+                        )}
                       </Flex>
                       <Flex align="center" gap="xxs" style={{ flexShrink: 0 }}>
-                        {!layer.isSingle && (
+                        {layer.toggleKey && shape.row && (
+                          <Switch
+                            size="sm"
+                            checked={!off}
+                            disabled={disabled}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => {
+                              const rows = [...(layer.value as Row[])];
+                              rows[shape.index] = { ...rows[shape.index], [layer.toggleKey!]: event.currentTarget.checked };
+                              layer.onChange(rows);
+                            }}
+                          />
+                        )}
+                        {!layer.readOnly && !layer.isSingle && (
                           <MiniButton icon={Pencil} label={t('zoneMap.edit', 'Edit')}
                             onClick={() => setEditing({ path: layer.entry.path, index: shape.index })} disabled={disabled} />
                         )}
-                        <MiniButton icon={Trash2} label={t('zoneMap.delete', 'Delete')} danger
-                          onClick={() => setConfirmDelete({ path: layer.entry.path, index: shape.index })} disabled={disabled} />
+                        {!layer.readOnly && (
+                          <MiniButton icon={Trash2} label={t('zoneMap.delete', 'Delete')} danger
+                            onClick={() => setConfirmDelete({ path: layer.entry.path, index: shape.index })} disabled={disabled} />
+                        )}
                       </Flex>
                     </Flex>
                   );
@@ -560,6 +602,7 @@ export function ZoneMap({
           </Flex>
           )}
 
+          {model.some((layer) => !layer.readOnly) && (
           <Flex direction="column" gap="xxs" p="xs" style={{ flexShrink: 0 }}>
             <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.08em" c="rgba(255,255,255,0.3)">
               {model.every((layer) => layer.isMarker)
@@ -567,7 +610,7 @@ export function ZoneMap({
                 : t('zoneMap.draw_new', 'Draw new')}
             </Text>
             <Flex gap="xxs" wrap="wrap">
-              {model.map((layer) => (
+              {model.filter((layer) => !layer.readOnly).map((layer) => (
                 <motion.button
                   key={layer.entry.path}
                   type="button"
@@ -594,12 +637,15 @@ export function ZoneMap({
               ))}
             </Flex>
           </Flex>
+          )}
         </Flex>
       </Flex>
 
+      {model.some((layer) => !layer.readOnly) && (
       <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.28)">
         {t('zoneMap.every_area_is_drawn_never_typed_toggle_a', 'Every area is drawn, never typed. Toggle a layer in the key to get it out of the way while you work.')}
       </Text>
+      )}
 
       <AnimatePresence>
         {editing && editingLayer && editingRow && (
@@ -655,7 +701,7 @@ export function ZoneMap({
         {replaceSingle && (
           <ConfirmModal
             title={`Replace ${layerFor(replaceSingle.path)?.entry.label}`}
-            description={`There is only one ${layerFor(replaceSingle.path)?.entry.label.toLowerCase()}. The shape you just drew replaces the existing ${layerFor(replaceSingle.path)?.shapes[0]?.points.length ?? 0}-point boundary.`}
+            description={`There is only one ${layerFor(replaceSingle.path)?.entry.label.toLowerCase()}. The shape you just drew replaces the existing boundary.`}
             confirmLabel="Replace"
             onConfirm={() => {
               layerFor(replaceSingle.path)?.onChange(replaceSingle.points);
@@ -831,8 +877,8 @@ function PlacePin({
 }
 
 function ShapeLabel({
-  label, hex, active, points,
-}: { label: string; hex: string; active: boolean; points: number }) {
+  label, hex, active,
+}: { label: string; hex: string; active: boolean }) {
   return (
     <Flex
       direction="column" align="center" gap="0.2vh"
@@ -849,9 +895,6 @@ function ShapeLabel({
       >
         <Text ff="Akrobat Bold" size="xxs" c={hex}>{label}</Text>
       </Flex>
-      {active && (
-        <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.5)" style={{ whiteSpace: 'nowrap' }}>{points} pts</Text>
-      )}
     </Flex>
   );
 }
@@ -889,7 +932,6 @@ function ShapeModal({
   >(null);
 
   const allColumns = (entry.columns ?? []).filter((c) => c.key !== polyKey);
-  const points = Array.isArray(draft[polyKey]) ? (draft[polyKey] as Point[]).length : 0;
 
   /**
    * The same `x-rowTabs` the list row editor honours.
@@ -944,7 +986,6 @@ function ShapeModal({
         icon={MapPin}
         iconColor={color}
         description={entry.label}
-        badge={{ label: `${points} BOUNDARY POINTS`, color }}
         onClose={askClose}
         width="70vh"
         height="66vh"

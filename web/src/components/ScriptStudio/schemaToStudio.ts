@@ -968,6 +968,10 @@ type MapPathSpec = {
    * shown on the map and set in the row editor.
    */
   movable?: boolean;
+  /** A boolean column shown as a switch per row; off = greyed on the map. */
+  toggle?: string;
+  /** Nothing to draw or edit: rows are shown (and switched with `toggle`). */
+  readOnly?: boolean;
 };
 
 /** The declared map paths, plus the styling declared alongside them. */
@@ -976,6 +980,8 @@ type MapMeta = Set<string> & {
   shapes: Map<string, 'polygon' | 'marker'>;
   points: Map<string, { key: string; label?: string; color?: string }[]>;
   movable: Map<string, boolean>;
+  toggles: Map<string, string>;
+  readOnly: Set<string>;
 };
 
 /**
@@ -1130,6 +1136,8 @@ export function schemaToStudio(schema: JsonSchema, meta: StudioMeta): StudioScri
     shapes: new Map<string, 'polygon' | 'marker'>(),
     points: new Map<string, { key: string; label?: string; color?: string }[]>(),
     movable: new Map<string, boolean>(),
+    toggles: new Map<string, string>(),
+    readOnly: new Set<string>(),
   });
   const mapColors = mapPaths.colors;
   const mapShapes = mapPaths.shapes;
@@ -1175,6 +1183,8 @@ export function schemaToStudio(schema: JsonSchema, meta: StudioMeta): StudioScri
     if (spec.shape) mapShapes.set(spec.path, spec.shape);
     if (spec.points) mapPoints.set(spec.path, spec.points);
     if (spec.movable !== undefined) mapMovable.set(spec.path, spec.movable !== false);
+    if (spec.toggle) mapPaths.toggles.set(spec.path, spec.toggle);
+    if (spec.readOnly === true) mapPaths.readOnly.add(spec.path);
   }
 
   siblingLists = new Set(
@@ -1721,6 +1731,8 @@ function buildListEntry(
     // with a height and a heading a map cannot express - so the map shows it
     // and the row editor sets it.
     mapMovable: mapPaths.has(path) ? mapPaths.movable.get(path) : undefined,
+    mapToggle: mapPaths.has(path) ? mapPaths.toggles.get(path) : undefined,
+    mapReadOnly: mapPaths.has(path) ? mapPaths.readOnly.has(path) : undefined,
     component: node?.['x-component'],
     componentFull: node?.['x-componentFull'] === true,
     group,

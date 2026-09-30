@@ -251,6 +251,13 @@ export type SettingEntry = {
   mapPoints?: { key: string; label?: string; color?: string }[];
   /** `movable: false` on the map path — pins are shown but never dragged. */
   mapMovable?: boolean;
+  /**
+   * `toggle` on the map path: a boolean column drawn as a switch on each row in the map's list; a row switched off draws
+   * greyed on the map. For areas decided on/off rather than drawn (dirk_containers' collision map).
+   */
+  mapToggle?: string;
+  /** `readOnly` on the map path: no add, draw, edit, delete or modal - the rows are shown (and switched, with `toggle`). */
+  mapReadOnly?: boolean;
   /** the map colour this layer was given in `x-mapPaths` */
   mapColor?: string;
   /**
