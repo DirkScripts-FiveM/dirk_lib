@@ -399,10 +399,13 @@ RegisterNUICallback('GET_STUDIO_LOCALES', function(payload, cb)
           else
             -- Only what the panel looks up. A script's gameplay strings are
             -- its own business and have no reason to cross into the panel.
+            -- studio.* is the panel's too: a script's page tab labels and the
+            -- words inside its own pages and controls (t()). Dropping them left
+            -- fishing's Players tab English on a German panel (30/09).
             local slim = {}
             for key, value in pairs(decoded) do
               if type(key) == 'string'
-                and (key:sub(1, 9) == 'settings.' or key:sub(1, 9) == 'sections.') then
+                and (key:sub(1, 9) == 'settings.' or key:sub(1, 9) == 'sections.' or key:sub(1, 7) == 'studio.') then
                 slim[key] = value
               end
             end
