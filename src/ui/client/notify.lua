@@ -55,11 +55,10 @@ lib.notify = function(data)
   if not settings.notify or settings.notify == 'dirk_lib' then
     local sound = settings.notifyAudio and data.sound
     data.title = data.title or (data.type and types[data.type]?.title) or 'Notification'
-    data.titleColor = data.titleColor or types[data.type] and types[data.type].titleColor
     data.position = data.position or settings.notifyPosition or 'top-right'
-    data.icon = data.icon or data.type and types[data.type] and types[data.type].icon or types['inform'].icon
-    data.iconColor = data.iconColor or types[data.type] and types[data.type].iconColor
-    data.iconBg = data.iconBg or types[data.type] and types[data.type].iconBg
+    -- the page colours each type itself (error red, success green, warning amber, inform = the script's accent)
+    -- and draws its icon; a script's own icon / iconColor / titleColor still win
+    data.theme = lib.uiTheme(GetInvokingResource() or GetCurrentResourceName())
     SendNuiMessage(json.encode({
       action = 'ADD_NOTIFICATION',
       data   = data

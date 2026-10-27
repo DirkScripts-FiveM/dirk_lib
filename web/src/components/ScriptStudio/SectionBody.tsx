@@ -136,7 +136,7 @@ export function SectionBody({
           return (
             <Flex
               direction="column" gap="xs" className="studio-scroll"
-              style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}
+              style={{ overflowY: 'auto', flex: 1, minHeight: 0, paddingRight: '0.8vh' }}
             >
               {skill.map((entry, index) => withSubgroup(
                 entry, index, skill, renderRow, color, theme, resource,
@@ -169,7 +169,7 @@ export function SectionBody({
           <Flex
             direction="column" gap="xs" flex={1}
             className="studio-scroll"
-            style={{ minHeight: 0, overflowY: 'auto' }}
+            style={{ minHeight: 0, overflowY: 'auto', paddingRight: '0.8vh' }}
           >
             {basics.map((entry, index) => withSubgroup(entry, index, basics, renderRow, color, theme, resource))}
           </Flex>
@@ -209,8 +209,15 @@ export function SectionBody({
         </Flex>
       );
     }
+    // Basic scrolls itself, same as a map section's Basic above. The pane is
+    // overflow-hidden (a workspace fills it), so a long Basic - multichar's
+    // backstory + intro settings - was simply cut off at the bottom.
     return (
-      <Flex direction="column" gap="xs" flex={1} style={{ minHeight: 0 }}>
+      <Flex
+        direction="column" gap="xs" flex={1}
+        className="studio-scroll"
+        style={{ minHeight: 0, overflowY: 'auto', paddingRight: '0.8vh' }}
+      >
         {railPlain.map((entry, index) => withSubgroup(entry, index, railPlain, renderRow, color, theme, resource))}
       </Flex>
     );

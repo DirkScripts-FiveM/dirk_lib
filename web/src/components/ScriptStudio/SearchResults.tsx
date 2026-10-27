@@ -1,5 +1,3 @@
-import { alpha, Flex, Text, useMantineTheme } from '@mantine/core';
-import { motion } from 'framer-motion';
 import { CornerDownRight, SearchX } from 'lucide-react';
 import { useMemo } from 'react';
 import { Icon } from './Icon';
@@ -34,8 +32,6 @@ export function SearchResults({
   onOpen: (resource: string, group: string, target?: { list: string; row: number }) => void;
 }) {
   const t = useChrome();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
   const scripts = useStudio((s) => s.scripts);
   const language = useActiveLanguage();
   const bundles = useBundles();
@@ -81,29 +77,21 @@ export function SearchResults({
 
   if (total === 0) {
     return (
-      <Flex direction="column" align="center" justify="center" gap="xs" style={{ flex: 1 }}>
-        <SearchX size="2.6vh" color="rgba(255,255,255,0.2)" />
-        <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.4)">
-          {t('search.none', 'Nothing matches')} “{query}”
-        </Text>
-        <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.28)">
-          {t('search.noneHint', 'Every script was searched, including the shared settings')}
-        </Text>
-      </Flex>
+      <div className="ss-empty">
+        <SearchX />
+        <div className="T">{t('search.none', 'Nothing matches')} “{query}”</div>
+        <div className="D">{t('search.noneHint', 'Every script was searched, including the shared settings')}</div>
+      </div>
     );
   }
 
   return (
-    <Flex
-      direction="column" gap="md" p="md"
-      className="studio-scroll"
-      style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}
-    >
-      <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.35)">
+    <div className="ss-sres studio-scroll">
+      <span className="L">
         {total} {total === 1 ? t('search.result', 'result') : t('search.results', 'results')}
         {' '}{t('search.acrossScripts', 'across')} {hits.length}
         {' '}{hits.length === 1 ? t('search.script', 'script') : t('search.scripts', 'scripts')}
-      </Text>
+      </span>
 
       {hits.map(({ script, groups }) => (
         <ScriptHits
@@ -111,97 +99,73 @@ export function SearchResults({
           script={script}
           groups={groups}
           query={query}
-          color={color}
           onOpen={onOpen}
         />
       ))}
-    </Flex>
+    </div>
   );
 }
 
+/** The query, lit up where it appears in a result. */
+function Lit({ text, query }: { text: string; query: string }) {
+  const needle = query.trim().toLowerCase();
+  const at = needle ? text.toLowerCase().indexOf(needle) : -1;
+  if (at < 0) return <>{text}</>;
+  return <>{text.slice(0, at)}<em>{text.slice(at, at + needle.length)}</em>{text.slice(at + needle.length)}</>;
+}
+
 function ScriptHits({
-  script, groups, query, color, onOpen,
+  script, groups, query, onOpen,
 }: {
   script: StudioScript;
   groups: { group: string; label: string; icon: string; entries: SettingEntry[] }[];
   query: string;
-  color: string;
   onOpen: (resource: string, group: string, target?: { list: string; row: number }) => void;
 }) {
-  const theme = useMantineTheme();
   const language = useActiveLanguage();
   const bundles = useBundles();
+  const count = groups.reduce((n, g) => n + g.entries.length, 0);
 
   return (
-    <Flex direction="column" gap="xs">
-      <Flex align="center" gap="xs">
-        <Icon name={script.icon} size="1.7vh" color={color} />
-        <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.9)" tt="uppercase" lts="0.06em">
-          {script.label}
-        </Text>
-        <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.25)">{script.resource}</Text>
-      </Flex>
+    <div className="sg">
+      <div className="pl sgh edge in">
+        <div className="sk">
+          <Icon name={script.icon} size="1.8vh" color="var(--a)" />
+          <span className="act">{script.label}</span>
+          <span className="cap dark"><b>{count}</b></span>
+        </div>
+      </div>
 
-      <Flex direction="column" gap="xxs">
-        {groups.map((group) => (
-          <Flex key={group.group} direction="column" gap="xxs">
-            {group.entries.map((entry) => (
-              <motion.button
-                key={entry.path}
-                type="button"
-                onClick={() => {
-                  // A row hit lands ON the row. `rowMatches` is the same
-                  // function the in-script cards use, so both roads end in the
-                  // same place rather than one of them stopping short.
-                  const hit = rowMatches(entry, query)[0];
-                  onOpen(
-                    script.resource,
-                    group.group,
-                    hit ? { list: entry.path, row: hit.index } : undefined,
-                  );
-                }}
-                whileHover={{ background: alpha(color, 0.1) }}
-                whileTap={{ scale: 0.997 }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '0.8vh',
-                  padding: '0.6vh 0.8vh',
-                  background: alpha(theme.colors.dark[8], 0.5),
-                  border: `0.1vh solid ${alpha(theme.colors.dark[5], 0.35)}`,
-                  borderRadius: theme.radius.xs,
-                  cursor: 'pointer', textAlign: 'left', width: '100%',
-                }}
-              >
-                <Icon name={group.icon} size="1.4vh" color="rgba(255,255,255,0.3)" />
-
-                <Flex direction="column" style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
-                  <Text ff="Akrobat Bold" size="xs" c="rgba(255,255,255,0.88)" truncate>
-                    {translate(
-                      bundles, language, script.resource,
-                      settingKey(entry.path, 'label'), entry.label,
-                    )}
-                  </Text>
-                  <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.28)" truncate>
-                    {group.label} · {entry.path}
-                    {/* Name the ROW that matched, not just the list holding it
-                        — "Stores" is not an answer to "where is Cypress". */}
-                    {(() => {
-                      const hit = rowMatches(entry, query)[0];
-                      return hit ? ` · ${hit.title}` : '';
-                    })()}
-                  </Text>
-                </Flex>
-
-                <CornerDownRight size="1.3vh" color="rgba(255,255,255,0.25)" />
-              </motion.button>
-            ))}
-          </Flex>
-        ))}
-      </Flex>
-
-      {/* the query is what the reader is scanning for, so keep it visible */}
-      <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.2)">
-        {groups.reduce((n, g) => n + g.entries.length, 0)} matching “{query}”
-      </Text>
-    </Flex>
+      {groups.map((group) => group.entries.map((entry, k) => {
+        // Name the ROW that matched, not just the list holding it - "Stores"
+        // is not an answer to "where is Cypress".
+        const hit = rowMatches(entry, query)[0];
+        return (
+          <div
+            key={entry.path}
+            className="pl sr in"
+            style={{ '--i': Math.min(k, 10) } as React.CSSProperties}
+            onClick={() => {
+              // A row hit lands ON the row. `rowMatches` is the same function
+              // the in-script cards use, so both roads end in the same place
+              // rather than one of them stopping short.
+              onOpen(script.resource, group.group, hit ? { list: entry.path, row: hit.index } : undefined);
+            }}
+          >
+            <div className="sk">
+              <Icon name={group.icon} size="1.6vh" color="rgba(255,255,255,0.45)" />
+              <div className="tx">
+                <div className="t">
+                  <Lit text={translate(bundles, language, script.resource, settingKey(entry.path, 'label'), entry.label)} query={query} />
+                </div>
+                <div className="p">{entry.path}{hit ? ` · ${hit.title}` : ''}</div>
+              </div>
+              <span className="crumb">{group.label}</span>
+              <CornerDownRight className="ico" />
+            </div>
+          </div>
+        );
+      }))}
+    </div>
   );
 }

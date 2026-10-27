@@ -13,6 +13,7 @@ lib.keycode = function(code, opts)
       title         = opts.title or 'Security Panel',
       description   = opts.description,
       multipleTries = opts.multipleTries == true,
+      tries         = tonumber(opts.tries), -- optional: how many goes (the pad counts them down)
       allowCancel   = opts.allowCancel ~= false,
       length        = opts.length, -- optional fixed length, auto-submit when reached
       theme         = lib.uiTheme(GetInvokingResource() or GetCurrentResourceName()),

@@ -15,6 +15,7 @@ import { PedsField } from './PedControl';
 import { VehiclesControl } from './VehicleControl';
 import { FieldAction } from './FieldAction';
 import { PositionListControl } from './PositionListControl';
+import { CameraListControl } from './CameraListControl';
 import { PickListControl, PickOneControl } from './PickListControl';
 import { WeightMapControl } from './WeightMapControl';
 import { MantineColorControl, ShadeControl } from './ThemeControls';
@@ -37,7 +38,7 @@ export function isWideColumn(type: SettingColumn['type']): boolean {
     || type === 'rows' || type === 'object'
     || type === 'keyvalue' || type === 'groups'
     || type === 'keybindMap' || type === 'mantineColor' || type === 'shade'
-    || type === 'groupGrades' || type === 'weekdays' || type === 'positions'
+    || type === 'groupGrades' || type === 'weekdays' || type === 'positions' || type === 'cameras'
     || type === 'pickList' || type === 'weightMap'
     || type === 'redirectKind' || type === 'objectMap';
 }
@@ -218,13 +219,9 @@ export function FieldRow({
       align={wide ? 'stretch' : 'center'}
       justify="space-between"
       gap={wide ? 'xs' : 'sm'}
-      px={bare ? 0 : 'sm'} py={bare ? 0 : 'xs'}
+      px={bare ? 0 : '1.6vh'} py={bare ? 0 : '1vh'}
+      className={bare ? undefined : 'ss-fr' + (error ? ' bad' : '')}
       style={{
-        background: bare ? 'transparent' : alpha(theme.colors.dark[8], 0.5),
-        border: bare
-          ? 'none'
-          : `0.1vh solid ${error ? alpha('#E0776B', 0.6) : alpha(theme.colors.dark[5], 0.35)}`,
-        borderRadius: theme.radius.xs,
         // Dimmed rather than hidden: knowing the field exists, and that
         // something else is switching it off, beats it vanishing.
         opacity: dimmed ? 0.4 : 1,
@@ -234,7 +231,7 @@ export function FieldRow({
       {!bare && (
       <Flex direction="column" style={{ minWidth: 0, lineHeight: 1.2 }}>
         <Flex align="center" gap="0.5vh">
-          <Text ff="Akrobat Bold" size="xs" c="rgba(255,255,255,0.85)">{fieldLabel}</Text>
+          <span className="ss-lbl sm">{fieldLabel}</span>
 
           {/* The schema's description, on hover. Inline it would reflow the
               form every time a field had something to say. */}
@@ -423,6 +420,10 @@ export function FieldRow({
         </Flex>
       )}
 
+      {column.type === 'cameras' && (
+        <CameraListControl value={value} disabled={disabled} onChange={onChange} />
+      )}
+
       {column.type === 'groupGrades' && (
         <GroupGradeControl value={value} disabled={disabled} onChange={onChange} />
       )}
@@ -432,7 +433,7 @@ export function FieldRow({
       )}
 
       {column.type === 'positions' && (
-        <PositionListControl value={value} disabled={disabled} onChange={onChange} />
+        <PositionListControl value={value} disabled={disabled} onChange={onChange} bodyHeight={column.bodyHeight} />
       )}
 
       {column.type === 'weightMap' && (

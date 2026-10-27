@@ -7,6 +7,7 @@ type Status = {
   time?: number;
   progress?: number; 
   progText?: string;
+  color?: string; -- the edge + bar colour for this one (default: the script's accent)
 }
 ]]
 
@@ -23,6 +24,7 @@ function StatusInfo:serialize()
     time        = self.time,
     progress    = self.progress,
     progText    = self.progText,
+    color       = self.color,
     theme       = lib.uiTheme(self.resource),
   }
 end

@@ -297,10 +297,29 @@ local function registeredResources()
   if registryCache then return registryCache end
 
   local list = {}
+  -- One entry per FOLDER, not per name.
+  --
+  -- A resource that declares `provide 'x'` is reported by
+  -- GetResourceByFindIndex under BOTH names, and both answer LoadResourceFile
+  -- with the same schema - so a drop-in replacement (dirk_chat provides
+  -- `chat`) turned up in the rail twice, with the same settings and the same
+  -- pages, and an edit to one looked like it had not saved in the other.
+  --
+  -- The folder is the identity. Where two names share one, the one matching
+  -- the folder is the real resource and the rest are its aliases.
+  local seenPath = {}
   local total = GetNumResources()
   for i = 0, total - 1 do
     local name = GetResourceByFindIndex(i)
     if name and GetResourceState(name) == 'started' and hasScriptConfigTag(name) then
+      local path = GetResourcePath and GetResourcePath(name) or name
+      local folder = path and path:gsub('[/\\]+$', ''):match('[^/\\]+$')
+      local already = seenPath[path]
+
+      -- An alias arriving after the real name is dropped; one arriving BEFORE
+      -- it is replaced, because resource order is not ours to rely on.
+      if already and folder ~= name then goto continue end
+
       local rawSchema = LoadResourceFile(name, 'schema.json')
       if rawSchema then
         local ok, schema = pcall(json.decode, rawSchema)
@@ -319,9 +338,21 @@ local function registeredResources()
             schema = schema,
             hash = joaat(rawSchema),
           }
+          if already then
+            -- The alias got here first. Take its slot rather than adding a row.
+            for j = 1, #list - 1 do
+              if list[j].resource == already then
+                list[j] = list[#list]
+                list[#list] = nil
+                break
+              end
+            end
+          end
+          seenPath[path] = name
         end
       end
     end
+    ::continue::
   end
   table.sort(list, function(a, b) return a.resource < b.resource end)
 
@@ -339,9 +370,22 @@ end
 ---
 --- Broadcast to everyone: the server does not track who has the panel open,
 --- and the client ignores it unless it does. One tiny event on a rare action.
+local studioPayload = require '@dirk_lib.src.scriptConfig.studioPayload'
+
+-- Which scripts ship a non-empty CHANGELOG.md, by resource. Filled as the
+-- index is asked and dropped per resource when it restarts - see
+-- dirk_lib:getChangelogIndex below.
+local changelogPresent = {}
+
 local function announceRegistryChange(resourceName)
+  if type(resourceName) == 'string' then changelogPresent[resourceName] = nil end
+
+  -- Only a dirk script can change the registry. This used to drop the cache on
+  -- EVERY start and stop on the server, so restarting a car pack threw away
+  -- every parsed schema and the next open re-read the lot.
+  if not studioPayload.touchesRegistry(resourceName, registryCache, hasScriptConfigTag) then return end
   registryCache = nil
-  if not resourceName or not hasScriptConfigTag(resourceName) then return end
+  if not hasScriptConfigTag(resourceName) then return end
   TriggerClientEvent('dirk_lib:scriptStudioResourcesChanged', -1, resourceName)
 end
 
@@ -377,11 +421,12 @@ end
 -- no re-release. It also means a normal player never receives a schema at all;
 -- only the admin who opened the panel does.
 --
--- VALUES are deliberately NOT included. Each consumer already registers a
--- permission-gated `<resource>:getFullScriptConfig`, and the client calls those
--- directly - so server-only values keep travelling through the one path that
--- checks who is asking, instead of a new one that would have to re-implement
--- the check.
+-- Client-visible VALUES are not included: the client already holds them, in
+-- each script's own client VM. The SERVER-ONLY sliver is, and it is asked of
+-- each script through its own `dirkStudioServerOnly` export - which runs that
+-- script's own permission check, the same one its `getServerOnlyScriptConfig`
+-- callback runs. So server-only values still only leave through the path that
+-- checks who is asking; they just stopped costing a round trip per script.
 -- Convar-detected schema defaults (`x-autoDefault`). Shared with the
 -- scriptConfig engine so both sides agree on what a default is.
 local collectAutoDefaults = require '@dirk_lib.src.autoDefaults'
@@ -430,6 +475,17 @@ lib.callback.register('dirk_lib:getScriptStudio', function(source, knownHashes)
       local autoDefaults = {}
       collectAutoDefaults(entry.schema, nil, autoDefaults)
 
+      -- The sliver, from the script itself. A script started before this
+      -- dirk_lib has no such export; `serverOnlyChecked` stays unset and the
+      -- client falls back to asking that script's callback, as it always did.
+      local okExport, sliver = pcall(function()
+        return exports[entry.resource]:dirkStudioServerOnly(source)
+      end)
+      -- An export that ANSWERED is final, refusal included: asking the
+      -- callback after it would ask the same check the same question.
+      local checked = okExport
+      sliver = type(sliver) == 'table' and sliver or nil
+
       out[#out + 1] = {
         resource = entry.resource,
         label    = entry.label,
@@ -439,6 +495,9 @@ lib.callback.register('dirk_lib:getScriptStudio', function(source, knownHashes)
         hash     = entry.hash,
         schemaJson   = knownHashes[entry.resource] ~= entry.hash and entry.rawSchema or nil,
         autoDefaults = next(autoDefaults) and autoDefaults or nil,
+        serverOnlyChecked = checked or nil,
+        serverOnly        = sliver and type(sliver.serverOnly) == 'table' and sliver.serverOnly or nil,
+        serverOnlyVersion = sliver and sliver.clientVersion or nil,
       }
     end
   end
@@ -479,6 +538,33 @@ local function openScriptStudio(src, focus)
   TriggerClientEvent('dirk_lib:openScriptStudio', src, focus, askLanguage)
 end
 
+--- Is `name` a PROVIDED alias rather than a resource in its own right?
+---
+--- `provide 'chat'` makes the runtime report a second resource called `chat`,
+--- started, carrying the PROVIDING resource's manifest - so dirk_chat showed up
+--- twice in every enumeration and picked up a `/chat` command beside its
+--- `/dirk_chat` one. Anything walking the resource list has to filter these, or
+--- it configures the same script under two names.
+---
+--- A resource's folder IS its name, so an entry whose path ends in some OTHER
+--- folder is an alias. The `provide` check is the belt to those braces: an
+--- alias inherits the manifest that named it, so its own `provide` is itself.
+local function isProvidedAlias(name)
+  local path = GetResourcePath(name)
+  if type(path) == 'string' and path ~= '' then
+    local folder = path:match('([^/\\]+)[/\\]*$')
+    if folder and folder ~= name then return true end
+  end
+  local i = 0
+  while true do
+    local provided = GetResourceMetadata(name, 'provide', i)
+    if not provided then break end
+    if provided == name then return true end
+    i = i + 1
+  end
+  return false
+end
+
 -- Every registered script keeps a `/resourceName` command, as it always had -
 -- it just lands in the hub with that script selected rather than opening a
 -- panel of its own. Customers' muscle memory and docs keep working.
@@ -489,7 +575,8 @@ CreateThread(function()
     local total = GetNumResources()
     for i = 0, total - 1 do
       local name = GetResourceByFindIndex(i)
-      if name and not registered[name] and GetResourceState(name) == 'started' and hasScriptConfigTag(name) then
+      if name and not registered[name] and GetResourceState(name) == 'started' and hasScriptConfigTag(name)
+        and not isProvidedAlias(name) then
         registered[name] = true
         lib.addCommand(name, {
           help = ('Open %s settings in Script Studio'):format(name),
@@ -545,6 +632,44 @@ lib.addCommand('dirk_config', {
   -- into it. The old event handler is left in place for one release so a
   -- consumer still calling it does not break.
   openScriptStudio(source)
+end)
+
+-- ── Warming the panel up after joining ───────────────────────────────────
+--
+-- A first open had to do everything at once: read the schema cache, fetch
+-- schemas, gather every script's values, and only then show anything - which
+-- is the open everyone notices. A client asks once, a while after it joins;
+-- if this player could open the panel, they are told to gather now, while
+-- nobody is waiting, and the first open then behaves like a repeat one.
+--
+-- The client asking grants nothing. This only decides whether to answer, by
+-- the same check getScriptStudio makes, and getScriptStudio checks again when
+-- the gather actually happens. Once per player per session, however often
+-- they ask.
+--
+-- A plain event, not a latent one: it carries no data, and latent events are
+-- for payloads big enough to meter (one this small has been seen to re-fire).
+local prewarmAsked = {}
+
+AddEventHandler('playerDropped', function()
+  prewarmAsked[source] = nil
+end)
+
+RegisterNetEvent('dirk_lib:studioPrewarm', function()
+  local src = source
+  if prewarmAsked[src] then return end
+  prewarmAsked[src] = true
+
+  local ctx
+  if not isMasterEditor(src) then ctx = resolveMatchCtx(src) end
+
+  local all = registeredResources()
+  for i = 1, #all do
+    if canEditResource(src, all[i].resource, ctx) then
+      TriggerClientEvent('dirk_lib:studioPrewarm', src)
+      return
+    end
+  end
 end)
 
 RegisterNetEvent('dirk_lib:scriptConfigChooserPick', function(resourceName)
@@ -790,6 +915,12 @@ end)
 
 -- Which of these scripts actually ship one, so the panel only offers the tab
 -- where there is something to read. One call rather than one per script.
+--
+-- Whether a file is there is remembered (changelogPresent, dropped when that
+-- resource restarts): the question used to read every CHANGELOG.md in full -
+-- fishing's is 578 lines - on every open, to answer yes or no. The permission
+-- check is NOT remembered; it is asked fresh each time, because access can
+-- change without anything restarting.
 lib.callback.register('dirk_lib:getChangelogIndex', function(source, payload)
   if source == 0 then return false, 'NoPermission' end
   local resources = type(payload) == 'table' and payload.resources or nil
@@ -800,10 +931,13 @@ lib.callback.register('dirk_lib:getChangelogIndex', function(source, payload)
     local resource = resources[i]
     if type(resource) == 'string' and GetResourceState(resource) == 'started'
       and canEditResource(source, resource) then
-      local text = LoadResourceFile(resource, 'CHANGELOG.md')
-      if type(text) == 'string' and text:find('%S') then
-        found[#found + 1] = resource
+      local present = changelogPresent[resource]
+      if present == nil then
+        local text = LoadResourceFile(resource, 'CHANGELOG.md')
+        present = type(text) == 'string' and text:find('%S') ~= nil
+        changelogPresent[resource] = present
       end
+      if present then found[#found + 1] = resource end
     end
   end
 

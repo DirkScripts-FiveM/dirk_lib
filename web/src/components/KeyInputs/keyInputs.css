@@ -1,0 +1,21 @@
+/* lib.showKeys. The strip's own place comes inline from `position`, so the
+   kit's default spot is cleared here first. */
+.dk .ki, .dk .ki.col { left: auto; right: auto; top: auto; bottom: auto; transform: none; }
+
+/* per-key states, the same set as dirk_fishing's key strip */
+.dk .ki .kp.hl { background: var(--red); }
+.dk .ki .kp.kpulse { animation: dk-kpulse 1s ease-in-out infinite; }
+.dk .ki .kp.in.kpulse { animation: dk-in .24s cubic-bezier(.2, .8, .2, 1) both, dk-kpulse 1s ease-in-out .24s infinite; animation-delay: calc(var(--i, 0) * 45ms), calc(var(--i, 0) * 45ms + .24s); }
+@keyframes dk-kpulse { 50% { background: #a8262c; } }
+.dk .ki .kp.down .cap { background: var(--ok); }
+.dk .ki .kp.dim { opacity: .35; }
+.dk .ki .kp.miss { background: none; box-shadow: none; padding-left: .8vh; }
+.dk .ki .kp.miss .act { color: #ff8a84; }
+
+/* the note: hung over the key, out of the row's flow, so the row never changes width */
+.dk .ki .kp .tag { position: absolute; left: 50%; bottom: calc(100% + .35vh); transform: translateX(-50%); padding: .25vh 1.1vh; background: rgba(10, 12, 15, .88); white-space: nowrap; pointer-events: none; }
+.dk .ki .kp .tag b { display: inline-block; transform: skewX(14deg); font: 800 italic 1.5vh/1 var(--f); color: #ff8a84; text-transform: uppercase; letter-spacing: .05em; }
+
+/* a hold fills the cap from the bottom: --h is animatable once registered */
+@property --h { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+.dk .ki .cap.hold { transition: --h var(--hd, .12s) linear; }

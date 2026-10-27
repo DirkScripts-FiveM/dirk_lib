@@ -283,6 +283,19 @@ end
     end)
   end)
 
+  --- Discord roles, for the role pickers.
+  RegisterNuiCallback('GET_DISCORD_ROLES', function(_, cb)
+    if not adminUiOpen() then cb({ success = false, _error = 'NotOpen' }) return end
+    CreateThread(function()
+      local ok, result, err = pcall(lib.callback.await, 'dirk_lib:getDiscordRoles')
+      if not ok or not result then
+        cb({ success = false, _error = err or 'NoAnswer' })
+        return
+      end
+      cb({ success = true, data = result })
+    end)
+  end)
+
   --- Who can open Script Studio.
   ---
   --- The rows, who is online to add, and whether this viewer may change any
@@ -481,6 +494,37 @@ end
       -- are; reading them is the page's business, not this bridge's.
       cb({ success = result ~= nil, data = result, _error = err })
     end)
+  end)
+
+  --- Straight to a script's own CLIENT, with no server in the middle.
+  ---
+  --- STUDIO_REQUEST goes out to the server and back, which is right for asking
+  --- a question and wrong for a live preview: scrubbing a timeline sends a
+  --- position many times a second, and a round trip per frame is not a preview,
+  --- it is a slideshow.
+  ---
+  --- The event is namespaced `<resource>:studio:<name>`, so a page can only
+  --- reach the handlers its own script put there for the panel.
+  RegisterNuiCallback('STUDIO_CLIENT', function(data, cb)
+    if not adminUiOpen() then cb({ success = false, _error = 'NotOpen' }) return end
+    local resource = type(data) == 'table' and data.resource or nil
+    local event = type(data) == 'table' and data.event or nil
+
+    if type(resource) ~= 'string' or type(event) ~= 'string' or event == '' then
+      cb({ success = false, _error = 'BadRequest' })
+      return
+    end
+    if event:find('[^%w_]') then
+      cb({ success = false, _error = 'BadEvent' })
+      return
+    end
+    if GetResourceState(resource) ~= 'started' then
+      cb({ success = false, _error = 'NotStarted' })
+      return
+    end
+
+    TriggerEvent(('%s:studio:%s'):format(resource, event), data.payload)
+    cb({ success = true })
   end)
 
   RegisterNuiCallback('SPAWN_VEHICLE', function(data, cb)

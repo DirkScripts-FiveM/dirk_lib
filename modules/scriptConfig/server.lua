@@ -698,6 +698,24 @@ local function adoptFromConsumers(scriptName, data, paths)
   return adopted
 end
 
+--- The rollback copy of the config, stamped as a copy.
+---
+--- Since override rows became the source of truth, the `data` column is only
+--- a mirror kept for one release so a rollback has something to read. It was
+--- written unstamped - and a script with no overrides at all (every config
+--- nobody has edited) looks exactly like a server that has never migrated, so
+--- the next boot migrated the mirror all over again. Whatever defaults had
+--- changed since then were pinned as overrides on the spot: an untouched
+--- server would never see new defaults again. The stamp is what tells the two
+--- apart. An older dirk_lib reading it back just sees one unknown key.
+local MIRROR_KEY = '__overridesMirror'
+local function mirrorBlob(config)
+  local copy = {}
+  for k, v in pairs(config or {}) do copy[k] = v end
+  copy[MIRROR_KEY] = true
+  return json.encode(copy)
+end
+
 --- One-time move of a legacy whole-blob row into override rows.
 ---
 --- Only paths that DIFFER from the shipped defaults become rows - copying the
@@ -1358,7 +1376,9 @@ local function registerScriptConfig(schema, canEditFn, rules)
   -- the migration would re-pin every value and defeat the point. The blob is
   -- left where it is: it is the rollback.
   local rawData, overrideCount = loadOverrides(scriptName)
-  if overrideCount == 0 and next(legacyBlob) then
+  local isMirror = legacyBlob[MIRROR_KEY] == true
+  legacyBlob[MIRROR_KEY] = nil
+  if overrideCount == 0 and next(legacyBlob) and not isMirror then
     -- Never let this kill init. An unguarded throw here left the callback
     -- registered but the config nil forever, and every client on defaults with
     -- nothing in the server console pointing at the migration. Whatever did
@@ -1446,7 +1466,7 @@ local function registerScriptConfig(schema, canEditFn, rules)
     -- rows. Drop this column write once the migration has shipped and settled.
     MySQL.prepare.await(
       'UPDATE dirk_scriptConfig SET data = ?, client_version = ?, resource_version = ?, change_log = ?, last_editor = ? WHERE script = ?',
-      { json.encode(scriptConfig), client_version, currentVer, json.encode(changeLog), json.encode(lastEditorMeta), scriptName }
+      { mirrorBlob(scriptConfig), client_version, currentVer, json.encode(changeLog), json.encode(lastEditorMeta), scriptName }
     )
   end
 
@@ -1629,7 +1649,7 @@ local function setScriptConfig(data, forceVers, ctx)
 
     MySQL.prepare.await(
       'UPDATE dirk_scriptConfig SET data = ?, client_version = ?, change_log = ?, last_editor = ? WHERE script = ?',
-      { json.encode(scriptConfig), client_version, json.encode(changeLog), json.encode(lastEditorMeta), scriptName }
+      { mirrorBlob(scriptConfig), client_version, json.encode(changeLog), json.encode(lastEditorMeta), scriptName }
     )
     lastPersistedHash = payloadHash
   end
@@ -1858,6 +1878,15 @@ end)
 lib.callback.register(('%s:getFullScriptConfig'):format(scriptName), function(src)
   if not scriptConfig then return nil, 'NotReady' end
   if not canViewScript(src) then return nil, 'NoPermission' end
+  -- Seeing a script is not editing it: server-only values (webhooks, keys,
+  -- undeclared leftovers) go to editors only - the same gate as the sliver
+  -- below. A view-only admin gets what every client already holds.
+  if not canEditScript(src) then
+    return true, nil, {
+      config = clientVisibleView or filterByVisibility(scriptConfig, nil, false),
+      clientVersion = client_version,
+    }
+  end
   return true, nil, { config = scriptConfig, clientVersion = client_version }
 end)
 
@@ -1890,6 +1919,38 @@ lib.callback.register(('%s:getServerOnlyScriptConfig'):format(scriptName), funct
 
   return true, nil, {
     serverOnly = sliver,
+    clientVersion = client_version,
+  }
+end)
+
+--- The same sliver, for dirk_lib's server to fold into the Script Studio
+--- payload.
+---
+--- The callback above costs the panel a round trip PER SCRIPT on every open,
+--- each with its own 5 s timeout, on top of the one that fetched the schemas.
+--- dirk_lib's server is already answering that first call, so it asks here
+--- instead - an in-process export, no network - and the sliver rides back in
+--- the same reply. One round trip per open, however many scripts.
+---
+--- The check is still THIS script's: canEditScript, the same gate as the
+--- callback, including a custom canEditFn the script registered. dirk_lib
+--- passes the source of the request it is answering and decides nothing.
+--- Exports are server-side only, so no client can call this.
+---
+--- A script with nothing server-only (no x-serverOnly, no undeclared keys)
+--- answers without walking its config, which is most of them.
+exports('dirkStudioServerOnly', function(src)
+  if not scriptConfig then return nil, 'NotReady' end
+  if not canEditScript(src) then return nil, 'NoPermission' end
+  if #serverOnlyPaths == 0 and #undeclaredPaths == 0 then
+    return { clientVersion = client_version }
+  end
+
+  local sliver = filterServerOnly(scriptConfig, nil)
+  return {
+    -- nil, never {}: see the callback above - an empty table becomes a JSON
+    -- array and wipes the form it is merged over.
+    serverOnly = next(sliver) ~= nil and sliver or nil,
     clientVersion = client_version,
   }
 end)

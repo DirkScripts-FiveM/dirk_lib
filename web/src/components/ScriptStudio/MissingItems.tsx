@@ -1,14 +1,12 @@
-import { alpha, Flex, Portal, Select, Text, useMantineTheme } from '@mantine/core';
-import { motion } from 'framer-motion';
 import { AlertTriangle, Check, Copy } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useItems, copyToClipboard } from 'dirk-cfx-react';
 import { MOCK_ITEMS } from './mockData';
 import { effectiveValue } from './store';
 import type { SettingColumn, SettingEntry, StudioScript } from './types';
 import { useChrome } from './studioLocale';
-
-const WARN = '#E0B15F';
+import { KitSelect } from './KitSelect';
+import { Btn } from './studioKit';
 
 const INVENTORY_FORMATS = [
   'ox_inventory', 'qb-inventory', 'qs-inventory', 'codem-inventory',
@@ -45,112 +43,58 @@ export function useMissingItems(script: StudioScript): string[] {
 }
 
 /**
- * Compact header button. Lives in the panel header rather than the scroll, so
- * the warning is always reachable without eating a row of settings.
+ * Compact header button, a warn plate beside the account chip. Lives in the
+ * panel header rather than the scroll, so the warning is always reachable
+ * without eating a row of settings. Opens under itself like the account menu.
  */
-export function MissingItemsButton({ script }: { script: StudioScript }) {
-  const theme = useMantineTheme();
+export function MissingItemsButton({ script, open, onOpen }: {
+  script: StudioScript;
+  open: boolean;
+  onOpen: (open: boolean) => void;
+}) {
+  const t = useChrome();
   const missing = useMissingItems(script);
-  const [open, setOpen] = useState(false);
-  const anchorRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
-  // Mantine portals the dropdown, so while it is open a click inside it
-  // lands outside this panel. Track it and ignore outside-clicks meanwhile.
-  const dropdownOpen = useRef(false);
+  const ref = useRef<HTMLDivElement | null>(null);
 
+  // Escape is the panel's: it closes this before it closes the Studio
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (dropdownOpen.current) return;
-      if (panelRef.current?.contains(e.target as Node)) return;
-      if (anchorRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
+      const target = e.target as Element;
+      if (ref.current?.contains(target)) return;
+      // the format select's dropdown is portalled to <body>
+      if (target.closest?.('.mantine-Select-dropdown, .mantine-Combobox-dropdown')) return;
+      onOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('mousedown', onDown);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [open, onOpen]);
 
   if (missing.length === 0) return null;
 
-  const toggle = () => {
-    const rect = anchorRef.current?.getBoundingClientRect();
-    if (rect) setPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
-    setOpen((o) => !o);
-  };
-
   return (
-    <>
-      <motion.button
-        ref={anchorRef as never}
-        type="button"
-        onClick={toggle}
-        whileHover={{ background: alpha(WARN, 0.22) }}
-        whileTap={{ scale: 0.96 }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '0.5vh',
-          height: '3.4vh', paddingInline: '0.9vh',
-          background: alpha(WARN, 0.14),
-          border: `0.1vh solid ${alpha(WARN, 0.45)}`,
-          borderRadius: theme.radius.xs,
-          cursor: 'pointer',
-        }}
+    <div className="ss-missW" ref={ref}>
+      <div
+        className={`pl ss-miss edge in${open ? ' open' : ''}`}
+        style={{ '--i': 1, '--e': 'var(--warn)' } as CSSProperties}
+        onClick={() => onOpen(!open)}
         aria-label={`${missing.length} items missing from your inventory`}
       >
-        <AlertTriangle size="1.5vh" color={WARN} />
-        <Text ff="Akrobat Bold" size="xxs" c={WARN}>{missing.length}</Text>
-      </motion.button>
-
-      {open && pos && (
-        <Portal>
-          <Flex
-            ref={panelRef as never}
-            direction="column"
-            style={{
-              position: 'fixed',
-              top: pos.top,
-              right: pos.right,
-              zIndex: 10400,
-              width: '72vh',
-              maxHeight: '60vh',
-              background: alpha(theme.colors.dark[9], 0.98),
-              border: `0.1vh solid ${alpha(WARN, 0.45)}`,
-              borderRadius: theme.radius.sm,
-              boxShadow: '0 2vh 5vh rgba(0,0,0,0.6)',
-              overflow: 'hidden',
-            }}
-          >
-            <MissingItemsPanel
-              script={script}
-              missing={missing}
-              onDropdownOpen={() => { dropdownOpen.current = true; }}
-              onDropdownClose={() => { setTimeout(() => { dropdownOpen.current = false; }, 0); }}
-            />
-          </Flex>
-        </Portal>
-      )}
-    </>
+        <div className="sk">
+          <AlertTriangle className="ico" />
+          <span className="V">{missing.length}</span>
+          <span className="L">{t('missingItems.missing', 'Missing')}</span>
+        </div>
+      </div>
+      {open && <MissingItemsPanel missing={missing} />}
+    </div>
   );
 }
 
-function MissingItemsPanel({
-  script, missing, onDropdownOpen, onDropdownClose,
-}: {
-  script: StudioScript;
-  missing: string[];
-  onDropdownOpen: () => void;
-  onDropdownClose: () => void;
-}) {
+function MissingItemsPanel({ missing }: { missing: string[] }) {
   const t = useChrome();
-  const theme = useMantineTheme();
   const [format, setFormat] = useState<string>('ox_inventory');
   const [copied, setCopied] = useState(false);
-  void script;
 
   const snippet = buildSnippet(format, missing);
 
@@ -161,88 +105,38 @@ function MissingItemsPanel({
   };
 
   return (
-    <Flex direction="column" style={{ minHeight: 0 }}>
-      <Flex
-        align="center" gap="sm" px="sm" py="xs"
-        style={{ borderBottom: `0.1vh solid ${alpha(WARN, 0.3)}`, flexShrink: 0 }}
-      >
-        <AlertTriangle size="1.8vh" color={WARN} />
-        <Flex direction="column" style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
-          <Text ff="Akrobat Bold" size="xs" c={WARN}>
-            {missing.length} configured {missing.length === 1 ? 'item is' : 'items are'} not in your inventory
-          </Text>
-          <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.45)">
-            {t('missingItems.paste_the_snippet_into_your_inventory_s_', 'Paste the snippet into your inventory\'s item list, then reload it.')}
-          </Text>
-        </Flex>
-        <Select
-          data={INVENTORY_FORMATS as unknown as string[]}
-          value={format}
-          onChange={(v) => setFormat(v ?? 'ox_inventory')}
-          onDropdownOpen={onDropdownOpen}
-          onDropdownClose={onDropdownClose}
-          allowDeselect={false}
-          comboboxProps={{ zIndex: 10500 }}
-          styles={{
-            input: {
-              background: alpha(theme.colors.dark[9], 0.75),
-              border: `0.1vh solid ${alpha(theme.colors.dark[4], 0.55)}`,
-              color: 'rgba(255,255,255,0.9)',
-              fontFamily: 'monospace',
-              fontSize: '1.4vh',
-              height: '3.4vh',
-              minHeight: '3.4vh',
-              width: '26vh',
-              borderRadius: theme.radius.xs,
-            },
-            dropdown: {
-              background: theme.colors.dark[8],
-              border: `0.1vh solid ${alpha(theme.colors.dark[5], 0.8)}`,
-              borderRadius: theme.radius.xs,
-              padding: '0.3vh',
-            },
-            option: {
-              fontFamily: 'monospace',
-              fontSize: '1.3vh',
-              color: 'rgba(255,255,255,0.8)',
-              borderRadius: '0.3vh',
-              padding: '0.5vh 0.8vh',
-            },
-          }}
-        />
-        <motion.button
-          type="button"
-          onClick={copy}
-          whileTap={{ scale: 0.96 }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '0.5vh',
-            height: '2.8vh', paddingInline: '1vh',
-            background: alpha(WARN, 0.14),
-            border: `0.1vh solid ${alpha(WARN, 0.4)}`,
-            borderRadius: theme.radius.xs,
-            cursor: 'pointer', flexShrink: 0,
-          }}
-        >
-          {copied ? <Check size="1.3vh" color={WARN} /> : <Copy size="1.3vh" color={WARN} />}
-          <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.05em" c={WARN}>
-            {copied ? 'Copied' : 'Copy'}
-          </Text>
-        </motion.button>
-      </Flex>
-
-      <Flex
-        p="sm"
-        className="studio-scroll"
-        style={{ overflowY: 'auto', minHeight: 0 }}
-      >
-        <Text
-          ff="monospace" size="xxs" c="rgba(255,255,255,0.75)"
-          style={{ whiteSpace: 'pre', lineHeight: 1.5 }}
-        >
-          {snippet}
-        </Text>
-      </Flex>
-    </Flex>
+    <div className="ss-mmenu">
+      <div className="pl ss-amh edge in" style={{ '--i': 0, '--e': 'var(--warn)' } as CSSProperties}>
+        <div className="sk">
+          <div className="ss-av wt"><AlertTriangle /></div>
+          <div className="tx">
+            <div className="T">
+              {(missing.length === 1
+                ? t('missingItems.title_one', '1 item is not in your inventory')
+                : t('missingItems.title', '{0} items are not in your inventory')).replace('{0}', String(missing.length))}
+            </div>
+            <div className="L">{t('missingItems.paste_the_snippet_into_your_inventory_s_', "Paste the snippet into your inventory's item list, then reload it.")}</div>
+          </div>
+        </div>
+      </div>
+      <div className="pl ss-akv in" style={{ '--i': 1 } as CSSProperties}>
+        <div className="sk">
+          <div className="hd">
+            <span className="L">{t('missingItems.inventory', 'Your inventory')}</span>
+            <KitSelect
+              value={format}
+              onChange={(v) => setFormat(v ?? 'ox_inventory')}
+              data={INVENTORY_FORMATS.map((f) => ({ value: f, label: f }))}
+              width="24vh"
+              clearable={false}
+              mono
+            />
+            <Btn sm icon={copied ? <Check /> : <Copy />} label={copied ? t('missingItems.copied', 'Copied') : t('missingItems.copy', 'Copy')} onClick={copy} />
+          </div>
+          <pre className="ss-msnip studio-scroll">{snippet}</pre>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -42,6 +42,15 @@ export function resolveIcon(name: string): React.ElementType {
   return found;
 }
 
+/**
+ * The lucide icon a name refers to, or nothing - for callers with a fallback
+ * of their own that should win over resolveIcon's generic one.
+ */
+export function findIcon(name: string): React.ElementType | undefined {
+  const registry = lucide as unknown as Record<string, React.ElementType | undefined>;
+  return registry[pascal(name)] ?? registry[name] ?? registry[`${pascal(name)}Icon`];
+}
+
 export function Icon({ name, size, color }: { name: string; size: string; color: string }) {
   const Cmp = resolveIcon(name);
   return <Cmp size={size} color={color} />;

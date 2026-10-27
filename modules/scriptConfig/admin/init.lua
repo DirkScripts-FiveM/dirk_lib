@@ -137,8 +137,11 @@ end)
 -- one require line below — no central registry to wire up.
 require '@dirk_lib/modules/scriptConfig/admin/tools/position'
 require '@dirk_lib/modules/scriptConfig/admin/tools/object'
+require '@dirk_lib/modules/scriptConfig/admin/tools/box'
 require '@dirk_lib/modules/scriptConfig/admin/tools/models'
 require '@dirk_lib/modules/scriptConfig/admin/tools/players'
+require '@dirk_lib/modules/scriptConfig/admin/tools/camera'
+require '@dirk_lib/modules/scriptConfig/admin/tools/handoff'
 
 -- ── pickDoor forwarder ────────────────────────────────────────────────
 -- The picker logic lives in dirk_lib's own VM (src/tools/client/

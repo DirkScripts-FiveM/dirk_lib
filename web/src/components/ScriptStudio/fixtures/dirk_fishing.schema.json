@@ -9332,6 +9332,13 @@
       "icon": "users",
       "component": "web/build/studio/players.js",
       "description": "Everyone who has fished, what they have earned, and their pots and permits."
+    },
+    {
+      "id": "depth-chart",
+      "label": "Depth Chart",
+      "icon": "waves",
+      "component": "web/build/studio/depth-chart.js",
+      "description": "A chart of every sea, lake and river the bake measured - the depths crab pots trust - and the button to bake it again."
     }
   ]
 }

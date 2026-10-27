@@ -1,0 +1,22 @@
+@font-face {
+  font-family: 'Akrobat Regular';
+  src: url('@cfxfonts/Akrobat-Regular.woff') format('woff');
+}
+@font-face {
+  font-family: 'Akrobat Bold';
+  src: url('@cfxfonts/Akrobat-Bold.woff') format('woff');
+}
+
+/* a DUI: nothing but the plate is drawn, the page itself is see-through */
+html, body, #root {
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent !important;
+  color-scheme: normal !important;
+}
+body {
+  font-family: 'Akrobat Regular', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

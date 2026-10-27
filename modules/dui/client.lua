@@ -56,6 +56,16 @@ function lib.dui:constructor(data)
 end
 
 function lib.dui:remove()
+	-- Once. A DUI gets removed by whoever made it AND by the stop handler below,
+	-- which clears every DUI a resource owns — so on a restart the second one to
+	-- run called DestroyDui on a handle the first had already destroyed, and the
+	-- client logged "invalid handle" for a teardown that had worked perfectly.
+	--
+	-- Idempotent here rather than in each consumer, because every consumer that
+	-- tidies up after itself (which is what they are supposed to do) hits it.
+	if self.private.removed then return end
+	self.private.removed = true
+
 	SetDuiUrl(self.duiObject, 'about:blank')
 	DestroyDui(self.duiObject)
 	duis[self.private.id] = nil

@@ -1,5 +1,5 @@
 import { alpha, Flex, Text, useMantineTheme } from '@mantine/core';
-import { ConfirmModal } from 'dirk-cfx-react';
+import { ConfirmModal } from './Dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';

@@ -1,0 +1,33 @@
+/* lib.inputDialog on top of the kit's .dlg / .fl / .in2 rules */
+.dk .inp .hd .back { cursor: pointer; color: rgba(255,255,255,.7); display: grid; }
+.dk .inp .hd .back .ico { width: 2.4vh; height: 2.4vh; color: inherit; }
+.dk .inp .btn { cursor: pointer; }
+.dk .fl { position: relative; }
+.dk .fl .L .lic { width: 1.4vh; height: 1.4vh; display: inline-block; vertical-align: -.2vh; margin-right: .5vh; }
+/* the real inputs inside the kit's boxes */
+.dk .in2 .tin { flex: 1; min-width: 0; background: none; border: 0; outline: 0; padding: 0; margin: 0; font: inherit; color: #fff; resize: none; caret-color: #fff; }
+.dk .in2 .tin::placeholder { color: rgba(255,255,255,.4); }
+.dk .in2.area .tin { min-height: 7vh; line-height: 1.3; }
+.dk .in2.dis { opacity: .5; }
+.dk .in2.sel { cursor: pointer; }
+.dk .in2 > .ico, .dk .in2 > svg { flex: none; }
+.dk .in2 .stp { display: grid; cursor: pointer; }
+.dk .chk { cursor: pointer; } .dk .chk.dis { opacity: .5; cursor: default; } .dk .chk .req { color: var(--a); margin-left: .3vh; }
+/* dropdowns (select, multi-select, colour, date) open under their field */
+.dk .inp .dd { position: absolute; left: 0; right: 0; top: calc(100% + .4vh); z-index: 5; background: #121418; box-shadow: 0 .8vh 2.4vh rgba(0,0,0,.55); max-height: 30vh; overflow-y: auto; padding: .5vh 0; scrollbar-width: thin; }
+.dk .inp .ddo { padding: .9vh 1.4vh; font: 700 1.65vh/1.2 var(--f); color: #fff; cursor: pointer; display: flex; align-items: center; gap: 1vh; }
+.dk .inp .ddo:hover { background: rgba(255,255,255,.08); }
+.dk .inp .ddo.on { box-shadow: inset .4vh 0 0 var(--a); background: var(--a18); }
+.dk .inp .ddo .bx { width: 2vh; height: 2vh; transform: skewX(-14deg); border: .2vh solid rgba(255,255,255,.5); display: grid; place-items: center; flex: none; }
+.dk .inp .ddo .bx.y { background: var(--a); border-color: var(--a); }
+.dk .inp .ddo .bx svg { width: 1.4vh; height: 1.4vh; transform: skewX(14deg); }
+.dk .inp .dd.pick { padding: 1vh; overflow: visible; max-height: none; right: auto; }
+.dk .inp .cal { padding: 1vh 1.2vh; width: 30vh; right: auto; overflow: visible; max-height: none; }
+.dk .inp .calh { display: flex; justify-content: space-between; align-items: center; margin-bottom: .8vh; }
+.dk .inp .calh .hit { cursor: pointer; display: grid; color: #fff; }
+.dk .inp .cal .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .3vh; text-align: center; }
+.dk .inp .cal .dy { font: 700 1.5vh/2.8vh var(--f); color: #fff; cursor: pointer; }
+.dk .inp .cal .dy:hover { background: rgba(255,255,255,.1); }
+.dk .inp .cal .dy.on { background: var(--a); }
+.dk .inp .cal .dy.off { opacity: .3; cursor: default; }
+.dk .inp .rng { display: grid; grid-template-columns: 1fr 1fr; gap: 1vh; }

@@ -1,12 +1,13 @@
-import { alpha, Flex, Text, TextInput, useMantineTheme } from '@mantine/core';
-import { Modal, fetchNui, isEnvBrowser } from 'dirk-cfx-react';
-import { motion } from 'framer-motion';
-import { ScrollText, Search } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { useSearchInputStyles } from './Controls';
+import { fetchNui, isEnvBrowser } from 'dirk-cfx-react';
+import { Modal } from './Dialog';
+import { ScrollText } from 'lucide-react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { SectionHeading } from './Frame';
+import { Chip, Empty, Search } from './studioKit';
 import { useStudio } from './store';
 import { compareVersions, useRemoteChangelog } from './publicInfo';
 import { useChrome } from './studioLocale';
+import './kitpages.css';
 
 /**
  * What changed, for the version actually installed.
@@ -128,9 +129,9 @@ const MOCK = `# UPDATE 1.2.80 | 25/08/2026
 
 export function ChangelogPage({ resource }: { resource: string }) {
   return (
-    <Flex direction="column" flex={1} p="xl" gap="md" style={{ minHeight: 0 }}>
-      <ChangelogBody resource={resource} />
-    </Flex>
+    <div className="ss-cl">
+      <ChangelogBody resource={resource} heading />
+    </div>
   );
 }
 
@@ -141,11 +142,8 @@ export function ChangelogPage({ resource }: { resource: string }) {
  * opened from an announcement that says "read the changelog" - and they should
  * not be two implementations that drift.
  */
-export function ChangelogBody({ resource }: { resource: string }) {
-  const theme = useMantineTheme();
+export function ChangelogBody({ resource, heading }: { resource: string; heading?: boolean }) {
   const t = useChrome();
-  const styles = useSearchInputStyles();
-  const color = theme.colors[theme.primaryColor][5];
 
   const script = useStudio((s) => s.scripts.find((entry) => entry.resource === resource));
   const [state, setState] = useState<{ text: string; version?: string } | null>(null);
@@ -219,49 +217,26 @@ export function ChangelogBody({ resource }: { resource: string }) {
   }, [releases, query]);
 
   const installed = script?.version;
+  const sub = t('changelog.subtitle', 'Every release of this script, newest first.')
+    + (installed ? ` ${t('changelog.running', 'You are running')} v${installed}.` : '');
 
   return (
     <>
-      <Flex align="flex-end" justify="space-between" gap="md" style={{ flexShrink: 0 }}>
-        <Flex direction="column" gap="0.3vh">
-          <Text ff="Akrobat Bold" size="lg" c="rgba(255,255,255,0.92)">
-            {t('changelog.title', "What's new")}
-          </Text>
-          <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.4)">
-            {t('changelog.subtitle', 'Every release of this script, newest first.')}
-            {installed ? ` ${t('changelog.running', 'You are running')} v${installed}.` : ''}
-          </Text>
-        </Flex>
-
-        <TextInput
-          value={query}
-          onChange={(e) => setQuery(e.currentTarget.value)}
-          placeholder={t('changelog.search', 'Search the changelog…')}
-          leftSection={<Search size="1.5vh" color="rgba(255,255,255,0.35)" />}
-          styles={styles}
-          style={{ width: '32vh', flexShrink: 0 }}
-        />
-      </Flex>
+      <div className="ss-clh">
+        {heading
+          ? <SectionHeading icon="scroll-text" label={t('changelog.title', "What's new")} description={sub} style={{ margin: 0, minWidth: 0, flex: 1 }} />
+          : <span className="D sub">{sub}</span>}
+        <Search value={query} onChange={setQuery} placeholder={t('changelog.search', 'Search the changelog…')} />
+      </div>
 
       {error && (
-        <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.35)">
-          {error === 'NoChangelog'
-            ? t('changelog.none', 'This script does not ship a changelog.')
-            : t('changelog.failed', 'The changelog could not be read.')}
-        </Text>
+        <Empty text={error === 'NoChangelog'
+          ? t('changelog.none', 'This script does not ship a changelog.')
+          : t('changelog.failed', 'The changelog could not be read.')} />
       )}
+      {!state && !error && <Empty text={t('changelog.loading', 'Reading…')} />}
 
-      {!state && !error && (
-        <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.3)">
-          {t('changelog.loading', 'Reading…')}
-        </Text>
-      )}
-
-      <Flex
-        direction="column" gap="sm"
-        className="studio-scroll"
-        style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}
-      >
+      <div className="ss-cll studio-scroll">
         {shown.map((release, index) => {
           // The version on this server, called out - the point of reading a
           // changelog in the panel rather than on the store page.
@@ -272,97 +247,38 @@ export function ChangelogBody({ resource }: { resource: string }) {
           const ahead = !!installed && !current
             && compareVersions(release.version, installed) > 0;
           return (
-            <motion.div
+            <div
               key={`${release.version}-${index}`}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(index, 8) * 0.02, duration: 0.16 }}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.7vh',
-                padding: '1.2vh 1.4vh',
-                background: alpha(theme.colors.dark[8], current ? 0.7 : 0.45),
-                border: `0.1vh solid ${current ? alpha(color, 0.4) : alpha(theme.colors.dark[5], 0.4)}`,
-                borderRadius: theme.radius.xs,
-                flexShrink: 0,
-              }}
+              className={'ss-clr in' + (current ? ' cur' : '')}
+              style={{ '--i': Math.min(index, 8) } as CSSProperties}
             >
-              <Flex align="center" gap="0.8vh" wrap="wrap">
-                <Text ff="Akrobat Bold" size="sm" c={current ? color : 'rgba(255,255,255,0.88)'}>
-                  v{release.version}
-                </Text>
-                {release.date && (
-                  <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.3)">{release.date}</Text>
-                )}
-                {ahead && (
-                  <div
-                    style={{
-                      background: alpha('#E0B15F', 0.12),
-                      border: `0.1vh solid ${alpha('#E0B15F', 0.35)}`,
-                      borderRadius: '0.3vh',
-                      padding: '0 0.55vh',
-                    }}
-                  >
-                    <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.06em" c="#E0B15F">
-                      {t('changelog.notInstalled', 'Not installed')}
-                    </Text>
-                  </div>
-                )}
-                {current && (
-                  <div
-                    style={{
-                      background: alpha(color, 0.12),
-                      border: `0.1vh solid ${alpha(color, 0.35)}`,
-                      borderRadius: '0.3vh',
-                      padding: '0 0.55vh',
-                    }}
-                  >
-                    <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.1em" c={color}>
-                      {t('changelog.installed', 'Installed')}
-                    </Text>
-                  </div>
-                )}
-              </Flex>
+              <div className="hd">
+                <span className="pl ver"><span className="sk V">v{release.version}</span></span>
+                {release.date && <span className="dt">{release.date}</span>}
+                {ahead && <Chip tone="w">{t('changelog.notInstalled', 'Not installed')}</Chip>}
+                {current && <Chip tone="a">{t('changelog.installed', 'Installed')}</Chip>}
+              </div>
 
               {release.sections.map((section, si) => (
-                <Flex key={`${section.heading}-${si}`} direction="column" gap="0.35vh">
-                  {section.heading && (
-                    <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.12em" c="rgba(255,255,255,0.35)">
-                      {section.heading}
-                    </Text>
-                  )}
+                <div key={`${section.heading}-${si}`} className="sec">
+                  {section.heading && <div className="L">{section.heading}</div>}
                   {section.bullets.map((bullet, bi) => (
-                    <Flex key={bi} gap="0.7vh" align="flex-start">
-                      <div
-                        style={{
-                          width: '0.4vh', height: '0.4vh', borderRadius: '50%',
-                          background: alpha(color, 0.5),
-                          marginTop: '0.75vh', flexShrink: 0,
-                        }}
-                      />
-                      <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.55)" style={{ lineHeight: 1.5 }}>
-                        {bullet.bold && (
-                          <Text component="span" ff="Akrobat Bold" c="rgba(255,255,255,0.85)">
-                            {bullet.bold}{' '}
-                          </Text>
-                        )}
+                    <div key={bi} className="bl">
+                      <i />
+                      <span className="D">
+                        {bullet.bold && <b>{bullet.bold}{/^[,.;:)]/.test(bullet.text) ? '' : ' '}</b>}
                         {bullet.text}
-                      </Text>
-                    </Flex>
+                      </span>
+                    </div>
                   ))}
-                </Flex>
+                </div>
               ))}
-            </motion.div>
+            </div>
           );
         })}
 
-        {state && shown.length === 0 && (
-          <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.3)">
-            {t('changelog.noMatch', 'Nothing in the changelog matches that.')}
-          </Text>
-        )}
-      </Flex>
+        {state && shown.length === 0 && <Empty text={t('changelog.noMatch', 'Nothing in the changelog matches that.')} />}
+      </div>
     </>
   );
 }
@@ -385,9 +301,9 @@ export function ChangelogModal({ resource, onClose }: { resource: string; onClos
       height="64vh"
       zIndex={10100}
     >
-      <Flex direction="column" gap="md" p="md" style={{ flex: 1, minHeight: 0 }}>
+      <div className="ss-cl in-modal">
         <ChangelogBody resource={resource} />
-      </Flex>
+      </div>
     </Modal>
   );
 }

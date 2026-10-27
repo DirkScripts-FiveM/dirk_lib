@@ -1,3 +1,4 @@
+import { formatMoney } from 'dirk-cfx-react';
 // Stand-in for the local log sink.
 //
 // The SHAPE here is the contract, not just filler: `fetchLogs` takes and
@@ -74,15 +75,15 @@ type EventSpec = { event: string; level?: LogLevel; weight: number; line: (r: ()
 const CATALOGUE: Record<string, EventSpec[]> = {
   dirk_fishing: [
     { event: 'fishCaught', weight: 40, line: (r, who) => `${who} caught a ${pick(r, ['Rainbow Trout', 'Sea Bass', 'Mackerel', 'Bluefin Tuna', 'Catfish'])} (${(1 + r() * 34).toFixed(1)}lb) in ${pick(r, ['Tataviam Lake', 'Paleto Cove', 'Del Perro Pier', 'Alamo Sea'])}` },
-    { event: 'fishSold', weight: 16, line: (r, who) => `${who} sold ${2 + Math.floor(r() * 18)}x fish for $${(400 + Math.floor(r() * 3800)).toLocaleString()}` },
-    { event: 'baitSold', weight: 7, line: (r, who) => `${who} sold ${5 + Math.floor(r() * 40)}x bait for $${(40 + Math.floor(r() * 300)).toLocaleString()}` },
-    { event: 'equipmentBought', weight: 9, line: (r, who) => `${who} bought a ${pick(r, ['Carbon Rod', 'Spinning Reel', 'Braided Line', 'Treble Hook', 'Bait Bucket'])} for $${(150 + Math.floor(r() * 2400)).toLocaleString()}` },
-    { event: 'permitBought', weight: 5, line: (r, who) => `${who} bought a fishing permit for $${(2500 + Math.floor(r() * 2000)).toLocaleString()}` },
+    { event: 'fishSold', weight: 16, line: (r, who) => `${who} sold ${2 + Math.floor(r() * 18)}x fish for ${formatMoney(400 + Math.floor(r() * 3800))}` },
+    { event: 'baitSold', weight: 7, line: (r, who) => `${who} sold ${5 + Math.floor(r() * 40)}x bait for ${formatMoney(40 + Math.floor(r() * 300))}` },
+    { event: 'equipmentBought', weight: 9, line: (r, who) => `${who} bought a ${pick(r, ['Carbon Rod', 'Spinning Reel', 'Braided Line', 'Treble Hook', 'Bait Bucket'])} for ${formatMoney(150 + Math.floor(r() * 2400))}` },
+    { event: 'permitBought', weight: 5, line: (r, who) => `${who} bought a fishing permit for ${formatMoney(2500 + Math.floor(r() * 2000))}` },
     { event: 'crabPotPlaced', weight: 6, line: (_r, who) => `${who} placed a crab pot` },
     { event: 'crabPotCollected', weight: 6, line: (r, who) => `${who} collected a crab pot (${1 + Math.floor(r() * 6)} items)` },
     { event: 'dailyChallenge', weight: 4, line: (r, who) => `${who} completed "${pick(r, ['Catch 10 fish', 'Sell $5,000 of fish', 'Land a 30lb catch'])}"` },
     { event: 'tournament', weight: 2, line: (r, who) => `${who} placed ${pick(r, ['1st', '2nd', '3rd'])} in the Paleto Open` },
-    { event: 'suspiciousSale', level: 'alert', weight: 1, line: (r, who) => `${who} sold a single catch for $${(24000 + Math.floor(r() * 60000)).toLocaleString()} - over the flag threshold` },
+    { event: 'suspiciousSale', level: 'alert', weight: 1, line: (r, who) => `${who} sold a single catch for ${formatMoney(24000 + Math.floor(r() * 60000))} - over the flag threshold` },
   ],
   dirk_lib: [
     { event: 'configSaved', weight: 8, line: (r, who) => `${who} saved ${pick(r, ['dirk_fishing', 'dirk_lib', 'dirk_phone'])} (${1 + Math.floor(r() * 5)} changes)` },
@@ -103,7 +104,7 @@ const CATALOGUE: Record<string, EventSpec[]> = {
     { event: 'characterDeleted', level: 'warn', weight: 1, line: (_r, who) => `${who} deleted a character` },
   ],
   dirk_projectCars: [
-    { event: 'vehiclePurchased', weight: 5, line: (r, who) => `${who} bought a ${pick(r, ['Sultan RS', 'Elegy Retro', 'Comet S2'])} for $${(45000 + Math.floor(r() * 400000)).toLocaleString()}` },
+    { event: 'vehiclePurchased', weight: 5, line: (r, who) => `${who} bought a ${pick(r, ['Sultan RS', 'Elegy Retro', 'Comet S2'])} for ${formatMoney(45000 + Math.floor(r() * 400000))}` },
     { event: 'partInstalled', weight: 9, line: (r, who) => `${who} installed a ${pick(r, ['turbo', 'roll cage', 'stage 3 gearbox', 'LSD'])}` },
     { event: 'dynoRun', weight: 4, line: (r, who) => `${who} ran the dyno - ${(280 + Math.floor(r() * 620))}hp` },
   ],

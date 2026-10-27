@@ -355,4 +355,27 @@ lib.callback.register('dirk_lib:getDiscordChannels', function(source)
   return { configured = true, channels = channels }
 end)
 
+--- Discord roles, for the role pickers (a backstory's lock, a VIP slot).
+---
+--- Read-level for the same reason as channels: it names roles rather than
+--- granting anything, and the alternative is developer mode and a pasted id.
+--- @everyone is already left out by discord_getRoles.
+lib.callback.register('dirk_lib:getDiscordRoles', function(source)
+  if not lib.scriptConfig.canView(source) then return nil, 'NotAuthorized' end
+
+  local ok, configured = pcall(function() return exports.dirk_lib:discord_isConfigured() end)
+  if not ok or not configured then return { configured = false, roles = {} } end
+
+  local got, roles, err = pcall(function() return exports.dirk_lib:discord_getRoles() end)
+  if not got or type(roles) ~= 'table' then
+    return { configured = true, roles = {}, error = tostring(err or 'Failed') }
+  end
+
+  local out = {}
+  for _, r in ipairs(roles) do
+    out[#out + 1] = { id = tostring(r.id), name = r.name, color = tonumber(r.color) or 0, managed = r.managed == true }
+  end
+  return { configured = true, roles = out }
+end)
+
 return true

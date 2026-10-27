@@ -1,10 +1,14 @@
-import { alpha, Flex, Text, useMantineTheme } from '@mantine/core';
+import { alpha, Flex, useMantineTheme } from '@mantine/core';
 import { getItemImageUrl } from 'dirk-cfx-react';
 import { Package } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { chipVars } from './Dialog';
 
-/** Shared pressables so every surface in the hub agrees on button styling. */
+/**
+ * Shared pressables so every surface in the hub agrees on button styling -
+ * the lib kit's slanted plate (studio.css `.ss-btn`): white for the one that
+ * goes ahead, red text for the one you cannot take back.
+ */
 export function StudioButton({
   label, onClick, primary, disabled, danger, icon: Icon, grow,
 }: {
@@ -16,42 +20,25 @@ export function StudioButton({
   icon?: React.ElementType;
   grow?: boolean;
 }) {
-  const theme = useMantineTheme();
-  const accent = danger ? '#ef4444' : theme.colors[theme.primaryColor][5];
-
   return (
-    <motion.button
+    <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      whileHover={disabled ? undefined : { background: alpha(accent, primary ? 0.28 : 0.14) }}
-      whileTap={disabled ? undefined : { scale: 0.97 }}
-      style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6vh',
-        flex: grow ? 1 : undefined,
-        height: '3.2vh',
-        minHeight: '3.2vh',
-        flexShrink: 0,
-        paddingInline: '1.4vh',
-        background: primary ? alpha(accent, 0.2) : 'transparent',
-        border: `0.1vh solid ${alpha(accent, primary ? 0.5 : 0.25)}`,
-        borderRadius: theme.radius.xs,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.45 : 1,
-      }}
+      className={'pl ss-btn sb' + (primary ? ' go' : '') + (danger ? ' no' : '') + (disabled ? ' off' : '') + (grow ? ' grow' : '')}
     >
-      {Icon && <Icon size="1.4vh" color={primary ? accent : 'rgba(255,255,255,0.7)'} />}
-      <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.07em" c={primary ? accent : 'rgba(255,255,255,0.7)'}>
-        {label}
-      </Text>
-    </motion.button>
+      <span className="sk">
+        {Icon && <Icon />}
+        <span className="act">{label}</span>
+      </span>
+    </button>
   );
 }
 
 /**
- * `size="control"` matches StudioButton's height and radius, for the case where
- * a chip sits in a row of buttons - a status pill next to a button it does not
- * line up with reads as a mistake, and the button often only appears
+ * `size="control"` matches StudioButton's height, for the case where a chip
+ * sits in a row of buttons - a status pill next to a button it does not line
+ * up with reads as a mistake, and the button often only appears
  * conditionally, so the row changes height as you use it.
  */
 export function Chip({
@@ -63,26 +50,14 @@ export function Chip({
   icon?: React.ElementType;
   size?: 'inline' | 'control';
 }) {
-  const theme = useMantineTheme();
-  const control = size === 'control';
-
   return (
-    <Flex
-      align="center" gap="0.4vh"
-      px={control ? '1.1vh' : '0.6vh'}
-      py={control ? undefined : '0.1vh'}
-      h={control ? '3.2vh' : undefined}
-      style={{
-        background: alpha(color, 0.13),
-        border: `0.1vh solid ${alpha(color, 0.38)}`,
-        borderRadius: control ? theme.radius.xs : '0.3vh',
-        flexShrink: 0,
-      }}
-    >
-      {dot && <Flex w="0.5vh" h="0.5vh" style={{ background: color, borderRadius: '50%' }} />}
-      {Icon && <Icon size="1.1vh" color={color} />}
-      <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.06em" c={color}>{label}</Text>
-    </Flex>
+    <span className={'ss-chip' + (size === 'control' ? ' ctl' : '')} style={chipVars(color)}>
+      <b>
+        {dot && <i className="dt" />}
+        {Icon && <Icon />}
+        {label}
+      </b>
+    </span>
   );
 }
 

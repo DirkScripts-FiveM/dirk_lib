@@ -1,6 +1,7 @@
 import { Marker } from '@adamscybot/react-leaflet-component-marker';
 import { alpha, Flex, Switch, Text, useMantineTheme } from '@mantine/core';
-import { ConfirmModal, Map as DirkMap, Modal, ZoomControls, gameToMap, mapToGame } from 'dirk-cfx-react';
+import { Map as DirkMap, ZoomControls, gameToMap, mapToGame } from 'dirk-cfx-react';
+import { ConfirmModal, Modal } from './Dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import L from 'leaflet';
 import 'leaflet-draw';

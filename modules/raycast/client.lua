@@ -42,9 +42,25 @@ local GetFinalRenderedCamRot = GetFinalRenderedCamRot
 function lib.raycast.fromCoords(coords, destination, flags, ignore)
   local rayHandle = StartShapeTestRay(coords.x, coords.y, coords.z, destination.x, destination.y, destination.z, flags or 511, ignore or 4, 0)
   local _, hit, endCoords, surfaceNormal, materialHash, entityHit = GetShapeTestResultIncludingMaterial(rayHandle)
-  
+
+  -- `hit` is a BOOL, and cfxlua hands a BOOL back as a Lua boolean.
+  --
+  -- This compared it to the NUMBER 1, and `true == 1` is false in Lua — so the
+  -- first return value was false on every call this function has ever made,
+  -- hit or miss. ox_lib, which this was adapted from, returns `hit` straight
+  -- through; the comparison was added here and broke it.
+  --
+  -- It hid for a long time because of what the callers do with it. Anything
+  -- reading the THIRD return (`entityHit`) was unaffected, so picking an object
+  -- under the crosshair kept working. Anything reading the FIRST fell through
+  -- to its own fallback — and a prop placer's fallback is "three metres in
+  -- front of the camera", which is close enough to where you were pointing
+  -- that it reads as working right up until you aim at something near or far.
+  --
+  -- Both forms accepted, so a build that ever does return a number is fine.
+  --
   -- Return results even if nothing was hit (entityHit will be 0)
-  return hit == 1, endCoords, entityHit or 0, surfaceNormal, materialHash
+  return hit == true or hit == 1, endCoords, entityHit or 0, surfaceNormal, materialHash
 end
 
 lib.raycast.world3dToScreen2d = function(pos)

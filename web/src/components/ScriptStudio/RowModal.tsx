@@ -1,13 +1,14 @@
-import { alpha, Flex, Text, useMantineTheme } from '@mantine/core';
-import { ConfirmModal, Modal } from 'dirk-cfx-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { Flex, useMantineTheme } from '@mantine/core';
+import { ConfirmModal, Modal } from './Dialog';
+import { AnimatePresence } from 'framer-motion';
 import {
-  Activity, Gift, Info, Layers, Leaf, List, Package, Plus, Trash2, TriangleAlert,
+  Activity, Gift, Info, Layers, Leaf, List, Package, Trash2, TriangleAlert,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { RowFields } from './RowFields';
 import { PickerDrawer } from './PickerDrawer';
 import { ItemArt, StudioButton } from './ui';
+import { findIcon } from './Icon';
 import { validateRow } from './rowValidation';
 import type { SettingColumn, SettingEntry } from './types';
 import { translate, useActiveLanguage, useBundles, useChrome } from './studioLocale';
@@ -187,46 +188,30 @@ export function RowModal({
         <Flex direction="column" flex={1} style={{ minHeight: 0 }}>
           {/* tabs */}
           {tabs.length > 1 && (
-            <Flex
-              gap="0.3vh" p="0.4vh" mx="sm" mt="sm"
-              style={{
-                background: alpha(theme.colors.dark[9], 0.7),
-                border: `0.1vh solid ${alpha(theme.colors.dark[5], 0.4)}`,
-                borderRadius: theme.radius.xs,
-                flexShrink: 0,
-              }}
-            >
-              {tabs.map((tab) => {
+            <div className="ss-tabs">
+              {tabs.map((tab, k) => {
                 const on = tab.id === current?.id;
-                const TabIcon = TAB_ICONS[tab.icon] ?? Info;
+                // The short aliases first, then any lucide name the schema
+                // declared - x-rowTabs documents "icon" as any icon, but only
+                // these seven ever drew, and every other tab fell back to Info.
+                const TabIcon = TAB_ICONS[tab.icon] ?? findIcon(tab.icon) ?? Info;
                 return (
-                  <motion.button
+                  <span
                     key={tab.id}
-                    type="button"
+                    className={'pl kp in' + (on ? ' on' : '')}
+                    style={{ '--i': k } as React.CSSProperties}
                     onClick={() => setActiveTab(tab.id)}
-                    whileTap={{ scale: 0.98 }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '0.5vh',
-                      padding: '0.5vh 1vh',
-                      background: on ? alpha(color, 0.16) : 'transparent',
-                      border: 'none',
-                      borderRadius: theme.radius.xs,
-                      cursor: 'pointer',
-                    }}
                   >
-                    <TabIcon size="1.3vh" color={on ? color : 'rgba(255,255,255,0.4)'} />
-                    <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.06em" c={on ? color : 'rgba(255,255,255,0.55)'}>
-                      {tabLabel(tab.id, tab.label)}
-                    </Text>
-                  </motion.button>
+                    <span className="sk"><TabIcon className="ico" /><span className="act">{tabLabel(tab.id, tab.label)}</span></span>
+                  </span>
                 );
               })}
-            </Flex>
+            </div>
           )}
 
           {/* the item this row is, shown the way fishing shows it */}
           {itemName && (
-            <Flex justify="center" pt="xs" style={{ flexShrink: 0 }}>
+            <Flex justify="center" pt="sm" style={{ flexShrink: 0 }}>
               {/* ItemArt, not a bare Image: an item can be configured but not
                   installed - which is the whole point of the missing-items
                   audit - and fallbackSrc pointed at a file that does not exist,
@@ -247,48 +232,38 @@ export function RowModal({
             onPick={setPicker}
           />
 
-          <Flex
-            align="center" justify="space-between" px="sm" py="xs"
-            style={{ borderTop: `0.1vh solid ${alpha(theme.colors.dark[4], 0.4)}`, flexShrink: 0 }}
-          >
+          <div className="ss-dfoot">
             {!creating && (
               <StudioButton label={t('rowModal.delete', 'Delete')} danger icon={Trash2} onClick={onDelete} disabled={disabled} />
             )}
-            <Flex align="center" gap="xs">
-              {/* Says WHAT is wrong before you press anything, rather than a
-                  disabled button with no explanation. Clicking jumps to the
-                  tab holding the offending field. */}
-              {problems.length > 0 && (
-                <motion.button
-                  type="button"
-                  onClick={() => {
-                    const tab = tabOf(problems[0].key);
-                    if (tab) setActiveTab(tab.id);
-                  }}
-                  whileTap={{ scale: 0.99 }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '0.5vh',
-                    background: 'transparent', border: 'none',
-                    cursor: 'pointer', padding: 0, maxWidth: '34vh',
-                  }}
-                >
-                  <TriangleAlert size="1.3vh" color="#E0B15F" style={{ flexShrink: 0 }} />
-                  <Text ff="Akrobat SemiBold" size="xxs" c="#E0B15F" truncate>
-                    {problems.length === 1
-                      ? problems[0].message
-                      : t('rowModal.n_problems', '{} things need fixing').replace('{}', String(problems.length))}
-                  </Text>
-                </motion.button>
-              )}
-              <StudioButton label={t('rowModal.cancel', 'Cancel')} onClick={askClose} />
-              <StudioButton
-                label={t('rowModal.save_entry', 'Save entry')}
-                primary
-                onClick={() => onSave(draft)}
-                disabled={disabled || problems.length > 0}
-              />
-            </Flex>
-          </Flex>
+            <span className="sp" />
+            {/* Says WHAT is wrong before you press anything, rather than a
+                disabled button with no explanation. Clicking jumps to the
+                tab holding the offending field. */}
+            {problems.length > 0 && (
+              <span
+                className="ss-warn"
+                onClick={() => {
+                  const tab = tabOf(problems[0].key);
+                  if (tab) setActiveTab(tab.id);
+                }}
+              >
+                <TriangleAlert />
+                <span>
+                  {problems.length === 1
+                    ? problems[0].message
+                    : t('rowModal.n_problems', '{} things need fixing').replace('{}', String(problems.length))}
+                </span>
+              </span>
+            )}
+            <StudioButton label={t('rowModal.cancel', 'Cancel')} onClick={askClose} />
+            <StudioButton
+              label={t('rowModal.save_entry', 'Save entry')}
+              primary
+              onClick={() => onSave(draft)}
+              disabled={disabled || problems.length > 0}
+            />
+          </div>
         </Flex>
       </Modal>
 
@@ -298,6 +273,7 @@ export function RowModal({
             type={picker.column.type}
             label={picker.column.label}
             iconSet={picker.column.iconSet}
+            bodyHeight={picker.column.bodyHeight}
             value={picker.value}
             disabled={disabled}
             onApply={(v) => picker.apply(v)}

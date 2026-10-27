@@ -39,6 +39,11 @@ local basicMap = {
   debug             = 'debug',
 }
 
+-- interface.* — shared UI behaviour. Flat key, like appearance and basic.
+local interfaceMap = {
+  keysWhileBusy = 'keysWhileBusy',
+}
+
 local bridgingMap = {
   -- UI providers
   notify      = 'notify',
@@ -76,6 +81,7 @@ local watchedKeys = {}
 for _, settingsKey in pairs(appearanceMap) do watchedKeys[#watchedKeys + 1] = settingsKey end
 for _, settingsKey in pairs(basicMap) do watchedKeys[#watchedKeys + 1] = settingsKey end
 for _, settingsKey in pairs(bridgingMap) do watchedKeys[#watchedKeys + 1] = settingsKey end
+for _, settingsKey in pairs(interfaceMap) do watchedKeys[#watchedKeys + 1] = settingsKey end
 -- `logo` is a static default (not in any schema section) but must stay in the
 -- snapshot so consumers reading lib.settings.logo still receive it.
 watchedKeys[#watchedKeys + 1] = 'logo'
@@ -97,6 +103,7 @@ local function buildOverlaySnapshot(cfg)
   collectGroup(cfg.appearance, appearanceMap, snapshot)
   collectGroup(cfg.basic, basicMap, snapshot)
   collectGroup(cfg.bridging, bridgingMap, snapshot)
+  collectGroup(cfg.interface, interfaceMap, snapshot)
 
   -- groups.* — pass the nested table through as `groups`. snapshot
   -- consumers (onSettings.lua) deep-merge into the existing

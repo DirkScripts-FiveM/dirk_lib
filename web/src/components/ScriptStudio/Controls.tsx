@@ -19,9 +19,15 @@ import { VehicleControl, VehiclesControl } from './VehicleControl';
 import { PedField, PedsField } from './PedControl';
 import type { ControlType, SettingColumn, SettingEntry } from './types';
 import { DiscordChannelControl } from './DiscordChannelControl';
+import { DiscordRoleControl } from './DiscordRoleControl';
 import { DurationControl } from './DurationControl';
 import { ObjectPicker, type ObjectValue } from './ObjectPicker';
+import { BoxPicker, type BoxValue } from './BoxPicker';
+import { CameraPicker } from './CameraPicker';
+import { toBodyHeight } from './bodyHeight';
 import { BoolChoiceControl } from './BoolChoiceControl';
+import { AnchorControl } from './AnchorControl';
+import { useStudio, valueAtPath } from './store';
 import { useChrome } from './studioLocale';
 
 // One dispatch, keyed by the schema's control type. Adding a control here is
@@ -54,18 +60,21 @@ const GIVE_FAILURES: Record<string, string> = {
   CallbackFailed: 'The server did not answer',
 };
 
+// The lib kit's field (24/10): a light wash with an underline, no box and no
+// radius. Focus turns the underline the accent and adds an inset bar (studio.css).
 export function useInputStyles(compact?: boolean) {
-  const theme = useMantineTheme();
   return {
     input: {
-      background: alpha(theme.colors.dark[9], 0.75),
-      border: `0.1vh solid ${alpha(theme.colors.dark[4], 0.55)}`,
-      color: 'rgba(255,255,255,0.9)',
-      fontFamily: 'Akrobat SemiBold',
-      fontSize: compact ? '1.3vh' : '1.45vh',
+      background: 'rgba(255,255,255,0.07)',
+      border: '0',
+      borderBottom: '0.25vh solid rgba(255,255,255,0.22)',
+      color: '#fff',
+      fontFamily: 'Akrobat',
+      fontWeight: 700,
+      fontSize: compact ? '1.35vh' : '1.5vh',
       height: compact ? '3vh' : '3.4vh',
       minHeight: compact ? '3vh' : '3.4vh',
-      borderRadius: theme.radius.xs,
+      borderRadius: 0,
       paddingInline: '0.9vh',
     },
     section: { width: '2.6vh' },
@@ -77,14 +86,16 @@ export function useInputStyles(compact?: boolean) {
     // Shared here, so matching is the default rather than something each call
     // site has to remember.
     dropdown: {
-      background: theme.colors.dark[8],
-      border: `0.1vh solid ${theme.colors.dark[6]}`,
-      borderRadius: theme.radius.xs,
+      background: 'rgba(12,14,17,0.97)',
+      border: '0',
+      borderRadius: 0,
+      boxShadow: 'inset 0 0.25vh 0 var(--mantine-primary-color-filled), 0 1vh 3vh rgba(0,0,0,0.55)',
     },
     option: {
-      fontFamily: 'Akrobat SemiBold',
+      fontFamily: 'Akrobat',
+      fontWeight: 700,
       fontSize: compact ? '1.3vh' : '1.4vh',
-      borderRadius: theme.radius.xs,
+      borderRadius: 0,
     },
   };
 }
@@ -103,13 +114,15 @@ export function useInputCssVars(): React.CSSProperties {
   return {
     '--studio-input-bg': styles.input.background,
     '--studio-input-border': styles.input.border,
+    '--studio-input-border-bottom': styles.input.borderBottom,
     '--studio-input-radius': styles.input.borderRadius,
     '--studio-input-height': styles.input.height,
     '--studio-input-font-size': styles.input.fontSize,
     '--studio-input-padding': styles.input.paddingInline,
     '--studio-dropdown-bg': styles.dropdown.background,
     '--studio-dropdown-border': styles.dropdown.border,
-    '--studio-dropdown-radius': styles.dropdown.borderRadius,
+    '--studio-dropdown-radius': `${styles.dropdown.borderRadius}`,
+    '--studio-dropdown-shadow': styles.dropdown.boxShadow,
   } as React.CSSProperties;
 }
 
@@ -149,6 +162,40 @@ export function useLeftSectionStyles(compact?: boolean) {
 }
 
 /** GTA blip palette - enough of it to make the picker read as real. */
+
+/**
+ * The anchor grid, plus the ghost of where the thing already sits.
+ *
+ * Its own component because it SUBSCRIBES: the hint comes from another setting
+ * (`x-anchorHintFrom`), which the owning script rewrites whenever a different
+ * design goes live, and a value read once inside the big control switch would
+ * be whatever it was when the panel opened.
+ */
+function AnchorField({
+  value, onChange, disabled, options, entry,
+}: {
+  value: unknown;
+  onChange: (next: string) => void;
+  disabled?: boolean;
+  options?: { value: string; label: string }[];
+  entry?: SettingEntry;
+}) {
+  const resource = useStudio((s) => s.activeResource);
+  // subscribing to the draft as well: the hint is a setting like any other, and
+  // one staged but unsaved still describes where the chat is about to be
+  useStudio((s) => s.draft[resource]);
+  const from = entry?.anchorHintFrom;
+  const hint = from ? valueAtPath(resource, from) : undefined;
+  return (
+    <AnchorControl
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      options={options}
+      hint={typeof hint === 'string' ? hint : null}
+    />
+  );
+}
 
 function ControlShell({
   children, width, className,
@@ -282,6 +329,11 @@ export function SettingControl({ type, value, onChange, entry, column, disabled,
           />
         </ControlShell>
       );
+
+    // A place on the screen. The values are an enum, but a dropdown of nine
+    // phrases is the wrong shape for a position - see AnchorControl.
+    case 'anchor':
+      return <AnchorField value={value} onChange={onChange} disabled={disabled} options={options} entry={entry} />;
 
     case 'enum':
       // When the schema styles its values (`x-enumIcons` / `x-enumColors`),
@@ -550,6 +602,14 @@ export function SettingControl({ type, value, onChange, entry, column, disabled,
         </ControlShell>
       );
 
+    case 'discordRole':
+    case 'discordRoles':
+      return (
+        <ControlShell width="30vh" className="studio-native">
+          <DiscordRoleControl value={value} disabled={disabled} onChange={onChange} multiple={type === 'discordRoles'} />
+        </ControlShell>
+      );
+
     case 'group':
       return (
         <ControlShell width="40vh" className="studio-native">
@@ -720,7 +780,8 @@ export function SettingControl({ type, value, onChange, entry, column, disabled,
             <Flex gap="0.3vh" style={{ flexShrink: 0 }}>
               <WorldPositionPicker
                 value={position}
-                onChange={(next: { x: number; y: number; z: number; w: number }) => onChange(trim(next))}
+                onChange={(next: { x: number; y: number; z: number; w: number }) =>
+                  onChange(trim(toBodyHeight(next, entry?.bodyHeight ?? column?.bodyHeight)))}
                 compact
               />
             </Flex>
@@ -756,6 +817,48 @@ export function SettingControl({ type, value, onChange, entry, column, disabled,
         </ControlShell>
       );
     }
+
+    case 'box': {
+      // An AREA, walked to and stretched rather than typed. Same admin-tool
+      // round trip as `prop` - the panel hides, the game hands back an answer
+      // - but what comes back is a footprint, and the tool fills it with the
+      // schema's sample props so the size is judged against real objects.
+      const b = (value ?? {}) as Partial<BoxValue>;
+      return (
+        <ControlShell width="44vh">
+          <BoxPicker
+            value={{
+              x: typeof b.x === 'number' ? b.x : 0,
+              y: typeof b.y === 'number' ? b.y : 0,
+              z: typeof b.z === 'number' ? b.z : 0,
+              w: typeof b.w === 'number' ? b.w : 0,
+              length: typeof b.length === 'number' ? b.length : 2,
+              width: typeof b.width === 'number' ? b.width : 2,
+              height: typeof b.height === 'number' ? b.height : 1,
+            }}
+            sample={entry?.boxSample ?? column?.boxSample}
+            min={entry?.min ?? column?.min}
+            max={entry?.max ?? column?.max}
+            disabled={disabled}
+            onChange={onChange}
+          />
+        </ControlShell>
+      );
+    }
+
+    case 'camera':
+      // A shot, framed in a free camera - the same admin-tool round trip as
+      // the other in-world pickers. Six numbers nobody can picture otherwise.
+      return (
+        <ControlShell width="44vh">
+          <CameraPicker
+            value={value}
+            flags={entry?.cameraFlags ?? column?.cameraFlags}
+            disabled={disabled}
+            onChange={onChange}
+          />
+        </ControlShell>
+      );
 
     case 'chance': case 'multiplier': case 'difficulty':
     case 'forgiveness': case 'rarity': case 'balance': case 'progression':
@@ -1064,7 +1167,7 @@ export function isWideType(type: ControlType): boolean {
   return type === 'list' || type === 'zones' || type === 'palette'
     || type === 'controls' || type === 'keyvalue' || type === 'groups'
     || type === 'keybindMap' || type === 'mantineColor' || type === 'shade'
-    || type === 'groupGrades' || type === 'refs' || type === 'weekdays' || type === 'positions' || type === 'pickList' || type === 'weightMap'
+    || type === 'groupGrades' || type === 'refs' || type === 'weekdays' || type === 'positions' || type === 'cameras' || type === 'pickList' || type === 'weightMap'
     // A script's own editor gets the full row width and renders inline in the
     // section, with the same scroll, rail and save bar as everything else.
     || type === 'custom'

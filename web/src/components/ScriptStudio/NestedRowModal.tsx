@@ -1,5 +1,5 @@
 import { alpha, Flex, Text, useMantineTheme } from '@mantine/core';
-import { Modal } from 'dirk-cfx-react';
+import { Modal } from './Dialog';
 import { useState } from 'react';
 import { useItems } from 'dirk-cfx-react';
 import { PickerDrawer } from './PickerDrawer';
@@ -108,6 +108,7 @@ export function NestedRowModal({
             type={picker.column.type}
             label={picker.column.label}
             iconSet={picker.column.iconSet}
+            bodyHeight={picker.column.bodyHeight}
             value={picker.value}
             disabled={disabled}
             onApply={(next) => picker.apply(next)}

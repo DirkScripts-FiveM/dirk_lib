@@ -56,6 +56,12 @@ local settings = {
     "#914ec8", "#8a43c6", "#7734af", "#692d9d", "#5c258b",
   },
 
+  -- ── shared UI behaviour ────────────────────────────────────────────
+  -- Controls left alive while a lib UI holds the screen. 249 is push-to-talk
+  -- and is re-enabled by the UI itself regardless, so this is the list of
+  -- EXTRAS a server wants to survive a cutaway.
+  keysWhileBusy = { 249 },
+
   -- ── localization ───────────────────────────────────────────────────
   language = 'en',
   currency = '$',
@@ -69,13 +75,13 @@ local settings = {
   logo        = 'https://via.placeholder.com/150',
   itemImgPath = nil, -- resolved below from autodetected.itemImgPath
 
-  -- ── bridging: UI providers (default ox_lib) ────────────────────────
-  notify          = 'ox_lib',
-  progress        = 'ox_lib',
-  showTextUI      = 'ox_lib',
-  contextMenu     = 'ox_lib',
-  alertDialog     = 'ox_lib',
-  inputDialog     = 'ox_lib',
+  -- ── bridging: UI providers (default dirk_lib; 'ox_lib' to hand off) ─
+  notify          = 'dirk_lib',
+  progress        = 'dirk_lib',
+  showTextUI      = 'dirk_lib',
+  contextMenu     = 'dirk_lib',
+  alertDialog     = 'dirk_lib',
+  inputDialog     = 'dirk_lib',
   dialog          = 'dirk_lib', -- no ox equivalent
 
   -- ── bridging: resource providers (resolved from autodetect below) ──

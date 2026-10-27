@@ -1,10 +1,11 @@
-import { IconProp } from "@fortawesome/fontawesome-svg-core"
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { alpha, Box, Flex, Image, Text, useMantineTheme } from "@mantine/core"
-import { motion } from "framer-motion"
-import { useEffect, useMemo, useRef, useState } from "react"
-import getImageType from "../../utils/getImagePath"
-import { MotionFlex } from "../App"
+// One notification (lib.notify), in the 19/10 look: a slanted plate with a square icon tile in the type's colour
+// (error red, success green, warning amber, inform = the calling script's accent), the title (2 lines at most), the
+// description (5 lines, **bold** and *em*), a ×N pill when the same one repeats, and a bar draining along the bottom.
+// A script's own icon / iconColor / titleColor still win.
+import type { CSSProperties } from "react";
+import { useEffect, useMemo } from "react";
+import getImageType from "../../utils/getImagePath";
+import { accentVars, Ico, KitIcon, md } from "../Kit";
 
 export type NotificationProps = {
   title?: string
@@ -12,225 +13,54 @@ export type NotificationProps = {
   description?: string
   duration?: number
   showDuration?: boolean
-  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  position: string
+  type?: string
   icon?: string
   iconColor?: string
   iconBg?: string
   iconAnimation?: string
+  /** the calling script's theme (its accent colours an inform) */
+  theme?: { primaryColor?: string; customTheme?: string[] } | null
 
-  // FOR UI 
+  // FOR UI
   id: string
   hide?: boolean
   count?: number
   onRemove?: () => void
 }
 
-export default function Notification(props: NotificationProps) {
-  const theme = useMantineTheme()
-  const [amountEffect, setAmountEffect] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(100)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+const TYPE: Record<string, string> = { error: "var(--red)", success: "var(--ok)", warning: "var(--warn)", inform: "var(--a)", info: "var(--a)" };
+const TYPE_ICON: Record<string, string> = { error: "error", success: "success", warning: "warning", inform: "inform", info: "inform" };
 
-  const imageType = useMemo(() => {
-    return getImageType(props.icon)
-  }, [props.icon])
+export default function Notification(props: NotificationProps & { accent: string }) {
+  const duration = props.duration ?? 5000;
 
-  // Count pulse effect
+  // gone when its time is up (the bar drains over the same time)
   useEffect(() => {
-    if (props.count && !amountEffect) {
-      setAmountEffect(true)
-      setTimeout(() => setAmountEffect(false), 100)
-    }
-  }, [props.count])
+    const t = setTimeout(() => props.onRemove?.(), duration);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration]);
 
-  // Countdown — starts on mount, calls onRemove when done
-  useEffect(() => {
-    setTimeLeft(100)
-    const tick = (props.duration ?? 5000) / 100
+  const image = useMemo(() => getImageType(props.icon), [props.icon]);
+  const edge = props.iconColor || TYPE[props.type ?? ""] || "var(--a)";
 
-    intervalRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(intervalRef.current!)
-          intervalRef.current = null
-          props.onRemove?.()
-          return 0
-        }
-        return prev - 1
-      })
-    }, tick)
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-    }
-  }, [props.duration])
-
-  const fromTop = props.position.startsWith('top')
+  let icon;
+  if (image && image.type === "image") icon = <img src={image.path} alt="" style={{ objectFit: "contain" }} />;
+  else if (props.icon) icon = <Ico icon={props.icon} />;
+  else icon = <KitIcon name={TYPE_ICON[props.type ?? ""] || "inform"} />;
 
   return (
-    <MotionFlex
-      pos='relative'
-      initial={{ opacity: 0, scale: 0.92, y: fromTop ? -12 : 12 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.92, y: fromTop ? -12 : 12, height: 0, marginBottom: 0 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
-      h='fit-content'
-      direction='column'
-      style={{
-        background: alpha(theme.colors.dark[9], 0.55),
-        borderRadius: theme.radius.sm,
-        border: '0.1vh solid rgba(255,255,255,0.07)',
-        boxShadow: '0 0.74vh 2.96vh rgba(0,0,0,0.5)',
-        minWidth: '20vh',
-        maxWidth: '35vh',
-        overflow: 'hidden',
-      }}
-    >
-      {/* ── Main content ── */}
-      <Flex p='1.2vh 1.4vh' gap='1vh'>
-
-        {props.count && (
-          <Box
-            style={{
-              position: 'absolute',
-              top: '0.6vh',
-              right: '0.6vh',
-              backgroundColor: alpha(theme.colors[theme.primaryColor][9], 0.2),
-              border: '0.1vh solid rgba(255,255,255,0.07)',
-              borderRadius: theme.radius.sm,
-              padding: '0 0.5vh',
-              textAlign: 'center',
-              transform: amountEffect ? 'scale(1.2)' : 'scale(1)',
-              transition: 'all 0.2s ease-in-out',
-              zIndex: 1000,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: 'Akrobat Bold, sans-serif',
-                fontSize: '0.85vh',
-                color: theme.colors[theme.primaryColor][6],
-                textShadow: `0 0 0.2vh ${theme.colors[theme.primaryColor][7]}, 0 0 0.3vh ${theme.colors[theme.primaryColor][9]}66`,
-              }}
-            >
-              {props.count}
-            </Text>
-          </Box>
-        )}
-
-        <NotificationImage imageType={imageType} {...props} />
-
-        <Flex direction='column' flex={1} gap='0.2vh'>
-          <Text
-            style={{
-              fontSize: '1.3vh',
-              fontWeight: 700,
-              lineHeight: 1.2,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: props.titleColor || 'white',
-              textShadow: props.titleColor
-                ? undefined
-                : `0 0 0.2vh ${theme.colors[theme.primaryColor][7]}, 0 0 0.3vh ${theme.colors[theme.primaryColor][9]}66`,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {props.title?.toUpperCase()}
-          </Text>
-
-          {props.description && (
-            <Text
-              style={{
-                fontSize: '1.2vh',
-                lineHeight: 1.3,
-                color: 'rgba(255,255,255,0.4)',
-                letterSpacing: '0.04em',
-              }}
-            >
-              {props.description}
-            </Text>
-          )}
-        </Flex>
-      </Flex>
-
-      {/* ── Duration bar — flush to bottom ── */}
-      <div style={{
-        position: 'relative',
-        width: '100%',
-        height: '0.35vh',
-        background: 'rgba(255,255,255,0.06)',
-        borderTop: '0.1vh solid rgba(255,255,255,0.06)',
-        overflow: 'hidden',
-        flexShrink: 0,
-      }}>
-        <motion.div
-          style={{
-            position: 'absolute',
-            top: 0, left: 0,
-            height: '100%',
-            background: `linear-gradient(90deg, ${theme.colors[theme.primaryColor][9]}, ${theme.colors[theme.primaryColor][7]})`,
-            boxShadow: `0 0 0.8vh ${theme.colors[theme.primaryColor][6]}88`,
-          }}
-          animate={{ width: `${timeLeft}%` }}
-          transition={{ duration: 0.08, ease: 'linear' }}
-        />
-        <motion.div
-          style={{
-            position: 'absolute',
-            top: 0,
-            width: '35%',
-            height: '100%',
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)',
-            pointerEvents: 'none',
-          }}
-          animate={{ left: ['-35%', '120%'] }}
-          transition={{ duration: 2.6, repeat: Infinity, ease: 'linear' }}
-        />
+    <div className="pl n in" style={{ ...accentVars(props.accent), "--e": edge } as CSSProperties}>
+      <div className="ic"><span className="sk">{icon}</span></div>
+      <div className="tx sk">
+        <div className="T">
+          <span style={props.titleColor ? { color: props.titleColor } : undefined}>{props.title}</span>
+          {(props.count ?? 0) > 1 && <span className="cnt"><i>×{props.count}</i></span>}
+        </div>
+        {props.description && <div className="D">{md(props.description)}</div>}
       </div>
-    </MotionFlex>
-  )
-}
-
-function NotificationImage(props: NotificationProps & { imageType: false | { type: string, path: string } }) {
-  const theme = useMantineTheme()
-  return (
-    <Box
-      h='4vh'
-      mah='4vh'
-      bg={props.iconBg || alpha(theme.colors[theme.primaryColor][9], 0.25)}
-      style={{
-        borderRadius: theme.radius.xs,
-        aspectRatio: '1/1',
-        border: '0.1vh solid rgba(255,255,255,0.07)',
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-      }}
-    >
-      <Flex justify='center' align='center' h='100%' w='100%'>
-        {props.imageType && props.imageType.type === 'icon' && (
-          <FontAwesomeIcon
-            icon={props.icon as IconProp || 'fas fa-info-circle' as IconProp}
-            color={props.iconColor || theme.colors[theme.primaryColor][9]}
-            style={{ fontSize: '2vh' }}
-          />
-        )}
-        {props.imageType && props.imageType.type === 'image' && (
-          <Image
-            src={props.imageType.path}
-            alt='icon'
-            h='3vh'
-            style={{ aspectRatio: '1/1' }}
-          />
-        )}
-      </Flex>
-    </Box>
-  )
+      {props.showDuration !== false && <i className="time" style={{ "--d": `${duration / 1000}s` } as CSSProperties} />}
+    </div>
+  );
 }

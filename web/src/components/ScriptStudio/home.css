@@ -1,0 +1,121 @@
+/* ── Overview = the shop window (lsx_lib's front door: two-tone hero, the shelf, news, coming soon) ── */
+.ss-home { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 1.3vh; padding: 2.2vh 2.6vh; }
+.ss-home .box { display: flex; flex-direction: column; gap: .8vh; min-height: 0; min-width: 0; }
+.ss-home .chip { display: inline-block; font: 800 italic 1.2vh/1 var(--f); text-transform: uppercase; letter-spacing: .06em; background: rgba(255,255,255,.14); padding: .45vh .9vh; transform: skewX(-14deg); color: #fff; white-space: nowrap; }
+.ss-home .chip > b { display: inline-block; font: inherit; color: inherit; transform: skewX(14deg); }
+.ss-home .chip.a { background: var(--a); color: #0c0e11; }
+.ss-home .chip.w { background: var(--warn); color: #0c0e11; }
+.ss-home .chip.g { background: var(--a18); color: var(--a); box-shadow: inset 0 0 0 .15vh var(--a60); }
+.ss-home .two { display: flex; flex-wrap: wrap; column-gap: 1.4vh; font: 900 italic 5.8vh/.92 var(--f); text-transform: uppercase; letter-spacing: .01em; color: #fff; }
+.ss-home .two > span { display: block; }
+.ss-home .two .o { color: transparent; -webkit-text-stroke: .2vh #fff; }
+.ss-home .two.stack { flex-direction: column; }
+.ss-home .two.sm { font-size: 2.7vh; column-gap: .7vh; }
+.ss-home .two.sm .o { -webkit-text-stroke-width: .11vh; }
+.ss-home .sec { display: flex; flex-direction: column; gap: .35vh; padding-left: .4vh; }
+.ss-home .sec .L { color: var(--a); font-size: 1.15vh; }
+.ss-home .sec.row { flex-direction: row; align-items: center; gap: 1.2vh; flex: none; }
+.ss-home .sec.row .sp { flex: 1; }
+.ss-home .sec.row .L + .two { margin-left: .4vh; }
+.ss-home .sec.row .L:not(:first-child) { color: rgba(255,255,255,.55); }
+.ss-home .sec .more { font: 800 italic 1.25vh/1 var(--f); color: var(--a); text-transform: uppercase; letter-spacing: .1em; cursor: pointer; margin-left: .6vh; }
+.ss-home .cd { display: inline-flex; gap: .35vh; margin-left: .9vh; vertical-align: middle; }
+.ss-home .cd .cap { height: 2.3vh; min-width: 3.6vh; font-size: 1.3vh; font-variant-numeric: tabular-nums; }
+.ss-home img { opacity: 0; transition: opacity .3s ease, transform .35s cubic-bezier(.2,.8,.2,1); }
+.ss-home img.ok { opacity: 1; }
+.ss-home .shop { display: grid; grid-template-columns: minmax(0, 1fr) 36vh; gap: 1.4vh; height: 27vh; flex: none; }
+
+/* hero: a slanted window onto the product art, the copy on the dark side */
+.ss-home .hero { position: relative; overflow: hidden; background: #0d1014; clip-path: polygon(7.1vh 0, 100% 0, calc(100% - 7.1vh) 100%, 0 100%); }
+.ss-home .slide { position: absolute; inset: 0; opacity: 0; transition: opacity .6s ease; pointer-events: none; }
+.ss-home .slide.on { opacity: 1; pointer-events: auto; }
+.ss-home .slide .art { position: absolute; top: 0; bottom: 0; right: 0; width: 66%; overflow: hidden; background: linear-gradient(135deg, var(--a18), transparent 60%); }
+.ss-home .slide .art img { width: 100%; height: 100%; object-fit: cover; display: block; transform: scale(1.06); transition: opacity .3s ease, transform 6.5s linear; }
+.ss-home .slide.on .art img { transform: scale(1.16); }
+.ss-home .slide .shade { position: absolute; inset: 0; background: linear-gradient(90deg, #0d1014 34%, rgba(13,16,20,.82) 50%, rgba(13,16,20,.15) 78%, rgba(13,16,20,0)), linear-gradient(0deg, rgba(13,16,20,.7), transparent 40%); }
+.ss-home .slide .cp { position: absolute; left: 7.4vh; top: 2.4vh; bottom: 2.6vh; width: 50vh; display: flex; flex-direction: column; justify-content: center; gap: 1.1vh; }
+.ss-home .slide.on .cp > * { animation: dk-in .4s cubic-bezier(.2,.8,.2,1) both; }
+.ss-home .slide.on .cp > :nth-child(2) { animation-delay: 60ms; }
+.ss-home .slide.on .cp > :nth-child(3) { animation-delay: 120ms; }
+.ss-home .slide.on .cp > :nth-child(4) { animation-delay: 180ms; }
+.ss-home .slide .kick { font: 800 italic 1.35vh/1 var(--f); text-transform: uppercase; letter-spacing: .14em; color: var(--a); display: flex; align-items: center; }
+.ss-home .slide .D { font-size: 1.5vh; max-width: 44vh; color: rgba(255,255,255,.8); }
+.ss-home .slide .row { display: flex; align-items: center; gap: .7vh; margin-top: .3vh; }
+.ss-home .slide .ss-btn svg { width: 1.8vh; height: 1.8vh; color: #0c0e11; }
+.ss-home .hero .foot { position: absolute; left: 0; right: 0; bottom: 0; height: .45vh; background: linear-gradient(90deg, var(--a), var(--a30) 55%, transparent); }
+.ss-home .dots { position: absolute; right: 8.6vh; bottom: 1.7vh; display: flex; gap: .5vh; }
+.ss-home .dots i { position: relative; width: 4vh; height: .65vh; background: rgba(255,255,255,.25); transform: skewX(-14deg); cursor: pointer; overflow: hidden; }
+.ss-home .dots i::after { content: ""; position: absolute; inset: 0; background: #fff; transform-origin: left; transform: scaleX(0); }
+.ss-home .dots i.on::after { animation: ss-fill 6s linear forwards; }
+@keyframes ss-fill { to { transform: scaleX(1); } }
+
+/* your server, beside the hero */
+.ss-home .srv { display: flex; flex-direction: column; gap: .7vh; min-height: 0; padding-right: 1.4vh; }
+.ss-home .srv .sec { margin-bottom: .2vh; }
+.ss-home .sv { flex: 1; min-height: 0; padding: 0 2vh 0 2.6vh; display: flex; }
+.ss-home .sv.go { cursor: pointer; }
+.ss-home .sv > .sk { flex: 1; display: flex; align-items: center; gap: 1.4vh; min-width: 0; }
+.ss-home .sv .V { font-size: 3vh; min-width: 3.6vh; }
+.ss-home .sv .V.w { color: var(--warn); }
+.ss-home .sv .V.a { color: var(--a); }
+.ss-home .sv .L { font-size: 1.15vh; color: #fff; }
+.ss-home .sv .D { font-size: 1.2vh; margin-top: .2vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-home .sv > .sk > div { flex: 1; min-width: 0; }
+.ss-home .sv svg.ico { width: 1.9vh; height: 1.9vh; color: rgba(255,255,255,.55); flex: none; }
+.ss-home .sv.go:hover { background: #fff; }
+.ss-home .sv.go:hover .V, .ss-home .sv.go:hover .L, .ss-home .sv.go:hover svg.ico { color: #0c0e11; }
+.ss-home .sv.go:hover .D { color: rgba(12,14,17,.7); }
+
+/* the shelf: product tiles are slanted plates, the art cut on the slant */
+.ss-home .prods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.8vh; padding: 0 1.4vh; flex: none; }
+.ss-home .pt { --t: skewX(-14deg); transform: var(--t); background: var(--plate); overflow: hidden; cursor: pointer; box-shadow: 0 .6vh 1.8vh rgba(0,0,0,.4); transition: transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .18s; }
+.ss-home .pt > .sk { margin: 0 -2.2vh; }
+.ss-home .pt:hover { transform: skewX(-14deg) translateY(-.6vh); box-shadow: 0 .6vh 1.8vh rgba(0,0,0,.4), inset 0 -.35vh 0 var(--a); }
+.ss-home .pt .pic { position: relative; height: 11.6vh; overflow: hidden; background: #15181d; }
+.ss-home .pt .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ss-home .pt:hover .pic img { transform: scale(1.07); }
+.ss-home .pt .pic > .chip { position: absolute; left: 3.4vh; top: 1vh; }
+.ss-home .pt .pic .nw { position: absolute; right: 3.2vh; top: 1vh; }
+.ss-home .pt .mt { padding: .85vh 4.4vh 1vh 3vh; }
+.ss-home .pt .mt .ft { display: flex; align-items: baseline; justify-content: space-between; gap: .8vh; margin-top: .45vh; }
+.ss-home .pt .t { font: 900 italic 1.7vh/1.05 var(--f); text-transform: uppercase; letter-spacing: .02em; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-home .pt .sub { font: 700 1.1vh/1 ui-monospace, Consolas, monospace; color: rgba(255,255,255,.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-home .pz { display: flex; align-items: baseline; gap: .6vh; font: 900 italic 1.8vh/1 var(--f); color: var(--a); white-space: nowrap; }
+.ss-home .pz s { font: 700 italic 1.15vh/1 var(--f); color: rgba(255,255,255,.4); }
+.ss-home .own, .ss-home .nt { display: inline-flex; align-items: center; gap: .4vh; font: 800 italic 1.2vh/1 var(--f); text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.6); white-space: nowrap; }
+.ss-home .own svg, .ss-home .nt svg { width: 1.4vh; height: 1.4vh; }
+.ss-home .own { color: var(--a); }
+
+/* news + coming soon */
+.ss-home .low2 { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 1.8vh; flex: 1; min-height: 0; }
+.ss-home .low2.nonews { grid-template-columns: minmax(0, 1fr); }
+.ss-home .low2.nonews .soonrow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ss-home .newsrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2vh; flex: 1; min-height: 0; padding: 0 1.4vh; }
+.ss-home .nc { padding: 1.3vh 2.2vh 1.3vh 2.6vh; cursor: pointer; min-height: 0; overflow: hidden; box-shadow: inset 0 .35vh 0 var(--a30), 0 .5vh 1.6vh rgba(0,0,0,.35); }
+.ss-home .nc.act { box-shadow: inset 0 .35vh 0 var(--warn), 0 .5vh 1.6vh rgba(0,0,0,.35); }
+.ss-home .nc > .sk { display: flex; flex-direction: column; gap: .6vh; }
+.ss-home .nc .nh { display: flex; align-items: center; gap: .8vh; }
+.ss-home .nc .nh svg.ico { width: 1.8vh; height: 1.8vh; color: var(--a); flex: none; }
+.ss-home .nc .when { margin-left: auto; font: 800 italic 1.15vh/1 var(--f); text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.45); white-space: nowrap; }
+.ss-home .nc .t { font: 900 italic 1.85vh/1.05 var(--f); text-transform: uppercase; letter-spacing: .02em; color: #fff; }
+.ss-home .nc .D { font-size: 1.3vh; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ss-home .nc:hover { box-shadow: inset 0 .35vh 0 var(--a), 0 .5vh 1.6vh rgba(0,0,0,.35); }
+.ss-home .soonrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 1.3vh; flex: 1; min-height: 0; padding: 0 1.4vh; }
+.ss-home .pt.soon { display: flex; }
+.ss-home .pt.soon > .sk { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* The whole 16:9 banner, as the shelf shows it (Liam 25/10: cover cut the
+   name off at the slants). The plate's slant eats 0.1245 x its height from the
+   top-left and from the bottom-right, and .sk runs 2.2vh past each side. With
+   the text strip a fixed 5.6vh and the picture W/2.027 tall (W the plate's own
+   width, = .sk's width - 4.4vh), the rectangle left between the slants is
+   exactly 16:9 at any width; the img is placed on it. A blurred copy fills
+   the triangles. */
+.ss-home .pt.soon .pic { flex: none; height: 0; padding-top: calc(49.33% - 2.17vh); }
+.ss-home .pt.soon .mt { height: 5.6vh; box-sizing: border-box; padding-right: 5.8vh; }
+.ss-home .pt.soon .pic img { position: absolute; filter: grayscale(.55) brightness(.75); transition: filter .18s; }
+.ss-home .pt.soon .pic img.bg { inset: 0; filter: blur(1.2vh) grayscale(.55) brightness(.45); transform: scale(1.15); }
+.ss-home .pt.soon .pic img.full { top: 0; height: 100%; left: calc(6.14% + 2.627vh); width: calc(87.71% - 3.858vh); object-fit: cover; }
+.ss-home .pt.soon:hover .pic img.full { filter: none; }
+.ss-home .pt.soon .pic::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(-76deg, transparent 0 1.6vh, rgba(255,255,255,.03) 1.6vh 3.2vh); pointer-events: none; }
+.ss-home .pt .ft .sub { min-width: 0; } .ss-home .pt .ft .nt { flex: none; }
+.ss-home .pt.soon .nt { color: var(--a); }

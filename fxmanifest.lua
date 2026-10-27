@@ -10,6 +10,12 @@ description  'A library for FiveM developers to use in their projects, accepting
 
 dirk_lib 'scriptConfig'
 
+-- dirk_lib runs its own suite like any other consumer. This flag is what the
+-- Studio's test index looks for (GetResourceMetadata(resource, 'dirk_lib') ==
+-- 'test'), so without it the Tests tab never appears for dirk_lib itself even
+-- though `dirktest dirk_lib` works from the console.
+dirk_lib 'test'
+
 dependencies {
   '/server:7290',
   '/onesync',
@@ -34,6 +40,10 @@ files {
   -- client.lua/server.lua convention, so its files don't match the patterns
   -- above. Wildcard the entire subtree.
   'modules/scriptConfig/admin/**/*.lua',
+
+  -- lib.cinematic splits across take/cues/appearance next to its client.lua,
+  -- which the strict patterns above don't match either.
+  'modules/cinematic/*.lua',
   'bridge/**/client.lua',
   'bridge/**/server.lua',
   'bridge/**/shared.lua',
@@ -45,9 +55,15 @@ files {
   'src/onSettings.lua',
   'src/nuiBridge.lua',
   'src/autoDefaults.lua',
+  -- Script Studio's open logic, required by its client half - which can only
+  -- load a file listed here.
+  'src/scriptConfig/studioPayload.lua',
   --\\ NUI WHEN ADDED \\--
   'web/build/index.html',
   'web/build/**/*',
+  -- the world prompt plate (lib.prompt): a DUI page any resource opens at nui://dirk_lib/web/dui/prompt/build/index.html
+  'web/dui/prompt/build/index.html',
+  'web/dui/prompt/build/**/*',
 }
 
 shared_script {
@@ -57,7 +73,15 @@ shared_script {
 
 client_scripts {
   'src/**/client.lua',
-  'src/**/client/*.lua'
+  'src/**/client/*.lua',
+
+  -- dirk_lib's own suite. Inert until `dirktest dirk_lib` is run from the
+  -- server console. Loaded in BOTH contexts so the `+c` leg has a client half
+  -- to talk to - see the lazy-load note in modules/test/shared.lua.
+  --
+  -- Every consumer had tests; the thing they all depend on had none, and this
+  -- week's bugs were all in here.
+  'tests/*.lua',
 }
 
 server_scripts {
@@ -65,5 +89,7 @@ server_scripts {
   'modules/callback/server.lua',
   'src/**/server.lua',
   'src/**/server/*.lua',
+
+  'tests/*.lua',
 }
 

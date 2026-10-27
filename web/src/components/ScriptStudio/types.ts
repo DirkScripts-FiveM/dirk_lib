@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import type { Condition, ValidationRule } from './conditions';
 
 // Shape the hub renders from. Deliberately mirrors what a schema.json walk
@@ -15,6 +16,8 @@ export type ControlType =
   | 'text'
   | 'enum'
   | 'enumList'
+  /** one of nine screen positions (plus "as drawn"), as a 3x3 grid of screens */
+  | 'anchor'
   | 'pickList'
   | 'pickOne'
   | 'chance'
@@ -46,6 +49,22 @@ export type ControlType =
    * children to map.
    */
   | 'prop'
+  /**
+   * An AREA, marked out in the world.
+   *
+   * What `prop` is to a point, this is to a footprint: a centre, a facing and
+   * three sides. Fields about how much ROOM something has - a delivery pile, a
+   * spawn patch - cannot be expressed by a position, and a map polygon is the
+   * wrong scale for two metres against a shutter.
+   */
+  | 'box'
+  /**
+   * A CAMERA SHOT, framed in a free camera rather than typed:
+   * `{ pos: {x,y,z}, rot: {x,y,z}, fov }`. Other keys on the object are kept.
+   */
+  | 'camera'
+  /** several camera shots in order - a camera path */
+  | 'cameras'
   | 'positions'
   | 'time'
   | 'keybind'
@@ -72,6 +91,9 @@ export type ControlType =
   | 'weightMap'
   /** a Discord channel the bot can post in, picked from the live list */
   | 'discordChannel'
+  /** one / several Discord roles, picked from the bot's server */
+  | 'discordRole'
+  | 'discordRoles'
   /** webhook URL or Discord bot - which way a redirect reaches Discord */
   | 'redirectKind'
   /** a length of time, read in whatever unit divides cleanly */
@@ -191,6 +213,18 @@ export type SettingColumn = {
   vectorDims?: 2 | 3 | 4;
   /** Prop model the `prop` control places. From `x-propModel`. */
   propModel?: string;
+  /** Boolean keys on a `camera` object, drawn as switches under the shot. */
+  cameraFlags?: { key: string; label: string; help?: string }[];
+  /** `x-bodyHeight`: captured positions are lifted to body height. See bodyHeight.ts. */
+  bodyHeight?: boolean;
+  /**
+   * Props to stand inside a `box` while it is being marked out, so the size is
+   * judged against what will really be there. From `x-boxSample`.
+   *
+   * Only the schema knows this particular field is a parcel pile — the tool is
+   * told, exactly as the prop placer is told its model.
+   */
+  boxSample?: { models?: string[]; count?: number };
   /** the schema's default for this field, shown when a row omits the key */
   default?: unknown;
   /** rows/object columns carry their own child columns */
@@ -207,7 +241,7 @@ export type SettingColumn = {
    */
   boundsFrom?: { path: string };
   /** which icon set an `icon` field's value belongs to - `x-iconSet` */
-  iconSet?: 'lucide' | 'fontawesome';
+  iconSet?: 'lucide' | 'fontawesome' | 'both';
   /** a button beside this field that does something - see SettingEntry.action */
   action?: { label: string; callback: string; icon?: string; sendSection?: boolean };
   /** which modal tab this field belongs to */
@@ -225,6 +259,22 @@ export type RowTab = { id: string; label: string; icon: string; keys: string[] }
 export type EnabledWhen = Condition & { path: string; equals?: unknown };
 
 export type SettingEntry = {
+  /**
+   * Another setting holding where the thing being placed ALREADY sits, for an
+   * `anchor` control to show as a ghost while it is on "as drawn" - `x-anchorHintFrom`.
+   *
+   * Without it the grid is nine identical empty cells until you change
+   * something, which tells you nothing about where your chat is right now.
+   */
+  anchorHintFrom?: string;
+  /**
+   * A value the script PUBLISHES - `x-hidden` on the field.
+   *
+   * Carried like any other setting so a control can read it, and drawn by
+   * nothing: a row nobody may change, sitting between rows they may, reads as
+   * broken rather than as information.
+   */
+  hidden?: boolean;
   /** declared with `x-installItem`; see SettingColumn.installItem */
   installItem?: boolean;
   /**
@@ -324,6 +374,18 @@ export type SettingEntry = {
   vectorDims?: 2 | 3 | 4;
   /** Prop model the `prop` control places. From `x-propModel`. */
   propModel?: string;
+  /** Boolean keys on a `camera` object, drawn as switches under the shot. */
+  cameraFlags?: { key: string; label: string; help?: string }[];
+  /** `x-bodyHeight`: captured positions are lifted to body height. See bodyHeight.ts. */
+  bodyHeight?: boolean;
+  /**
+   * Props to stand inside a `box` while it is being marked out, so the size is
+   * judged against what will really be there. From `x-boxSample`.
+   *
+   * Only the schema knows this particular field is a parcel pile — the tool is
+   * told, exactly as the prop placer is told its model.
+   */
+  boxSample?: { models?: string[]; count?: number };
   /** pickList: the setting whose rows supply the options, e.g. 'fish' */
   optionsFrom?: { path: string; key: string };
 
@@ -339,7 +401,7 @@ export type SettingEntry = {
   /** which band of the Bridges page this setting belongs in - `x-bridgeGroup` */
   bridgeGroup?: 'interface' | 'bridge';
   /** which icon set an `icon` setting's value belongs to - `x-iconSet` */
-  iconSet?: 'lucide' | 'fontawesome';
+  iconSet?: 'lucide' | 'fontawesome' | 'both';
   /**
    * A button beside this setting that DOES something - `x-action`.
    *
@@ -395,6 +457,21 @@ export type SettingGroup = {
  * rail lists them under that script. dirk_lib supplies the frame, the theme
  * and the loader; what goes inside stays in the script that owns it.
  */
+/**
+ * One of a section's plain settings, handed to a control that took the window.
+ *
+ * The NODE is the panel's own row - same editor, same staging, same save bar -
+ * so a control placing these is not reimplementing settings, only deciding
+ * where they sit. `path` is there so it can pull one out and treat it
+ * differently: a master switch belongs beside the thing it switches off, not
+ * filed in with the rest.
+ */
+export type SlottedSetting = {
+  path: string;
+  label: string;
+  node: React.ReactNode;
+};
+
 export type ScriptPage = {
   id: string;
   label: string;
@@ -402,6 +479,34 @@ export type ScriptPage = {
   /** path inside the owning resource, e.g. `web/build/studio/players.js` */
   component: string;
   description?: string;
+  /**
+   * The page wants the whole window - schema `x-pages[].full`.
+   *
+   * A settings pane is a column beside a rail; a canvas is not. A page that
+   * declares this opens with the panel grown to the screen and the rail folded
+   * away, and the page is handed an `onBack` to come out of it again. That is
+   * how a design editor gets its width without being a second UI floating over
+   * the panel it was opened from.
+   */
+  full?: boolean;
+  /**
+   * The schema path this page EDITS, when it edits one - `x-pages[].path`.
+   *
+   * Without it a page is a screen that fetches its own data, like fishing's
+   * Players. With it the page is a list: dirk_lib hands the component the same
+   * value, onChange and row editor a custom control gets, so a wall of cards
+   * keeps the schema-built form, the staging and the save bar rather than
+   * reimplementing all three to be a page.
+   */
+  path?: string;
+  /**
+   * Paths whose plain settings belong to this page - `x-pages[].settings`.
+   *
+   * A page is not a section, so its settings have no rail entry of their own.
+   * They come with it instead, and the page decides where they go: behind a
+   * gear, in a strip, not at all.
+   */
+  settings?: string[];
 };
 
 export type StudioScript = {
@@ -411,8 +516,6 @@ export type StudioScript = {
   version: string;
   /** dirk_lib's own shared layer — pinned to the bottom of the rail */
   shared?: boolean;
-  /** this script ships a design editor, so the rail lists a Design entry for it */
-  designs?: boolean;
   /** whole pages this script supplies - schema `x-pages` */
   pages?: ScriptPage[];
   groups: SettingGroup[];

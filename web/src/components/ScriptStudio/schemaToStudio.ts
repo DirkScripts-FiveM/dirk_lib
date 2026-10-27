@@ -139,6 +139,7 @@ function keysAcross(rows: unknown[]): string[] {
 const CONTROL_TYPES = new Set<string>([
   'boolean', 'number', 'integer', 'percent', 'string', 'secret', 'weekdays',
   'text', 'enum', 'enumList', 'pickList', 'pickOne', 'color', 'blipColor', 'blipSprite',
+  'anchor',
   'blipDisplay', 'ped', 'peds', 'vehicle', 'vehicles', 'coords', 'positions', 'time', 'keybind',
   'control', 'controls', 'item', 'list', 'zones', 'palette', 'slider', 'range',
   'chance', 'multiplier', 'difficulty', 'forgiveness', 'rarity', 'balance', 'progression',
@@ -146,14 +147,20 @@ const CONTROL_TYPES = new Set<string>([
   'group',
   'tags', 'model', 'account', 'accounts', 'mantineColor', 'shade', 'keyvalue',
   'icon',
+  'camera',
+  'cameras',
   'custom',
   'keybindMap', 'groupGrades', 'weightMap',
-  'discordChannel', 'redirectKind', 'duration', 'hourOfDay', 'boolChoice', 'objectMap',
+  'discordChannel', 'discordRole', 'discordRoles', 'redirectKind', 'duration', 'hourOfDay', 'boolChoice', 'objectMap',
   // A PROP placed in the world. Not to be confused with `objectMap`, which is
   // a map of arbitrary keys to values and has nothing to do with entities -
   // nor with the `object` TYPE, which is a nested block of sub-fields and is
   // inferred from the shape, never declared.
   'prop',
+  // An AREA marked out in the world - a footprint with a size, not a point.
+  // Sibling of `prop`, and the same reasoning applies to the name: `box` is
+  // a placed extent, nothing to do with `objectMap` or the nested-object TYPE.
+  'box',
 ]);
 
 /**
@@ -389,7 +396,7 @@ function columnsFor(node: JsonSchema, rows: unknown[]): { columns: SettingColumn
     options?: (string | { value: string; label?: string })[];
     optionsFrom?: { path: string; key?: string; labelKey?: string };
     anyLabel?: string;
-    iconSet?: 'lucide' | 'fontawesome';
+    iconSet?: 'lucide' | 'fontawesome' | 'both';
     boundsFrom?: { path: string };
     /**
      * Greyed out unless a sibling field says otherwise.
@@ -517,7 +524,22 @@ function columnsFor(node: JsonSchema, rows: unknown[]): { columns: SettingColumn
     }
 
     const iconSet = child?.['x-iconSet'];
-    if (iconSet === 'fontawesome' || iconSet === 'lucide') column.iconSet = iconSet;
+    if (iconSet === 'fontawesome' || iconSet === 'lucide' || iconSet === 'both') column.iconSet = iconSet;
+
+    // A button beside a column, for something with an effect. `FieldRow` has
+    // always known how to draw one; only the TOP-LEVEL builder read the
+    // annotation, so `x-action` on a row column was accepted, documented under
+    // row-level controls, and silently drew nothing. dirk_stores puts Preview
+    // on a store's name, which is exactly where a row action belongs.
+    const rowAction = child?.['x-action'];
+    if (rowAction?.callback) {
+      column.action = {
+        label: String(rowAction.label ?? 'Run'),
+        callback: String(rowAction.callback),
+        icon: rowAction.icon ? String(rowAction.icon) : undefined,
+        sendSection: rowAction.sendSection === true,
+      };
+    }
 
     const bounds = child?.['x-boundsFrom'];
     if (bounds?.path) column.boundsFrom = { path: String(bounds.path) };
@@ -710,7 +732,18 @@ function buildColumnInner(
           : (everyRow.find((r) => r && typeof r === 'object'
             && (r as Record<string, unknown>)[nestedKey] !== undefined) as
               Record<string, unknown> | undefined)?.[nestedKey];
-        const built = buildColumn(nestedKey, nestedChild, nestedValue, /name$|^item$/.test(nestedKey));
+        /**
+         * A nested column is an item because the SCHEMA says so, never because
+         * of what it is called.
+         *
+         * This used to read `/name$|^item$/` and hand back an item picker, so
+         * a store's categories were edited with one — "Melee Weapons" against
+         * the inventory — and every row grew a missing-item box. The same
+         * guess was giving projectCars an item picker for the job names in a
+         * zone's `groups`. It is the last of the name rules the panel was
+         * supposed to have lost; `x-itemPicker` says it instead.
+         */
+        const built = buildColumn(nestedKey, nestedChild, nestedValue, false);
         // A nested table declares what it requires the same way a top-level
         // one does. Without this a store's stock rows could be saved blank -
         // the outer row validated, the table inside it was merely non-empty,
@@ -730,15 +763,29 @@ function buildColumnInner(
       };
     }
 
+    /**
+     * The rules below read the field NAME, so they only apply to a field that
+     * has said nothing about itself.
+     *
+     * The early return above cannot cover these: `pickList` and friends are
+     * ENRICHED_BY_INFERENCE, so a field declaring one has to keep falling
+     * through to the branch that gives it its options — straight past a name
+     * rule that claims it first. dirk_stores has a per-store `paymentMethods`
+     * listing which of ITS OWN methods a shop takes, declared `pickList` with
+     * `x-optionsFrom`, and it drew a framework-account picker offering ESX
+     * accounts instead. Nothing errored; the list was simply the wrong list.
+     */
+    const namedByShapeOnly = !declared && !child['x-optionsFrom'];
+
     // payment accounts come from the framework, so they get the account picker
     // rather than a free-text tag editor. `paymentMethods` holds the same thing
     // as `permitAccounts`, it is just named for what the store does with it.
-    if (/accounts$/i.test(key) || /^paymentmethods$/i.test(key)) return { key, label, type: 'accounts' };
+    if (namedByShapeOnly && (/accounts$/i.test(key) || /^paymentmethods$/i.test(key))) return { key, label, type: 'accounts' };
     // "Job / gang / ACE group names" - suggest the framework's own groups but
     // still allow a typed ACE name like group.admin
-    if (/groups$/i.test(key)) return { key, label, type: 'groups' };
+    if (namedByShapeOnly && /groups$/i.test(key)) return { key, label, type: 'groups' };
     // 0-6, and nobody remembers which end Sunday is on
-    if (/^days?ofweek$/i.test(key)) return { key, label, type: 'weekdays' };
+    if (namedByShapeOnly && /^days?ofweek$/i.test(key)) return { key, label, type: 'weekdays' };
 
     // A list of names that must match rows in ANOTHER setting - a tournament's
     // `fish` has to name species that exist. Declared with x-optionsFrom, or
@@ -896,10 +943,29 @@ function buildColumnInner(
     // with nothing to say why.
     boolLabels: child?.['x-boolLabels'],
     vectorDims: control === 'coords' ? vectorDims(child, value) : undefined,
+    bodyHeight: child?.['x-bodyHeight'] === true || child?.items?.['x-bodyHeight'] === true || undefined,
     // Which prop the placer spawns. Per-field, because only the schema
     // knows this one is a laptop and the next one is a vending machine.
     propModel: typeof child['x-propModel'] === 'string' ? child['x-propModel'] : undefined,
+    boxSample: (child['x-boxSample'] && typeof child['x-boxSample'] === 'object')
+      ? child['x-boxSample'] as { models?: string[]; count?: number } : undefined,
+    cameraFlags: control === 'camera' ? cameraFlags(child) : undefined,
   };
+}
+
+/**
+ * The switches a camera object carries beside its shot.
+ *
+ * Declaring `x-control: camera` turns the whole object into one control, so
+ * any other field on it - a scene camera's "follow the player" - would simply
+ * disappear from the form. Booleans are the only extras a shot has needed, so
+ * they are drawn under it rather than lost.
+ */
+function cameraFlags(node: JsonSchema): { key: string; label: string; help?: string }[] {
+  const props = (node?.properties ?? {}) as Record<string, JsonSchema>;
+  return Object.entries(props)
+    .filter(([, child]) => child?.type === 'boolean')
+    .map(([key, child]) => ({ key, label: labelFor(key, child), help: child?.description }));
 }
 
 /**
@@ -937,6 +1003,8 @@ function defaultForControl(control: ControlType): unknown {
     case 'keyvalue': case 'keybindMap': case 'groupGrades': return {};
     case 'refs': return [];
     case 'positions': return [];
+    case 'discordRoles': return [];
+    case 'cameras': return [];
     case 'mantineColor': return 'dirk';
     case 'shade': return 5;
     case 'groups': return [];
@@ -1165,6 +1233,11 @@ export function schemaToStudio(schema: JsonSchema, meta: StudioMeta): StudioScri
         icon: String(page.icon ?? 'square-dashed'),
         component: String(page.component),
         description: page.description ? String(page.description) : undefined,
+        full: (page as Record<string, unknown>).full === true,
+        path: page.path ? String(page.path) : undefined,
+        settings: Array.isArray((page as Record<string, unknown>).settings)
+          ? ((page as Record<string, unknown>).settings as unknown[]).map(String)
+          : undefined,
       }))
     : [];
 
@@ -1194,6 +1267,17 @@ export function schemaToStudio(schema: JsonSchema, meta: StudioMeta): StudioScri
   );
 
   for (const [groupId, groupNode] of Object.entries(topLevel)) {
+    /**
+     * Config a script keeps but nobody edits by hand.
+     *
+     * A product's saved designs are config - they are stored, versioned and
+     * migrated like everything else - but a design tree is not a setting, and
+     * the panel has no control that makes one editable. `x-hidden` keeps it
+     * out of the rail and out of the entry list; the script's own page is
+     * where it is worked on.
+     */
+    if (groupNode?.['x-hidden'] === true) continue;
+
     groups.push({
       id: groupId,
       label: humanise(groupId),
@@ -1211,6 +1295,26 @@ export function schemaToStudio(schema: JsonSchema, meta: StudioMeta): StudioScri
     }
 
     walkObject(groupNode, groupId, groupId, serverOnly, entries, overrides, mapPaths, undefined, rowTabs);
+  }
+
+  // ── what a page has claimed ─────────────────────────────────────────────
+  //
+  // A page that declares `path` or `settings` OWNS those settings: the page is
+  // where they are edited. Leaving them in the rail as well puts the same
+  // thing in two places, and one of them - the raw list behind the wall of
+  // cards - is the one nobody wants. They stay in `entries` so the page can
+  // still be handed them; they just have no place of their own.
+  const claimed: string[] = [];
+  for (const page of pages) {
+    if (page.path) claimed.push(page.path);
+    for (const prefix of page.settings ?? []) claimed.push(prefix);
+  }
+  if (claimed.length > 0) {
+    for (const entry of entries) {
+      if (claimed.some((prefix) => entry.path === prefix || entry.path.startsWith(`${prefix}.`))) {
+        entry.hidden = true;
+      }
+    }
   }
 
   // ── constraints ─────────────────────────────────────────────────────────
@@ -1413,6 +1517,19 @@ function walkObject(
     const childServerOnly = serverOnly || !!child?.['x-serverOnly'];
     const fallback = child?.default ?? defaults?.[key];
 
+    /**
+     * A value the script PUBLISHES rather than one anybody edits.
+     *
+     * `x-hidden` was only ever read on a top-level block (a design library),
+     * so a hidden LEAF still drew a field row - and a field nobody may change,
+     * sitting in a section beside the ones they may, reads as broken. It still
+     * travels and is still addressable, which is the point: an `anchor`
+     * control reads one through `x-anchorHintFrom`. So it is BUILT and marked,
+     * not dropped - dropping it would put it out of reach of the control that
+     * is the only reason it exists.
+     */
+    const childHidden = child?.['x-hidden'] === true;
+
     if (child?.type === 'array' || Array.isArray(fallback)) {
       out.push(buildListEntry(childPath, key, child, group, childServerOnly, overrides, mapPaths, subgroup, rowTabs));
       continue;
@@ -1449,6 +1566,10 @@ function walkObject(
       type: control,
       group,
       subgroup,
+      hidden: childHidden || undefined,
+      // an `anchor` control reads this sibling to outline where the thing it
+      // places already sits - see SettingEntry.anchorHintFrom
+      anchorHintFrom: typeof child?.['x-anchorHintFrom'] === 'string' ? child['x-anchorHintFrom'] : undefined,
       default: fallback,
       value,
       // Bounds on a PAIR live on the items, not on the array - `minimum`
@@ -1472,7 +1593,10 @@ function walkObject(
       // How many numbers a place has. A zone corner is flat; an owner faces a
       // way. Same control, different shape written back.
       vectorDims: control === 'coords' ? vectorDims(child, fallback) : undefined,
+      bodyHeight: child?.['x-bodyHeight'] === true || child?.items?.['x-bodyHeight'] === true || undefined,
       propModel: typeof child['x-propModel'] === 'string' ? child['x-propModel'] : undefined,
+      boxSample: (child['x-boxSample'] && typeof child['x-boxSample'] === 'object')
+        ? child['x-boxSample'] as { models?: string[]; count?: number } : undefined,
       // "That is set over there." A setting can point at another script's
       // setting rather than describing where to find it in prose.
       goTo: child?.['x-goTo'],
@@ -1646,13 +1770,21 @@ function buildListEntry(
   // entry 2" instead of the picker that knows what those words mean.
   if (/accounts$/i.test(key)) {
     return {
-      path, label: humanise(key), help: node?.description, type: 'accounts',
+      path, label: labelFor(key, node), help: node?.description, type: 'accounts',
       group, subgroup, default: fallback, value, serverOnly: serverOnly || undefined,
     };
   }
   if (/groups$/i.test(key)) {
     return {
-      path, label: humanise(key), help: node?.description, type: 'groups',
+      path, label: labelFor(key, node), help: node?.description, type: 'groups',
+      group, subgroup, default: fallback, value, serverOnly: serverOnly || undefined,
+    };
+  }
+
+  // A camera path - shots framed in game, not six number boxes each.
+  if (node?.['x-control'] === 'cameras') {
+    return {
+      path, label: labelFor(key, node), help: node?.description, type: 'cameras',
       group, subgroup, default: fallback, value, serverOnly: serverOnly || undefined,
     };
   }
@@ -1665,7 +1797,7 @@ function buildListEntry(
     && typeof (row as Record<string, unknown>).y === 'number'
     && typeof (row as Record<string, unknown>).z === 'number')) {
     return {
-      path, label: humanise(key), help: node?.description, type: 'positions',
+      path, label: labelFor(key, node), help: node?.description, type: 'positions',
       group, subgroup, default: fallback, value, serverOnly: serverOnly || undefined,
     };
   }
@@ -1673,7 +1805,7 @@ function buildListEntry(
   // Rows that point at other settings rather than holding a value.
   if (node?.['x-arrayKey'] === 'ref' || (rows[0] && typeof rows[0] === 'object' && 'ref' in (rows[0] as object))) {
     return {
-      path, label: humanise(key), help: node?.description, type: 'refs',
+      path, label: labelFor(key, node), help: node?.description, type: 'refs',
       group, subgroup, default: fallback, value, serverOnly: serverOnly || undefined,
     };
   }
@@ -1703,7 +1835,7 @@ function buildListEntry(
       group,
       subgroup,
       rowLabelKey: 'value',
-      columns: [{ key: 'value', label: humanise(key), type: inferControl(key, {}, rows[0]) }],
+      columns: [{ key: 'value', label: labelFor(key, node), type: inferControl(key, {}, rows[0]) }],
       rowTemplate: { value: '' },
       default: fallback,
       value,
@@ -1735,6 +1867,7 @@ function buildListEntry(
     mapReadOnly: mapPaths.has(path) ? mapPaths.readOnly.has(path) : undefined,
     component: node?.['x-component'],
     componentFull: node?.['x-componentFull'] === true,
+    anchorHintFrom: typeof node?.['x-anchorHintFrom'] === 'string' ? node['x-anchorHintFrom'] : undefined,
     group,
     subgroup,
     rowLabelKey: rowLabelKey(columns, node?.['x-arrayKey'], node?.['x-itemTitle']),

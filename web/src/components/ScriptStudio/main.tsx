@@ -1,8 +1,14 @@
-import { alpha, Flex, Text, TextInput, Tooltip, useMantineTheme } from '@mantine/core';
-import { ConfirmModal, isEnvBrowser, useSettings } from 'dirk-cfx-react';
+import { alpha, Flex, Text, TextInput, Tooltip, UnstyledButton, useMantineTheme } from '@mantine/core';
+import { isEnvBrowser, useSettings } from 'dirk-cfx-react';
+import { ConfirmModal, anyDialogOpen, useDialogOpen } from './Dialog';
+import { PAGES, Rail, SaveBar, ScriptPicker, ScriptSwitch, SectionHeading, TopBar, ownedByScript } from './Frame';
+import { noteRecent } from './stats';
+import { Segs, useAccent } from '../Kit';
+import './studio.css';
+import './pages.css';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  AlertTriangle, Anchor, ArrowRight, Banknote, Box, Braces, Car, Check, ChevronRight, Droplets, Fish, Gamepad2, History, Home, Image, Info, LayoutTemplate, Library, Lightbulb, Link as LinkIcon, ListRestart, Lock, Map as MapIcon, MessageCircle, Music, Package, Palette, Plug, Radar, Redo2, RefreshCw, RotateCcw, ScrollText, Search, Shield, Shovel, SlidersHorizontal, Sprout, Store, Target, TrendingUp, Trophy, Undo2, User, Users, Utensils, Waves, Wrench, X,
+  AlertTriangle, Anchor, ArrowLeft, ArrowRight, Banknote, Box, Braces, Car, Check, ChevronRight, Droplets, Fish, Gamepad2, History, Home, Image, Info, LayoutTemplate, Library, Lightbulb, Link as LinkIcon, ListRestart, Lock, Map as MapIcon, MessageCircle, Music, Package, Palette, Plug, Radar, Redo2, RefreshCw, RotateCcw, ScrollText, Search, Shield, Shovel, SlidersHorizontal, Sprout, Store, Target, TrendingUp, Trophy, Undo2, User, Users, Utensils, Waves, Wrench, X,
 } from 'lucide-react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { Fragment, memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
@@ -31,6 +37,7 @@ import { KeybindMapControl } from './KeybindMapControl';
 import { GroupGradeControl } from './GroupGradeControl';
 import { WeekdayControl } from './WeekdayControl';
 import { PositionListControl } from './PositionListControl';
+import { CameraListControl } from './CameraListControl';
 import { WeightMapControl } from './WeightMapControl';
 import { RefListControl } from './RefListControl';
 import { MantineColorControl, ShadeControl } from './ThemeControls';
@@ -48,11 +55,12 @@ import {
 } from './store';
 import { forgetLocales, loadLocales, sectionKey, settingKey, translate, useActiveLanguage, useBundles, useChrome } from './studioLocale';
 import { SetupWizard } from './SetupWizard';
-import type { SettingEntry, SettingGroup, StudioScript } from './types';
+import type { SettingEntry, SettingGroup, SlottedSetting, StudioScript } from './types';
 import { useInputCssVars } from './Controls';
 import { useAdminToolStore } from 'dirk-cfx-react';
 import { ChangelogPage } from './ChangelogPage';
 import { TestsPage } from './TestsPage';
+import { AccountChip } from './AccountChip';
 import { useAnnouncedResources } from './Dispatch';
 import { BASIC_CHILD, MAP_CHILD, SKILL_CHILD, tabsAsList } from './types';
 import { Toasts } from './Toasts';
@@ -63,16 +71,13 @@ export { Icon };
 
 /** Wraps the matched run so a search hit is visible in place, like his does. */
 function Highlight({ text, query }: { text: string; query: string }) {
-  const t = useChrome();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
   if (!query) return <>{text}</>;
   const index = text.toLowerCase().indexOf(query.toLowerCase());
   if (index === -1) return <>{text}</>;
   return (
     <>
       {text.slice(0, index)}
-      <span style={{ background: alpha(color, 0.25), color, borderRadius: '0.3vh' }}>
+      <span className="ss-hl">
         {text.slice(index, index + query.length)}
       </span>
       {text.slice(index + query.length)}
@@ -147,6 +152,20 @@ export default function ScriptStudio() {
    * released NUI focus by this point.
    */
   const activeTool = useAdminToolStore((s) => s.active);
+  const accent = useAccent();
+  const fresh = useStudio((s) => s.fresh);
+  const dialogOpen = useDialogOpen();
+  // CTRL K: every script, searchable, instead of a rail that lists them all
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // the linked account's details, open from the chip top right
+  const [acctOpen, setAcctOpen] = useState(false);
+  // the missing-items menu under its warn plate, beside the account chip
+  const [missOpen, setMissOpen] = useState(false);
+  // Mounted from the first open on: closing only hides it (`.shut`), so the
+  // next open repaints what is already built instead of rebuilding it.
+  const everOpen = useRef(false);
+  if (open) everOpen.current = true;
+  useEffect(() => { if (!open) setPickerOpen(false); }, [open]);
 
   /**
    * Published on the DOCUMENT, not on the panel.
@@ -272,32 +291,9 @@ export default function ScriptStudio() {
     }
   }, []);
 
-  // The server sends RAW schemas plus that resource's stored values, not
-  // ready-made panel state: layout, controls and validation are all derived
-  // from the schema here, which is why adding a script needs no dirk_lib change.
-  useNuiEvent<{ scripts?: LivePayload[]; canEdit?: boolean; focus?: string; askLanguage?: boolean }>('OPEN_SCRIPT_STUDIO', (data) => {
-    if (data?.scripts?.length) applyLivePayload(data.scripts, data.focus);
-    useStudio.setState({
-      open: true,
-      canEdit: data?.canEdit !== false,
-      askLanguage: data?.askLanguage === true,
-    });
-
-    // Which scripts ship a changelog - one question covering all of them,
-    // rather than a call per script or a tab that opens onto nothing.
-    const resources = (data?.scripts ?? [])
-      .map((entry) => entry.resource)
-      .filter((name): name is string => typeof name === 'string');
-    if (resources.length) {
-      fetchNui<{ resources?: string[] }>('GET_CHANGELOG_INDEX', { resources }, { resources })
-        .then((reply) => useStudio.setState({ changelogs: reply?.resources ?? [] }))
-        .catch(() => { /* no changelog tabs is a fine outcome */ });
-
-      fetchNui<{ resources?: string[] }>('GET_TEST_INDEX', { resources }, { resources })
-        .then((reply) => useStudio.setState({ tests: reply?.resources ?? [] }))
-        .catch(() => { /* likewise */ });
-    }
-  });
+  // OPEN_SCRIPT_STUDIO and SCRIPT_STUDIO_DATA are handled in live.ts at module
+  // level (onStudioOpen / onStudioData), which also fetches the changelog and
+  // test lists - they must work before this component mounts.
 
   useNuiEvent('CLOSE_SCRIPT_STUDIO', () => useStudio.setState({ open: false }));
 
@@ -339,6 +335,70 @@ export default function ScriptStudio() {
       : undefined),
     [activePage, script],
   );
+
+  /**
+   * A page holding the whole window.
+   *
+   * Declaring `full` in `x-pages` gives a page PERMISSION to take the window;
+   * it asks when it actually wants it. That split is the Designs tab: browsing
+   * the gallery is an ordinary page beside the rail, and opening a design
+   * grows this same window to the screen and folds the rail. Growing on
+   * arrival instead makes browsing feel like a page inside a page.
+   *
+   * It is NOT the user's own full-screen setting - that stays whatever they
+   * left it on, and this comes off when the page closes.
+   */
+  const [pageWantsFull, setPageWantsFull] = useState(false);
+  useEffect(() => { if (!scriptPage) setPageWantsFull(false); }, [scriptPage]);
+  const pageFull = !!scriptPage?.full && pageWantsFull;
+
+  /**
+   * The window is also given up to a script's own control that asked for it.
+   *
+   * Same idea as a page, for the other shape of thing that is not a settings
+   * column: a workspace control (`x-componentFull`) can be a wall of cards or
+   * a canvas, and those want the screen. It is the CONTROL that asks, not the
+   * section, because a section holds several tabs and only one of them is the
+   * wall - Backstories has its plain settings sitting beside it.
+   */
+  /**
+   * Leaving a page swaps the content AT ONCE, then the box animates.
+   *
+   * Deferring it with startTransition left the page mounted while the panel
+   * shrank, so a wall of cards reflowed its auto-fill grid every frame - five
+   * columns down to two - with the rail and the header remounting over the top
+   * of it. Swapping first means only the panel is moving, and what is inside
+   * it is the settings column, which costs nothing to lay out.
+   */
+  const goBackFromPage = useCallback(() => {
+    // Both in ONE update. Clearing the page and THEN handing the window back
+    // is two renders, and in between the panel is still full-screen with the
+    // settings column already in it - a flash of the rest of the panel at the
+    // wrong size, right before it shrinks.
+    setPageWantsFull(false);
+    useStudio.setState({ activePage: null });
+  }, []);
+
+  /**
+   * Opening the panel never drops you straight into a full-window page.
+   *
+   * The panel remembers where you were, which is right for a settings section
+   * and for a gallery, and wrong for a page that takes the whole screen:
+   * restart a resource, reopen the panel, and you are looking at a full-screen
+   * wall with no sense of having asked for it. A page like that is somewhere
+   * you GO.
+   */
+  useEffect(() => {
+    if (!open) return;
+    setPageWantsFull(false);
+    const landing = useStudio.getState().activePage;
+    if (!landing?.startsWith('page:')) return;
+    const id = landing.slice(5);
+    if (script?.pages?.find((entry) => entry.id === id)?.full) {
+      useStudio.setState({ activePage: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   /**
    * A section to land on once the script owning it is actually open.
@@ -384,6 +444,9 @@ export default function ScriptStudio() {
   const byGroup = useMemo(() => {
     const map = new Map<string, SettingEntry[]>();
     for (const entry of script?.entries ?? []) {
+      // published, not edited - see SettingEntry.hidden. It still travels, so a
+      // control can read it; it just never draws a row of its own.
+      if (entry.hidden) continue;
       if (!matchesSearch(entry, groupLabels.get(entry.group) ?? entry.group, query)) continue;
       const list = map.get(entry.group) ?? [];
       list.push(entry);
@@ -655,6 +718,7 @@ export default function ScriptStudio() {
   const modifiedByGroup = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of script?.entries ?? []) {
+      if (entry.hidden) continue;
       if (!isModified(script!.resource, entry)) continue;
       map.set(entry.group, (map.get(entry.group) ?? 0) + 1);
     }
@@ -669,13 +733,37 @@ export default function ScriptStudio() {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setPickerOpen((o) => !o); return; }
       if (e.key !== 'Escape') return;
-      if (pickerEntry || resetOpen) return;
+      if (pickerEntry || resetOpen || anyDialogOpen()) return;
+      if (acctOpen) { setAcctOpen(false); return; }
+      if (missOpen) { setMissOpen(false); return; }
       handleClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, pickerEntry, resetOpen]);
+  }, [open, pickerEntry, resetOpen, acctOpen, missOpen]);
+  useEffect(() => { setMissOpen(false); }, [open, activeResource, activePage]);
+
+  // Opening a script from the rail, the tools grid or the picker. Clicking the
+  // one already open closes it, the way a tab does, back to the overview -
+  // except from the picker, where picking it means "take me there".
+  const pickScript = (resource: string, fromPicker = false) => startTransition(() => {
+    const state = useStudio.getState();
+    const alreadyOpen = !state.activePage && state.activeResource === resource;
+    useStudio.setState({
+      activeResource: resource,
+      activePage: alreadyOpen && !fromPicker ? 'home' : null,
+      editingDesign: null,
+    });
+  });
+
+  // The rail's Recent list: whatever script you actually open, not the shared layer.
+  useEffect(() => {
+    if (!open || activePage || !activeResource) return;
+    if (scripts.find((entry) => entry.resource === activeResource)?.shared) return;
+    noteRecent(activeResource);
+  }, [open, activePage, activeResource, scripts]);
 
   const handleClose = () => {
     useStudio.setState({ open: false, searches: {} });
@@ -698,9 +786,11 @@ export default function ScriptStudio() {
   // memoises estimateSize's output, so a self-adjusting estimate never
   // actually reaches it. Accuracy comes from `forcedIndex` below instead.
   //
-  // Keyed by section id rather than index, so it survives search filtering and
-  // switching scripts.
+  // Keyed by script + section id rather than index, so it survives search
+  // filtering and switching scripts - and two scripts that both have a
+  // "general" section do not hand each other the wrong height.
   const sizeCache = useRef<Map<string, number>>(new Map());
+  const sizeKey = (id: string) => `${activeResource}:${id}`;
 
   // The section a rail click is travelling to, force-rendered no matter where
   // the viewport is. Without this a long jump cannot land: the pane can only
@@ -759,7 +849,7 @@ export default function ScriptStudio() {
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => {
       const id = visibleGroups[index]?.id;
-      return (id && sizeCache.current.get(id)) || 700;
+      return (id && sizeCache.current.get(sizeKey(id))) || 700;
     },
     overscan: 2,
     // offsetHeight, NOT getBoundingClientRect: the panel animates scale 0.97 -> 1
@@ -768,7 +858,7 @@ export default function ScriptStudio() {
     measureElement: (el) => {
       const height = (el as HTMLElement).offsetHeight;
       const id = (el as HTMLElement).dataset.groupId;
-      if (id && height > 0) sizeCache.current.set(id, height);
+      if (id && height > 0) sizeCache.current.set(sizeKey(id), height);
       return height;
     },
     getItemKey: (index) => visibleGroups[index]?.id ?? index,
@@ -860,7 +950,7 @@ export default function ScriptStudio() {
       if (cancelled) return;
       if (jumping.current) return schedule();
 
-      while (index < visibleGroups.length && sizeCache.current.has(visibleGroups[index]!.id)) index += 1;
+      while (index < visibleGroups.length && sizeCache.current.has(sizeKey(visibleGroups[index]!.id))) index += 1;
       if (index >= visibleGroups.length) return setWarmIndex(null);
 
       setWarmIndex(index);
@@ -879,9 +969,12 @@ export default function ScriptStudio() {
       else timer = window.setTimeout(run, 120);
     };
 
-    schedule();
+    // Not straight away: the first seconds after an open belong to the open
+    // itself (the fresh values landing, the first sections painting).
+    const start = window.setTimeout(schedule, 2000);
     return () => {
       cancelled = true;
+      clearTimeout(start);
       if (timer) clearTimeout(timer);
       if (idle) window.cancelIdleCallback?.(idle);
       setWarmIndex(null);
@@ -1264,115 +1357,94 @@ export default function ScriptStudio() {
 
   if (!script) return null;
 
-  // The panel's BOX - not its entrance. Framer only applies keys listed in
-  // `initial` on the first paint, so anything that lives solely in `animate`
-  // is missing from the frame the browser shows first. With width/height/
-  // background only in `animate`, that first frame was a panel with no size
-  // and no background, and the only child painting anything was the sidebar:
-  // a skinny, faint-black, full-height strip down the left. Same values in
-  // both, so the first paint is already the right shape and only scale and
-  // opacity animate - and toggling full screen still animates, because
-  // `animate` recomputes while `initial` is mount-only.
-  const panelBox = {
-    width: fullScreen ? '100vw' : 'min(152vh, 96vw)',
-    height: fullScreen ? '100vh' : '84vh',
-    // No backdrop-filter: CEF renders it unreliably over the game, so the
-    // panel stays near-opaque and the dim behind does the separating.
-    backgroundColor: alpha(theme.colors.dark[9], fullScreen ? 0.93 : 0.97),
-    borderRadius: fullScreen ? 0 : 6,
-  };
-  const dim = fullScreen ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.6)';
+  // The window is a grid of separate plates (lib kit, 24/10): top bar, rail,
+  // page and save bar each float over the game on their own, with nothing
+  // square painted behind them. A full-window page IS the window and gets the
+  // one cell; the design editor drops the rail; pages drop the save bar.
+  const wide = fullScreen || pageFull;
+  const winClass = 'ss-win'
+    + (pageFull ? ' bare' : '')
+    + (!pageFull && editingDesign ? ' noRail' : '')
+    + (activePage || pageFull ? ' noSave' : '')
+    + (dialogOpen ? ' modal' : '')
+    + (pickerOpen ? ' picking' : '')
+    + (acctOpen || missOpen ? ' acct' : '');
+
+  if (!everOpen.current) return null;
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0, backgroundColor: dim }}
-          animate={{ opacity: 1, backgroundColor: dim }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9990,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <motion.div
-            // The panel ITSELF, not the dim behind it - so a screenshot keeps
-            // its rounded corners and drops onto any background.
-            data-studio-panel
-            initial={{ scale: 0.97, opacity: 0, ...panelBox }}
-            animate={{ scale: 1, opacity: 1, ...panelBox }}
-            exit={{ scale: 0.97, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeOut' }}
-            style={{
-              display: 'flex', flexDirection: 'column',
-              // The containing block for the language chooser. Without it the
-              // overlay anchors to the fixed dim behind the panel and covers
-              // the whole screen instead of the thing it belongs to - and CEF
-              // and Chrome disagree about which ancestor wins, so it is pinned
-              // rather than inferred.
-              position: 'relative',
-              // Hidden, not unmounted: staged edits, scroll position and the
-              // open modal all have to survive walking across the map.
-              visibility: activeTool ? 'hidden' : 'visible',
-              border: fullScreen ? 'none' : `0.1vh solid ${alpha(theme.colors.dark[6], 0.9)}`,
-              boxShadow: fullScreen ? 'none' : '0 3vh 9vh rgba(0,0,0,0.65)',
-              overflow: 'hidden',
-              userSelect: 'none',
-            }}
-          >
-            <Header
-              script={script}
-              page={activePage ? PAGES.find((entry) => entry.id === activePage) : undefined}
-              query={search}
-              onQuery={setSearch}
-              onClose={handleClose}
-              missingItems={activePage ? undefined : <MissingItemsButton script={script} />}
-              canEdit={canEdit}
-            />
-
-            <Flex flex={1} style={{ minHeight: 0 }}>
-              {/* The rail drops ONLY while a design is open in the editor. Browsing
-                  designs is an ordinary page and keeps it — the canvas is the one
-                  thing that genuinely needs the width, and nobody browses settings
-                  mid-design. The breadcrumb inside DesignPage is the way back. */}
-              {!editingDesign && (
-              <Sidebar
+    <div className={'dk ss' + (wide ? ' wide' : '') + (open ? '' : ' shut')} style={accent}>
+      <div className="ss-dim" style={{ visibility: activeTool ? 'hidden' : undefined }} />
+      <div
+        className={winClass}
+        // Named so a page that needs the GAME visible behind it - the intro
+        // editor's live view - can step the panel aside without closing it.
+        data-studio-panel
+        // Hidden, not unmounted: staged edits, scroll position and the open
+        // modal all have to survive walking across the map.
+        style={{ visibility: activeTool ? 'hidden' : undefined }}
+      >
+        {!pageFull && (
+          <TopBar
+            query={search}
+            onQuery={setSearch}
+            searchable={SEARCHABLE_PAGES.has(activePage ?? '') || !activePage || activePage === 'home'}
+            placeholder={activePage === 'items' ? t('main.search_items', 'Search items...')
+              : activePage === 'vehicles' ? t('main.search_vehicles', 'Search vehicles...')
+                : activePage && activePage !== 'home' ? t('main.search_settings', 'Search these settings...')
+                  : !activePage ? t('main.search_script', 'Search {0}...').replace('{0}', script.label)
+                    : t('main.search_everything', 'Search every setting...')}
+            onClose={handleClose}
+            canEdit={canEdit}
+            missingItems={activePage ? undefined : <MissingItemsButton script={script} open={missOpen} onOpen={setMissOpen} />}
+            account={<AccountChip live={open} open={acctOpen} onOpen={setAcctOpen} />}
+            switcher={(
+              <ScriptSwitch
                 scripts={scripts}
                 script={script}
-                groupLabels={groupLabels}
-                visibleGroups={populatedGroups}
-                byGroup={byGroup}
-                modifiedByGroup={modifiedByGroup}
-                activeGroup={activeGroup}
                 activePage={activePage}
-                onPickScript={(resource) => startTransition(() => {
-                  // Clicking the script that is already open CLOSES it, the way
-                  // a tab does, and lands you back on the overview. Without
-                  // that the only way out of a script was to find another
-                  // page, and the rail's selected item had no "off".
-                  const state = useStudio.getState();
-                  const alreadyOpen = !state.activePage && state.activeResource === resource;
-                  useStudio.setState({
-                    activeResource: resource,
-                    activePage: alreadyOpen ? 'home' : null,
-                    editingDesign: null,
-                  });
-                })}
-                onPickPage={(id) => startTransition(() => useStudio.setState({ activePage: id, editingDesign: null }))}
-                onPickGroup={jumpTo}
-                onPickSubgroup={jumpToSubgroup}
-                subgroupsByGroup={subgroupsByGroup}
-                openGroups={openGroups}
-                activeSubgroup={activeSubgroup}
-                shownList={shownList}
-                setOpenGroups={setOpenGroups}
-                onHoverGroup={prefetchSection}
-                onLeaveGroup={cancelPrefetch}
+                open={pickerOpen}
+                onOpen={() => setPickerOpen((o) => !o)}
               />
-              )}
+            )}
+          />
+        )}
 
-              <Flex direction="column" flex={1} style={{ minHeight: 0, position: 'relative' }}>
+        {/* The rail drops ONLY while a design is open in the editor: the canvas
+            is the one thing that genuinely needs the width. */}
+        {!editingDesign && !pageFull && (
+          <Rail
+            scripts={scripts}
+            script={script}
+            groupLabels={groupLabels}
+            visibleGroups={populatedGroups}
+            byGroup={byGroup}
+            modifiedByGroup={modifiedByGroup}
+            activeGroup={activeGroup}
+            activePage={activePage}
+            onPickScript={pickScript}
+            onPickPage={(id) => startTransition(() => useStudio.setState({ activePage: id, editingDesign: null }))}
+            onPickGroup={jumpTo}
+            onPickSubgroup={jumpToSubgroup}
+            subgroupsByGroup={subgroupsByGroup}
+            openGroups={openGroups}
+            activeSubgroup={activeSubgroup}
+            shownList={shownList}
+            setOpenGroups={setOpenGroups}
+            onHoverGroup={prefetchSection}
+            onLeaveGroup={cancelPrefetch}
+            onOpenPicker={() => setPickerOpen((o) => !o)}
+          />
+        )}
+
+        <main className="ss-main">
+          {/* Opened from memory: what is shown is last time's, the fresh values
+              are on their way and saves wait for them. Says so, quietly. */}
+          {!fresh && (
+            <div className="pl ss-ld edge in">
+              <div className="sk"><span className="L">{t('main.loading_latest', 'Loading latest...')}</span><Segs n={8} frac={1} /></div>
+            </div>
+          )}
                 {/* A search typed while standing on a page searches EVERY
                     script. Overview is where you land, and the search box did
                     nothing there - which is the one moment you are most likely
@@ -1407,7 +1479,7 @@ export default function ScriptStudio() {
                       setJumpNonce((n) => n + 1);
                     }}
                   />
-                ) : activePage === 'home' ? <HomePage />
+                ) : activePage === 'home' ? <HomePage onOpenPicker={() => setPickerOpen(true)} />
                   : activePage === 'bridges' ? <BridgesPage />
                   : activePage === 'admins' ? <AdminsPage canEdit={canEdit} />
                   : activePage === 'logs' ? <LogsPage canEdit={canEdit} />
@@ -1417,7 +1489,41 @@ export default function ScriptStudio() {
                   : activePage === 'tests' ? <TestsPage resource={activeResource} />
                   : activePage === 'minigames' ? <MinigamesPage />
                   : scriptPage ? (
-                    <ScriptPage resource={script.resource} page={scriptPage} canEdit={canEdit} />
+                    <ScriptPage
+                      resource={script.resource}
+                      page={scriptPage}
+                      canEdit={canEdit}
+                      onBack={goBackFromPage}
+                      full={pageFull}
+                      setFull={setPageWantsFull}
+                      // A page that declares a path is a LIST: it gets the
+                      // entry, and the settings that belong with it, so it
+                      // keeps the row editor and the save bar.
+                      entry={scriptPage.path
+                        ? script.entries.find((e) => e.path === scriptPage.path)
+                        : undefined}
+                      settings={scriptPage.path && scriptPage.settings
+                        ? script.entries
+                          .filter((e) => scriptPage.settings!.some(
+                            (prefix) => e.path === prefix || e.path.startsWith(`${prefix}.`),
+                          ))
+                          .map((e) => ({
+                            path: e.path,
+                            label: e.label,
+                            node: (
+                              <SettingRow
+                                key={e.path}
+                                resource={script.resource}
+                                entry={e}
+                                query=""
+                                canEdit={canEdit}
+                                problems={problemsByPath.get(e.path)}
+                                onDrill={openPicker}
+                              />
+                            ),
+                          }))
+                        : undefined}
+                    />
                   )
                   : activePage ? (
                   <Flex align="center" justify="center" style={{ flex: 1 }}>
@@ -1431,22 +1537,12 @@ export default function ScriptStudio() {
                   // belongs to the map rather than being fought over. You leave
                   // it by picking something else in the rail.
                   <Flex direction="column" flex={1} p="md" style={{ minHeight: 0, overflow: 'hidden' }}>
-                    <Flex align="flex-start" gap="xs" mb="0.4vh" style={{ flexShrink: 0 }}>
-                      <Flex align="center" gap="xs" h={HEADING_LINE} style={{ flexShrink: 0 }}>
-                        <Icon name={openWorkspace.icon} size="1.9vh" color={color} />
-                        <Text ff="Akrobat Bold" size="md" c="rgba(255,255,255,0.92)" lts="0.01em">
-                          {localisedGroup(openWorkspace).label}
-                        </Text>
-                      </Flex>
-                      {openWorkspace.description && (
-                        <Text
-                          ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.35)"
-                          style={{ flex: 1, minWidth: 0, lineHeight: HEADING_LINE }}
-                        >
-                          {localisedGroup(openWorkspace).description}
-                        </Text>
-                      )}
-                    </Flex>
+                    <SectionHeading
+                      icon={openWorkspace.icon}
+                      label={localisedGroup(openWorkspace).label}
+                      description={openWorkspace.description ? localisedGroup(openWorkspace).description : undefined}
+                      style={{ marginBottom: '1vh', flexShrink: 0 }}
+                    />
 
                     <Flex direction="column" flex={1} style={{ minHeight: 0 }}>
                       <SectionBody
@@ -1535,33 +1631,11 @@ export default function ScriptStudio() {
                         paddingBottom: '3vh',
                       }}
                     >
-                      {/* Icon and title share ONE line box, and the
-                          description's line-height is set to that same height.
-                          Top-aligned, the description's first line then sits
-                          dead centre against the title whether it wraps or
-                          not - no measuring, and nothing to detect.
-
-                          Centring the whole row pushed the title to the middle
-                          of a three-line description; top-aligning the raw text
-                          instead left a one-line description sitting high,
-                          because the two font sizes have different line boxes.
-                          Matching the boxes fixes both cases at once. */}
-                      <Flex align="flex-start" gap="xs" mb="0.4vh">
-                        <Flex align="center" gap="xs" h={HEADING_LINE} style={{ flexShrink: 0 }}>
-                          <Icon name={group.icon} size="1.9vh" color={color} />
-                          <Text ff="Akrobat Bold" size="md" c="rgba(255,255,255,0.92)" lts="0.01em">
-                            {localisedGroup(group).label}
-                          </Text>
-                        </Flex>
-                        {group.description && (
-                          <Text
-                            ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.35)"
-                            style={{ flex: 1, minWidth: 0, lineHeight: HEADING_LINE }}
-                          >
-                            {localisedGroup(group).description}
-                          </Text>
-                        )}
-                      </Flex>
+                      <SectionHeading
+                        icon={group.icon}
+                        label={localisedGroup(group).label}
+                        description={group.description ? localisedGroup(group).description : undefined}
+                      />
 
                       <SectionBody
                         resource={script.resource}
@@ -1604,7 +1678,7 @@ export default function ScriptStudio() {
                       at the top and nothing further is blank. */}
                   {(() => {
                     const last = visibleGroups[visibleGroups.length - 1];
-                    const height = last && sizeCache.current.get(last.id);
+                    const height = last && sizeCache.current.get(sizeKey(last.id));
                     if (!height || viewHeight === 0) return null;
                     const room = Math.max(0, viewHeight - height);
                     return room > 0 ? <Flex style={{ height: room, flexShrink: 0 }} /> : null;
@@ -1614,7 +1688,9 @@ export default function ScriptStudio() {
 
                 </>)}
 
-                {!activePage && <SaveBar
+        </main>
+
+        {!activePage && !pageFull && <SaveBar
                   dirty={dirty}
                   saving={saving}
                   saveError={saveError && saveError.resource === script.resource ? saveError.message : null}
@@ -1649,15 +1725,23 @@ export default function ScriptStudio() {
                   onReset={() => setResetOpen(true)}
                   onRefresh={() => reloadFromServer()}
                 />}
-              </Flex>
-            </Flex>
 
-            {/* Asked once, before anything else is worth reading - a panel in
-              * the wrong language is the one screen a translation cannot fix. */}
-            {askLanguage && canEdit && (
-              <SetupWizard onDone={() => useStudio.setState({ askLanguage: false })} />
-            )}
-          </motion.div>
+        {pickerOpen && (
+          <ScriptPicker
+            scripts={scripts}
+            current={activePage && !ownedByScript(activePage) ? undefined : script.resource}
+            onPick={(resource) => { setPickerOpen(false); pickScript(resource, true); }}
+            onClose={() => setPickerOpen(false)}
+            onHome={() => { setPickerOpen(false); startTransition(() => useStudio.setState({ activePage: 'home', editingDesign: null })); }}
+          />
+        )}
+
+        {/* Asked once, before anything else is worth reading - a panel in
+          * the wrong language is the one screen a translation cannot fix. */}
+        {askLanguage && canEdit && (
+          <SetupWizard onDone={() => useStudio.setState({ askLanguage: false })} />
+        )}
+      </div>
 
           <AnimatePresence>
             {pickerEntry && (
@@ -1666,6 +1750,7 @@ export default function ScriptStudio() {
                 label={pickerEntry.label}
                 help={pickerEntry.help}
                 iconSet={pickerEntry.iconSet}
+                bodyHeight={pickerEntry.bodyHeight}
                 value={effectiveValue(script.resource, pickerEntry)}
                 disabled={!canEdit}
                 onApply={(next) => setValue(script.resource, pickerEntry, next)}
@@ -1729,9 +1814,7 @@ export default function ScriptStudio() {
               />
             )}
           </AnimatePresence>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </div>
   );
 }
 
@@ -1744,223 +1827,11 @@ export default function ScriptStudio() {
 const HEADING_LINE = '2.6vh';
 
 function CurrentSection({ group, show }: { group?: SettingGroup; show: boolean }) {
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
   if (!group) return null;
-
   return (
-    <motion.div
-      initial={false}
-      animate={{ opacity: show ? 1 : 0, y: show ? 0 : -6 }}
-      transition={{ duration: 0.12 }}
-      style={{
-        position: 'absolute',
-        top: 0, left: 0, right: 0,
-        zIndex: 30,
-        pointerEvents: 'none',
-      }}
-    >
-    <Flex
-      align="center" gap="xs"
-      px="md" py="sm"
-      style={{
-        background: theme.colors.dark[9],
-        borderBottom: `0.1vh solid ${alpha(theme.colors.dark[6], 0.8)}`,
-      }}
-    >
-      {/* icon + type scale match the in-flow section heading so the bar reads as
-          the same thing, just pinned */}
-      <Icon name={group.icon} size="1.9vh" color={color} />
-      <Text ff="Akrobat Bold" size="md" c="rgba(255,255,255,0.92)" lts="0.01em">{group.label}</Text>
-      {group.description && (
-        <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.35)" truncate>
-          {group.description}
-        </Text>
-      )}
-    </Flex>
-    </motion.div>
-  );
-}
-
-function Header({
-  script, page, query, onQuery, onClose,
-  missingItems, canEdit,
-}: {
-  script: StudioScript;
-  /** set when a built-in page is open, so the header stops naming a script */
-  page?: { id: string; label: string; icon: string };
-  query: string;
-  onQuery: (v: string) => void;
-  onClose: () => void;
-  missingItems?: React.ReactNode;
-  canEdit: boolean;
-}) {
-  const t = useChrome();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-  const language = useActiveLanguage();
-  const bundles = useBundles();
-  // Local input state so a keystroke never waits on the panel-wide filter.
-  const [local, setLocal] = useState(query);
-  useEffect(() => { setLocal(query); }, [query]);
-
-  return (
-    <Flex
-      align="center" justify="space-between" gap="md"
-      px="md" py="sm"
-      style={{
-        borderBottom: `0.1vh solid ${alpha(theme.colors.dark[6], 0.8)}`,
-        background: alpha(theme.colors.dark[8], 0.5),
-        flexShrink: 0,
-      }}
-    >
-      <Flex align="center" gap="sm" style={{ width: '32vh', minWidth: 0 }}>
-        <Flex
-          align="center" justify="center"
-          style={{
-            aspectRatio: '1 / 1',
-            height: '4.4vh',
-            background: 'rgba(0,0,0,0.5)',
-            borderRadius: theme.radius.xs,
-            outline: `0.2vh solid ${alpha(theme.colors[theme.primaryColor][9], 0.8)}`,
-            boxShadow: `inset 0 0 2vh ${alpha(theme.colors[theme.primaryColor][7], 0.5)}`,
-            flexShrink: 0,
-          }}
-        >
-          <SlidersHorizontal size="2.2vh" color={color} />
-        </Flex>
-        <Flex direction="column" style={{ minWidth: 0, lineHeight: 1.15 }}>
-          {/* Fixed. The title and icon used to change with whatever you had
-              open, so the one part of the window that should tell you WHERE
-              YOU ARE was the part that never held still - and the rail already
-              says which script is selected. */}
-          <Text ff="Akrobat Bold" size="md" c="rgba(255,255,255,0.92)" truncate>
-            {t('header.title', 'Script Studio')}
-          </Text>
-          <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.3)" truncate>
-            {t('header.description', 'Every dirk script, in one place')}
-          </Text>
-        </Flex>
-      </Flex>
-
-      {/* Pages that own their filtering (Logs, Admins, Bridges) get a blank
-          space here instead: two search boxes on one screen is a question about
-          which one you are typing into. */}
-      {!SEARCHABLE_PAGES.has(page?.id ?? '') ? (
-        <Flex style={{ flex: 1, maxWidth: '54vh' }} />
-      ) : (
-      <TextInput
-        value={local}
-        onChange={(e) => {
-          const next = e.currentTarget.value;
-          setLocal(next);              // paints immediately
-          startTransition(() => onQuery(next));  // filtering yields to typing
-        }}
-        placeholder={page?.id === 'items' ? t('main.search_items', 'Search items...')
-          : page?.id === 'vehicles' ? t('main.search_vehicles', 'Search vehicles...')
-            : t('main.search_settings', 'Search these settings...')}
-        leftSection={<Search size="1.6vh" color="rgba(255,255,255,0.35)" />}
-        rightSection={local ? (
-          <motion.button
-            type="button"
-            onClick={() => { setLocal(''); startTransition(() => onQuery('')); }}
-            whileTap={{ scale: 0.85 }}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-            }}
-            aria-label={t('main.clear_search', 'Clear search')}
-          >
-            <X size="1.5vh" color="rgba(255,255,255,0.45)" />
-          </motion.button>
-        ) : null}
-        styles={{
-          input: {
-            background: alpha(theme.colors.dark[9], 0.8),
-            border: `0.1vh solid ${alpha(theme.colors.dark[5], 0.6)}`,
-            color: 'rgba(255,255,255,0.9)',
-            fontFamily: 'Akrobat SemiBold',
-            fontSize: '1.5vh',
-            height: '3.6vh',
-            minHeight: '3.6vh',
-            borderRadius: theme.radius.xs,
-            // the icon sits in a 4.2vh well; without matching padding the
-            // caret starts almost touching it
-            paddingLeft: '4.2vh',
-            paddingRight: '3.8vh',
-          },
-          section: { width: '4.2vh' },
-        }}
-        style={{ flex: 1, maxWidth: '54vh' }}
-      />
-      )}
-
-      <Flex align="center" gap="xs" justify="flex-end" style={{ width: '32vh' }}>
-        {!canEdit && (
-          <Flex
-            align="center" gap="xxs" px="0.8vh" py="0.3vh"
-            style={{
-              background: alpha('#E0B15F', 0.14),
-              border: `0.1vh solid ${alpha('#E0B15F', 0.4)}`,
-              borderRadius: '0.3vh',
-            }}
-          >
-            <Lock size="1.2vh" color="#E0B15F" />
-            <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.06em" c="#E0B15F">{t('main.view_only', 'View only')}</Text>
-          </Flex>
-        )}
-        {/* Only what acts on the WINDOW stays up here. History, Reset,
-            Refresh and the JSON editor all act on the SCRIPT you are editing,
-            so they sit with Save and Discard - the other controls that do. */}
-        {missingItems}
-        <IconButton icon={X} label={t('main.close', 'Close')} danger onClick={onClose} />
-      </Flex>
-    </Flex>
-  );
-}
-
-function IconButton({
-  icon: Cmp, label, onClick, danger,
-}: { icon: React.ElementType; label: string; onClick?: () => void; danger?: boolean }) {
-  const theme = useMantineTheme();
-  const accent = danger ? '#ef4444' : theme.colors[theme.primaryColor][5];
-
-  return (
-    <Tooltip
-      label={label}
-      position="bottom"
-      withArrow
-      zIndex={10000}
-      styles={{
-        tooltip: {
-          background: alpha(theme.colors.dark[7], 0.95),
-          border: '0.1vh solid rgba(255,255,255,0.1)',
-          color: 'rgba(255,255,255,0.75)',
-          fontFamily: 'Akrobat Bold',
-          fontSize: '1.2vh',
-          padding: '0.5vh 0.8vh',
-        },
-      }}
-    >
-      <motion.button
-        type="button"
-        onClick={onClick}
-        whileHover={{ background: alpha(accent, 0.16), borderColor: alpha(accent, 0.5) }}
-        whileTap={{ scale: 0.95 }}
-        style={{
-          aspectRatio: '1 / 1', height: '3.4vh',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'transparent',
-          border: `0.1vh solid ${alpha(theme.colors.dark[5], 0.6)}`,
-          borderRadius: theme.radius.xs,
-          cursor: 'pointer',
-          color: 'rgba(255,255,255,0.65)',
-        }}
-        aria-label={label}
-      >
-        <Cmp size="1.7vh" />
-      </motion.button>
-    </Tooltip>
+    <div className={'ss-cur' + (show ? '' : ' hide')}>
+      <SectionHeading icon={group.icon} label={group.label} description={group.description} />
+    </div>
   );
 }
 
@@ -1979,580 +1850,6 @@ const SECTION_EXTRAS: Record<string, React.ComponentType<{ resource: string; can
 
 /** Which views the header's search box actually drives. */
 const SEARCHABLE_PAGES = new Set(['', 'items', 'vehicles']);
-
-/** One of the shared layer's sections, sitting straight under GENERIC. */
-function SharedSectionRow({
-  group, label, count, active, onClick,
-}: {
-  resource: string;
-  group: SettingGroup;
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      whileTap={{ scale: 0.99 }}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '0.8vh',
-        padding: '0.7vh 0.8vh',
-        background: active ? alpha(color, 0.14) : 'transparent',
-        border: 'none',
-        borderLeft: `0.2vh solid ${active ? color : 'transparent'}`,
-        borderRadius: `0 ${theme.radius.xs} ${theme.radius.xs} 0`,
-        cursor: 'pointer', textAlign: 'left', width: '100%',
-      }}
-    >
-      <Icon name={group.icon} size="1.6vh" color={active ? color : 'rgba(255,255,255,0.4)'} />
-      <Text
-        ff="Akrobat SemiBold" size="sm"
-        c={active ? color : 'rgba(255,255,255,0.7)'}
-        style={{ flex: 1, minWidth: 0 }}
-        truncate
-      >
-        {label}
-      </Text>
-      <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.25)">{count}</Text>
-    </motion.button>
-  );
-}
-
-// "Access" only ever described the first of these. Logs is a record of what
-// happened and Bridges is what the library is talking to - neither is about
-// who may do what. They are all server-wide concerns rather than settings of
-// any one script, which is what the band actually means.
-const PAGES: { id: string; label: string; icon: string; band: 'server' | 'library' }[] = [
-  { id: 'admins', label: 'Admins', icon: 'users', band: 'server' },
-  { id: 'logs', label: 'Logs', icon: 'scroll-text', band: 'server' },
-  { id: 'bridges', label: 'Bridges', icon: 'plug', band: 'server' },
-  { id: 'items', label: 'Items', icon: 'package', band: 'library' },
-  { id: 'vehicles', label: 'Vehicles', icon: 'car', band: 'library' },
-  { id: 'minigames', label: 'Minigames', icon: 'gamepad', band: 'library' },
-];
-
-/**
- * Grouped rail: the scripts you configure, the shared layer, and the pages that
- * are about the server rather than any one script. Separate bands stop
- * "Bridges" reading like one more fishing section.
- */
-function Sidebar({
-  scripts, script, groupLabels, visibleGroups, byGroup, modifiedByGroup, activeGroup, activePage,
-  onPickScript, onPickPage, onPickGroup, onPickSubgroup,
-  subgroupsByGroup, openGroups, setOpenGroups, activeSubgroup, shownList,
-  onHoverGroup, onLeaveGroup,
-}: {
-  scripts: StudioScript[];
-  script: StudioScript;
-  groupLabels: Map<string, string>;
-  visibleGroups: SettingGroup[];
-  byGroup: Map<string, SettingEntry[]>;
-  modifiedByGroup: Map<string, number>;
-  activeGroup: string;
-  activePage: string | null;
-  onPickScript: (resource: string) => void;
-  onPickPage: (id: string) => void;
-  onPickGroup: (groupId: string) => void;
-  onPickSubgroup: (groupId: string, subgroupId: string, listPath?: string) => void;
-  subgroupsByGroup: Map<string, { id: string; label: string; count: number; list?: string }[]>;
-  openGroups: Set<string>;
-  activeSubgroup: string | null;
-  shownList: string | null;
-  setOpenGroups: React.Dispatch<React.SetStateAction<Set<string>>>;
-  onHoverGroup: (index: number) => void;
-  onLeaveGroup: () => void;
-}) {
-  const t = useChrome();
-  const changelogs = useStudio((s) => s.changelogs);
-  const announced = useAnnouncedResources();
-  const tests = useStudio((s) => s.tests);
-
-  /**
-   * Which resource the footer is about.
-   *
-   * A page that belongs to a SCRIPT (its settings, its design, its changelog,
-   * its tests) is that script; everything else - Overview, Admins, Logs,
-   * Bridges, the library pages - belongs to dirk_lib itself.
-   */
-  const footer = useMemo(() => {
-    const ownedByScript = !activePage
-      || activePage === 'design' || activePage === 'changelog' || activePage === 'tests'
-      || activePage.startsWith('page:');
-    if (ownedByScript && script) return script;
-    const lib = scripts.find((entry) => entry.shared);
-    return lib ?? script;
-  }, [activePage, script, scripts]);
-  // The shared band's sections belong to dirk_lib, not to whatever
-  // script is selected, so the rail resolves them against their own
-  // bundle rather than the active one's.
-  const language = useActiveLanguage();
-  const bundles = useBundles();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-
-  const userScripts = useMemo(() => scripts.filter((entry) => !entry.shared), [scripts]);
-  const sharedScripts = useMemo(() => scripts.filter((entry) => entry.shared), [scripts]);
-
-  const renderScript = (entry: StudioScript) => {
-    // Design is a page BELONGING to this script, not a global one like Admins or
-    // Items — so the script stays expanded while you are on it and the tree does
-    // not collapse under you. Global pages still collapse everything, which is
-    // right: they have nothing to do with the selected script.
-    const active =
-      entry.resource === script.resource
-      && (!activePage || activePage === 'design' || activePage === 'changelog'
-        || activePage === 'tests' || activePage.startsWith('page:'));
-    return (
-      <Flex key={entry.resource} direction="column" gap="xxs">
-        <motion.button
-          type="button"
-          onClick={() => onPickScript(entry.resource)}
-          // clicking the OPEN one closes it; see onPickScript
-          whileTap={{ scale: 0.99 }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '0.8vh',
-            padding: '0.75vh 0.8vh',
-            background: active ? alpha(color, 0.14) : 'transparent',
-            border: 'none',
-            borderLeft: `0.2vh solid ${active ? color : 'transparent'}`,
-            borderRadius: `0 ${theme.radius.xs} ${theme.radius.xs} 0`,
-            cursor: 'pointer', textAlign: 'left', width: '100%',
-          }}
-        >
-          <Icon name={entry.icon} size="1.7vh" color={active ? color : 'rgba(255,255,255,0.4)'} />
-          <Text
-            ff="Akrobat Bold" size="sm" tt="uppercase" lts="0.05em"
-            c={active ? color : 'rgba(255,255,255,0.75)'}
-            style={{ flex: 1, minWidth: 0 }}
-            truncate
-          >
-            {entry.label}
-          </Text>
-        </motion.button>
-
-        <AnimatePresence initial={false}>
-          {active && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              style={{ overflow: 'hidden' }}
-            >
-              <Flex direction="column" gap="0.15vh" pl="1.6vh" pb="0.4vh">
-                                {/* Design leads the script's own groups — it is what you opened the
-                    script for, and the settings below it are what you tune after.
-                    It stays inside the script rather than in the global ACCESS /
-                    LIBRARY bands because designs belong to a script: dirk_loading's
-                    are not dirk_multichar's. Only shown for scripts declaring one. */}
-                {/* PARKED with the design page itself - see tsconfig `exclude`.
-                    Nothing in this release declares `designs` (only dirk_loading
-                    does, and it is not on scriptConfig yet), so this only ever
-                    routed somewhere that is not mounted. */}
-                {false && entry.designs && (
-                  <motion.button
-                    type="button"
-                    onClick={() => onPickPage('design')}
-                    whileTap={{ scale: 0.99 }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '0.7vh',
-                      padding: '0.5vh 0.7vh',
-                      background: activePage === 'design' ? alpha(color, 0.1) : 'transparent',
-                      border: 'none',
-                      borderRadius: theme.radius.xs,
-                      cursor: 'pointer', textAlign: 'left', width: '100%',
-                    }}
-                  >
-                    <Icon name="layout" size="1.4vh" color={color} />
-                    <Text ff="Akrobat SemiBold" size="sm" c={color} style={{ flex: 1, minWidth: 0 }} truncate>
-                      {t('main.design', 'Design')}
-                    </Text>
-                    <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.25)">5</Text>
-                  </motion.button>
-                )}
-
-                {/* What changed, for the build this server is running. Offered
-                    only where the resource actually ships a CHANGELOG.md -
-                    every dirk script does, but a consumer might not. */}
-                {changelogs.includes(entry.resource) && (
-                  <motion.button
-                    type="button"
-                    onClick={() => onPickPage('changelog')}
-                    whileTap={{ scale: 0.99 }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '0.7vh',
-                      padding: '0.5vh 0.7vh',
-                      background: activePage === 'changelog' ? alpha(color, 0.1) : 'transparent',
-                      border: 'none',
-                      borderRadius: theme.radius.xs,
-                      cursor: 'pointer', textAlign: 'left', width: '100%',
-                    }}
-                  >
-                    <Icon name="scroll-text" size="1.4vh" color={color} />
-                    <Text ff="Akrobat SemiBold" size="sm" c={color} style={{ flex: 1, minWidth: 0 }} truncate>
-                      {t('main.changelog', "What's new")}
-                    </Text>
-                    {/* A dot rather than a word: it says "there is something
-                        here" without claiming to know what, and without making
-                        the row wider. A changelog shipped inside a resource
-                        cannot know about a release that came after it, so this
-                        comes from the announcement, not the file. */}
-                    {announced.has(entry.resource) && (
-                      <div
-                        style={{
-                          width: '0.7vh', height: '0.7vh', borderRadius: '50%',
-                          background: color, flexShrink: 0,
-                        }}
-                      />
-                    )}
-                    <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.25)">
-                      v{entry.version}
-                    </Text>
-                  </motion.button>
-                )}
-
-                {/* Only where a suite is actually registered - read from the
-                    manifest, so dirk_lib never offers a tab backed by nothing. */}
-                {tests.includes(entry.resource) && (
-                  <motion.button
-                    type="button"
-                    onClick={() => onPickPage('tests')}
-                    whileTap={{ scale: 0.99 }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '0.7vh',
-                      padding: '0.5vh 0.7vh',
-                      background: activePage === 'tests' ? alpha(color, 0.1) : 'transparent',
-                      border: 'none',
-                      borderRadius: theme.radius.xs,
-                      cursor: 'pointer', textAlign: 'left', width: '100%',
-                    }}
-                  >
-                    <Icon name="flask-conical" size="1.4vh" color={color} />
-                    <Text ff="Akrobat SemiBold" size="sm" c={color} style={{ flex: 1, minWidth: 0 }} truncate>
-                      {t('main.tests', 'Tests')}
-                    </Text>
-                  </motion.button>
-                )}
-
-                {/* Pages the script supplies itself.
-                  *
-                  * Above its sections rather than below, because these are
-                  * places rather than settings - fishing's Players screen is
-                  * somewhere you go, not something you configure, and burying
-                  * it under fourteen sections would hide it. */}
-                {entry.pages?.map((pageEntry) => {
-                  const pageId = `page:${pageEntry.id}`;
-                  return (
-                    <motion.button
-                      key={pageId}
-                      type="button"
-                      onClick={() => onPickPage(pageId)}
-                      whileTap={{ scale: 0.99 }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '0.7vh',
-                        padding: '0.5vh 0.7vh',
-                        background: activePage === pageId ? alpha(color, 0.1) : 'transparent',
-                        border: 'none',
-                        borderRadius: theme.radius.xs,
-                        cursor: 'pointer', textAlign: 'left', width: '100%',
-                      }}
-                    >
-                      <Icon name={pageEntry.icon} size="1.4vh" color={color} />
-                      <Text
-                        ff="Akrobat SemiBold" size="sm" c={color}
-                        style={{ flex: 1, minWidth: 0 }} truncate
-                      >
-                        {translate(
-                          bundles, language, entry.resource,
-                          `studio.pages.${pageEntry.id}.label`, pageEntry.label,
-                        )}
-                      </Text>
-                    </motion.button>
-                  );
-                })}
-
-                {visibleGroups.map((group, groupIndex) => {
-                  // activeGroup tracks whatever section the settings pane is
-                  // scrolled to, and it keeps that value while a full page is
-                  // open — so without this guard, Design and Backgrounds would
-                  // both read as selected at once.
-                  const isActive = !activePage && group.id === activeGroup;
-                  const count = byGroup.get(group.id)?.length ?? 0;
-                  const modified = modifiedByGroup.get(group.id) ?? 0;
-                  // A section with several nested blocks - Yellow Pages holds
-                  // Business Ads, Personal Ads, Featured, Calls and Categories -
-                  // is a tree, and the rail was flattening it. The blocks are
-                  // already known from the schema walk; they just had nowhere to
-                  // appear.
-                  const subs = subgroupsByGroup.get(group.id) ?? [];
-                  const isOpen = openGroups.has(group.id);
-                  return (
-                    <Fragment key={group.id}>
-                    <motion.button
-                      key={group.id}
-                      type="button"
-                      onClick={() => onPickGroup(group.id)}
-                      // start rendering the destination while the pointer is
-                      // still on its way to the click
-                      onPointerEnter={() => onHoverGroup(groupIndex)}
-                      onPointerLeave={onLeaveGroup}
-                      whileTap={{ scale: 0.99 }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '0.7vh',
-                        padding: '0.5vh 0.7vh',
-                        background: isActive ? alpha(color, 0.1) : 'transparent',
-                        border: 'none',
-                        borderRadius: theme.radius.xs,
-                        cursor: 'pointer', textAlign: 'left', width: '100%',
-                      }}
-                    >
-                      <Icon name={group.icon} size="1.4vh" color={isActive ? color : 'rgba(255,255,255,0.3)'} />
-                      <Text
-                        ff="Akrobat SemiBold" size="sm"
-                        c={isActive ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.55)'}
-                        style={{ flex: 1, minWidth: 0 }}
-                        truncate
-                      >
-                        {groupLabels.get(group.id) ?? group.label}
-                      </Text>
-                      <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.25)">{count}</Text>
-                      {modified > 0 && (
-                        <Flex w="0.6vh" h="0.6vh" style={{ background: color, borderRadius: '50%', flexShrink: 0 }} />
-                      )}
-                      {subs.length > 1 && (
-                        <motion.div
-                          onClick={(event) => {
-                            // Expanding is not selecting: clicking the chevron
-                            // should open the tree without also jumping the pane.
-                            event.stopPropagation();
-                            setOpenGroups((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(group.id)) next.delete(group.id);
-                              else next.add(group.id);
-                              return next;
-                            });
-                          }}
-                          animate={{ rotate: isOpen ? 90 : 0 }}
-                          transition={{ duration: 0.14 }}
-                          style={{ display: 'flex', flexShrink: 0, cursor: 'pointer' }}
-                        >
-                          <ChevronRight size="1.2vh" color="rgba(255,255,255,0.3)" />
-                        </motion.div>
-                      )}
-                    </motion.button>
-
-                    <AnimatePresence initial={false}>
-                      {isOpen && subs.length > 1 && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.16 }}
-                          style={{ overflow: 'hidden' }}
-                        >
-                          {subs.map((sub) => {
-                            // A tabbed list is "current" when the section body
-                            // is showing it; a block is current when it is the
-                            // one scrolled to.
-                            const subActive = isActive && (sub.list
-                              ? shownList === sub.list
-                              : activeSubgroup === sub.id);
-                            return (
-                            <motion.button
-                              key={sub.id}
-                              type="button"
-                              onClick={() => onPickSubgroup(group.id, sub.id, sub.list)}
-                              whileTap={{ scale: 0.99 }}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: '0.6vh',
-                                padding: '0.35vh 0.7vh 0.35vh 2.6vh',
-                                background: subActive ? alpha(color, 0.08) : 'transparent',
-                                border: 'none',
-                                borderLeft: `0.1vh solid ${subActive ? color : alpha(theme.colors.dark[4], 0.6)}`,
-                                marginLeft: '1.4vh',
-                                cursor: 'pointer', textAlign: 'left', width: 'calc(100% - 1.4vh)',
-                              }}
-                            >
-                              <Text
-                                ff="Akrobat SemiBold" size="xs"
-                                c={subActive ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.4)'}
-                                style={{ flex: 1, minWidth: 0 }}
-                                truncate
-                              >
-                                {sub.label}
-                              </Text>
-                              <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.2)">{sub.count}</Text>
-                            </motion.button>
-                            );
-                          })}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                    </Fragment>
-                  );
-                })}
-              </Flex>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Flex>
-    );
-  };
-
-  const renderPage = (page: { id: string; label: string; icon: string }) => {
-    const active = activePage === page.id;
-    return (
-      <motion.button
-        key={page.id}
-        type="button"
-        onClick={() => onPickPage(page.id)}
-        whileTap={{ scale: 0.99 }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '0.8vh',
-          padding: '0.7vh 0.8vh',
-          background: active ? alpha(color, 0.14) : 'transparent',
-          border: 'none',
-          borderLeft: `0.2vh solid ${active ? color : 'transparent'}`,
-          borderRadius: `0 ${theme.radius.xs} ${theme.radius.xs} 0`,
-          cursor: 'pointer', textAlign: 'left', width: '100%',
-        }}
-      >
-        <Icon name={page.icon} size="1.6vh" color={active ? color : 'rgba(255,255,255,0.4)'} />
-        <Text
-          ff="Akrobat SemiBold" size="sm"
-          c={active ? color : 'rgba(255,255,255,0.7)'}
-          style={{ flex: 1, minWidth: 0 }}
-        >
-          {t(`page.${page.id}`, page.label)}
-        </Text>
-      </motion.button>
-    );
-  };
-
-  return (
-    <Flex
-      direction="column"
-      w="28vh"
-      style={{
-        borderRight: `0.1vh solid ${alpha(theme.colors.dark[6], 0.8)}`,
-        background: alpha(theme.colors.dark[8], 0.35),
-        flexShrink: 0,
-        minHeight: 0,
-      }}
-    >
-      <Flex
-        direction="column" gap="xxs" px="xs" pt="xs"
-        className="studio-scroll"
-        style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}
-      >
-        {/* Band-less and first: Overview is the way back to where /dirk_config
-            lands, not a member of any category. */}
-        {renderPage({ id: 'home', label: 'Overview', icon: 'home' })}
-
-        <RailLabel>{t('main.scripts', 'Scripts')}</RailLabel>
-        {userScripts.map(renderScript)}
-
-        {/* GENERIC is the shared layer, and there is only ever one shared
-            script — so listing it as a script you must click, inside a band
-            with exactly one child, was a level of nesting that bought nothing.
-            Its sections sit directly under the band instead. */}
-        {sharedScripts.length > 0 && (
-          <>
-            <RailLabel>{t('main.generic', 'Generic')}</RailLabel>
-            {sharedScripts.map((entry) => (
-              <Fragment key={entry.resource}>
-                {entry.groups.map((group) => (
-                  <SharedSectionRow
-                    key={`${entry.resource}:${group.id}`}
-                    resource={entry.resource}
-                    group={group}
-                    // Resolved against the SHARED script's own bundle, not the
-                    // active one. `groupLabels` only holds whichever script is
-                    // selected, so these sections came out in English the
-                    // moment you were looking at anything other than dirk_lib.
-                    label={translate(
-                      bundles, language, entry.resource,
-                      sectionKey(group.id, 'label'), group.label,
-                    )}
-                    count={entry.entries.filter((e) => e.group === group.id).length}
-                    active={!activePage && script.resource === entry.resource && activeGroup === group.id}
-                    onClick={() => {
-                      // No timer: the jump waits for the section to exist,
-                      // however long the script takes to swap in. A fixed
-                      // delay was a guess, and losing that race dropped you on
-                      // the wrong section with no sign anything had gone wrong.
-                      if (script.resource !== entry.resource) onPickScript(entry.resource);
-                      onPickGroup(group.id);
-                    }}
-                  />
-                ))}
-
-                {/* The shared band lists dirk_lib's SECTIONS directly, which
-                    reads better than one clickable script wrapping one child -
-                    but flattening it also dropped every page that belongs to a
-                    script rather than to a section. dirk_lib's own changelog
-                    was unreachable from the panel entirely: it is in the index,
-                    it just had nothing to render it, because "What's new" only
-                    exists inside renderScript and the shared script never goes
-                    through it. */}
-                {changelogs.includes(entry.resource) && (
-                  <SharedSectionRow
-                    resource={entry.resource}
-                    group={{ id: '__changelog', icon: 'scroll-text', label: '' } as SettingGroup}
-                    label={t('main.changelog', "What's new")}
-                    count={0}
-                    active={activePage === 'changelog' && script.resource === entry.resource}
-                    onClick={() => {
-                      if (script.resource !== entry.resource) onPickScript(entry.resource);
-                      onPickPage('changelog');
-                    }}
-                  />
-                )}
-              </Fragment>
-            ))}
-          </>
-        )}
-
-        <RailLabel>{t('main.server', 'Server')}</RailLabel>
-        {PAGES.filter((page) => page.band === 'server').map(renderPage)}
-
-        <RailLabel>{t('main.library', 'Library')}</RailLabel>
-        {PAGES.filter((page) => page.band === 'library').map(renderPage)}
-      </Flex>
-
-      <Flex
-        align="center" justify="space-between" px="sm" py="xs"
-        style={{ borderTop: `0.1vh solid ${alpha(theme.colors.dark[6], 0.7)}`, flexShrink: 0 }}
-      >
-        {/* Whatever the footer names, it has to be the thing you are looking
-            at. On Overview, Admins or Logs you are not in any script, so
-            naming the last-selected one - and its version - was simply wrong.
-            Those pages belong to the library, so the library is what it says. */}
-        <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.28)" truncate>
-          {footer.resource}
-        </Text>
-        <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.28)">v{footer.version}</Text>
-      </Flex>
-    </Flex>
-  );
-}
-
-function RailLabel({ children }: { children: React.ReactNode }) {
-  const t = useChrome();
-  return (
-    <Text
-      ff="Akrobat Bold" size="xs" tt="uppercase" lts="0.16em"
-      c="rgba(255,255,255,0.28)" px="0.6vh" pt="xs" pb="0.2vh"
-    >
-      {children}
-    </Text>
-  );
-}
 
 const SettingRow = memo(function SettingRow({
   resource, entry, query, rowFilter, canEdit: allowed, problems, onDrill, fill,
@@ -2681,23 +1978,13 @@ const SettingRow = memo(function SettingRow({
       // pinned to the bottom, and a hole between them.
       justify={wide ? 'flex-start' : 'space-between'}
       gap="sm"
-      px="sm" py="xs"
+      px="1.6vh" py="1.1vh"
+      // A filling list owns the whole pane, so it gets no plate of its own -
+      // a box inside a box. Changed / staged / wrong is a left edge either way.
+      className={'ss-fr'
+        + (fill && wide ? ' flat' : '')
+        + (problems?.length ? ' bad' : staged !== undefined ? ' stg' : modified ? ' mod' : '')}
       style={{
-        // A filling list owns the whole pane, so the card around it was a box
-        // inside a box — an outer frame wrapping rows that are already cards.
-        // Only the staged/problem state still needs saying, and a left edge
-        // says it without re-framing the page.
-        background: fill && wide
-          ? 'transparent'
-          : alpha(theme.colors.dark[8], staged ? 0.75 : 0.45),
-        border: fill && wide ? 'none' : `0.1vh solid ${problems?.length
-          ? alpha('#ef4444', 0.6)
-          : staged ? alpha(color, 0.35) : alpha(theme.colors.dark[5], 0.35)}`,
-        borderLeft: fill && wide && (problems?.length || staged)
-          ? `0.25vh solid ${problems?.length ? alpha('#ef4444', 0.7) : alpha(color, 0.5)}`
-          : undefined,
-        borderRadius: fill && wide ? 0 : theme.radius.xs,
-        transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
         position: wide ? 'relative' : undefined,
         ...(fill && wide ? { flex: 1, minHeight: 0, overflow: 'hidden' } : {}),
         // Dimmed rather than hidden: knowing the setting exists and why it is
@@ -2712,9 +1999,9 @@ const SettingRow = memo(function SettingRow({
         * lines of text, and the search box floating in the middle of it. */}
       <Flex direction="column" gap="0.2vh" style={{ minWidth: 0, flex: wide ? '0 0 auto' : 1 }}>
         <Flex align="center" gap="xs" wrap="wrap">
-          <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.9)">
+          <span className="ss-lbl">
             <Highlight text={label} query={query} />
-          </Text>
+          </span>
 
           {modified && (
             <Chip label={t('main.modified', 'Modified')} color={color} dot />
@@ -2769,9 +2056,9 @@ const SettingRow = memo(function SettingRow({
         </Flex>
 
         {help && !compactHelp && (
-          <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.45)" style={{ maxWidth: '82vh' }}>
+          <div className="ss-help" style={{ maxWidth: '82vh' }}>
             <Highlight text={help} query={query} />
-          </Text>
+          </div>
         )}
 
         {/* "That is set over there." Only while the value it applies to is
@@ -2806,14 +2093,14 @@ const SettingRow = memo(function SettingRow({
               column. Everything after them - a validator, an action, a gate
               reason - stays, because those are things you act on. */}
           {!compactHelp && (
-            <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.22)">
+            <span className="ss-path">
               <Highlight text={entry.path} query={query} />
-            </Text>
+            </span>
           )}
           {modified && !compactHelp && (
-            <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.3)">
-              default: {formatDefault(entry.default)}
-            </Text>
+            <span className="ss-path">
+              default: <b>{formatDefault(entry.default)}</b>
+            </span>
           )}
           {problems?.map((problem) => (
             <Flex key={problem} align="center" gap="0.4vh">
@@ -2933,10 +2220,17 @@ const SettingRow = memo(function SettingRow({
             max={entry.max}
             onChange={(next) => setValue(resource, entry, next)}
           />
+        ) : entry.type === 'cameras' ? (
+          <CameraListControl
+            value={value}
+            disabled={!canEdit}
+            onChange={(next) => setValue(resource, entry, next)}
+          />
         ) : entry.type === 'positions' ? (
           <PositionListControl
             value={value}
             disabled={!canEdit}
+            bodyHeight={entry.bodyHeight}
             onChange={(next) => setValue(resource, entry, next)}
           />
         ) : entry.type === 'weekdays' ? (
@@ -3019,244 +2313,6 @@ const SettingRow = memo(function SettingRow({
     </Flex>
   );
 });
-
-function SaveBar({
-  dirty, saving, saveError, saved, canEdit, onDiscard, onSave, onUndo, onRedo, canUndo, canRedo,
-  onJson, onHistory, onReset, onRefresh,
-  problems, onShowProblem,
-}: {
-  dirty: number;
-  saving: boolean;
-  /** why the last save was refused, or null */
-  saveError: string | null;
-  /** a save of THIS script has succeeded since the panel opened */
-  saved: boolean;
-  canEdit: boolean;
-  problems: { path: string; label: string; group: string; message: string }[];
-  onShowProblem: (problem: { group: string; path: string }) => void;
-  onDiscard: () => void;
-  onSave: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  /** absent on the built-in pages, which have no JSON to show */
-  onJson?: () => void;
-  onHistory: () => void;
-  onReset: () => void;
-  onRefresh: () => void;
-}) {
-  const t = useChrome();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-
-  return (
-    <Flex
-      align="center" justify="space-between"
-      px="md" py="xs"
-      style={{
-        borderTop: `0.1vh solid ${alpha(theme.colors.dark[6], 0.8)}`,
-        background: alpha(theme.colors.dark[8], 0.5),
-        flexShrink: 0,
-        minHeight: '5.2vh',
-      }}
-    >
-      <Flex align="center" gap="xs" style={{ minWidth: 0, flex: 1 }}>
-        <AnimatePresence mode="wait">
-          {problems.length > 0 ? (
-            <motion.div
-              key="problems"
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -6 }}
-              transition={{ duration: 0.15 }}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.7vh', minWidth: 0 }}
-            >
-              <AlertTriangle size="1.5vh" color="#ef4444" />
-              {/* Counts were written straight into the markup in English, so a
-                  panel translated into every other language still said
-                  "2 problems" here. Same for the unsaved count below. */}
-              <Text ff="Akrobat Bold" size="xs" c="#ef4444" style={{ flexShrink: 0 }}>
-                {(problems.length === 1
-                  ? t('main.problem_count_one', '1 problem')
-                  : t('main.problem_count_other', '{n} problems')
-                ).replace('{n}', String(problems.length))}
-              </Text>
-              {/* name the first one and offer to go there - a count alone
-                  leaves you hunting through twenty sections */}
-              <motion.button
-                type="button"
-                onClick={() => onShowProblem(problems[0]!)}
-                whileHover={{ opacity: 1 }}
-                style={{
-                  background: 'transparent', border: 'none', padding: 0,
-                  cursor: 'pointer', opacity: 0.75, minWidth: 0, textAlign: 'left',
-                }}
-              >
-                <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.6)" truncate>
-                  {problems[0]!.label}: {problems[0]!.message} →
-                </Text>
-              </motion.button>
-            </motion.div>
-          ) : dirty > 0 ? (
-            <motion.div
-              key="dirty"
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -6 }}
-              transition={{ duration: 0.15 }}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.7vh' }}
-            >
-              <Flex w="0.7vh" h="0.7vh" style={{ background: color, borderRadius: '50%' }} />
-              <Text ff="Akrobat Bold" size="xs" c="rgba(255,255,255,0.8)">
-                {(dirty === 1
-                  ? t('main.unsaved_count_one', '1 unsaved change')
-                  : t('main.unsaved_count_other', '{n} unsaved changes')
-                ).replace('{n}', String(dirty))}
-              </Text>
-              {/* The nudge to press Save belongs HERE, where there is something
-                  to save. It used to be the RESTING text instead, so the panel
-                  announced "Changes are staged until you save." at the exact
-                  moment nothing was staged - including straight after a
-                  successful save, which made a save that worked read as one
-                  that had not happened yet. */}
-              <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.4)">
-                {t('main.changes_are_staged_until_you_save', 'Changes are staged until you save.')}
-              </Text>
-            </motion.div>
-          ) : saved ? (
-            <motion.div
-              key="saved"
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.6vh' }}
-            >
-              <Check size="1.4vh" color="#22c55e" />
-              <Text ff="Akrobat Bold" size="xs" c="#22c55e">
-                {t('main.all_changes_saved', 'Saved.')}
-              </Text>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="clean"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.3)">
-                {t('main.nothing_to_save', 'No unsaved changes.')}
-              </Text>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* A refused save used to look identical to a successful one - the
-            chips cleared either way and nothing said why. */}
-        <AnimatePresence initial={false}>
-          {saveError && (
-            <motion.div
-              key="saveError"
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.6vh' }}
-            >
-              <AlertTriangle size="1.4vh" color="#ef4444" />
-              <Text ff="Akrobat Bold" size="xs" c="#ef4444">{saveError}</Text>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Flex>
-
-      <Flex align="center" gap="xs">
-        {/* Step back and forward through staged edits, as the old config panel
-            did. Sits beside Discard because it is the same kind of decision -
-            what happens to what you have changed but not yet saved. */}
-        {/* Moved down from the header: these act on the script being edited,
-            which is what this bar is for. */}
-        {onJson && <StepButton icon={Braces} label={t('main.view_or_import_json', 'View or import JSON')} onClick={onJson} />}
-        <StepButton icon={History} label={t('main.change_history', 'Change history')} onClick={onHistory} />
-        <StepButton icon={RefreshCw} label={t('main.refresh_from_server', 'Refresh from server')} onClick={onRefresh} />
-        <StepButton icon={RotateCcw} label={t('main.reset_everything_to_defaults', 'Reset everything to defaults')} onClick={canEdit ? onReset : undefined} disabled={!canEdit} danger />
-
-        <Flex w="0.1vh" h="2.4vh" style={{ background: alpha(theme.colors.dark[4], 0.6), flexShrink: 0 }} />
-
-        <StepButton icon={Undo2} label={t('main.undo', 'Undo')} onClick={onUndo} disabled={!canUndo || saving || !canEdit} />
-        <StepButton icon={Redo2} label={t('main.redo', 'Redo')} onClick={onRedo} disabled={!canRedo || saving || !canEdit} />
-
-        <Flex w="0.1vh" h="2.4vh" style={{ background: alpha(theme.colors.dark[4], 0.6), flexShrink: 0 }} />
-
-        <StudioButton label={t('main.discard', 'Discard')} onClick={onDiscard} disabled={dirty === 0 || saving} />
-        <StudioButton
-          label={saving ? t('main.saving', 'Saving...') : t('main.save_changes', 'Save changes')}
-          primary
-          onClick={onSave}
-          disabled={dirty === 0 || saving || !canEdit || problems.length > 0}
-        />
-      </Flex>
-    </Flex>
-  );
-}
-
-/** Square icon button sized to sit in the row of StudioButtons. */
-function StepButton({
-  icon: Icon, label, onClick, disabled, danger,
-}: {
-  icon: React.ElementType;
-  label: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  const theme = useMantineTheme();
-  // Reset stays red now that it sits in a row of ordinary actions - it is the
-  // one button here you cannot take back with Undo.
-  const accent = danger ? '#ef4444' : theme.colors[theme.primaryColor][5];
-
-  return (
-    <Tooltip
-      label={label}
-      position="top"
-      withArrow
-      zIndex={10000}
-      styles={{
-        tooltip: {
-          background: alpha(theme.colors.dark[7], 0.95),
-          border: '0.1vh solid rgba(255,255,255,0.1)',
-          color: 'rgba(255,255,255,0.75)',
-          fontFamily: 'Akrobat Bold',
-          fontSize: '1.2vh',
-          padding: '0.5vh 0.8vh',
-        },
-      }}
-    >
-      <motion.button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        whileHover={disabled ? undefined : { background: alpha(accent, 0.14) }}
-        whileTap={disabled ? undefined : { scale: 0.94 }}
-        style={{
-          aspectRatio: '1 / 1', height: '3.2vh',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'transparent',
-          border: `0.1vh solid ${alpha(danger ? accent : theme.colors.dark[4], danger ? 0.4 : 0.55)}`,
-          borderRadius: theme.radius.xs,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled ? 0.35 : 1,
-          flexShrink: 0,
-        }}
-        aria-label={label}
-      >
-        <Icon size="1.5vh" color={danger ? accent : 'rgba(255,255,255,0.7)'} />
-      </motion.button>
-    </Tooltip>
-  );
-}
 
 function formatDefault(value: unknown): string {
   if (value === null || value === undefined) return 'none';

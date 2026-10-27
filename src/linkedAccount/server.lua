@@ -344,6 +344,8 @@ local function checkIn()
     end
 
     lastCheckin = { at = os.time(), ok = true, support = data.support == true }
+    -- the account can rename or change its picture: keep ours in step
+    if support.mergeAccount(link, data.account) then writeLink(link) end
     if data.support == true and type(data.requests) == 'table' then
       for _, req in ipairs(data.requests) do
         if type(req) == 'table' and type(req.id) == 'string' and not answered[req.id] then
@@ -388,6 +390,7 @@ local function pollUntilDone(mine)
           key = data.key,
           host = mine.host,
           account = type(data.account) == 'string' and data.account or nil,
+          avatar = support.avatarUrl(data.avatar),
           serverName = mine.serverName,
           linkedAt = os.time(),
           linkedBy = mine.by,
@@ -424,6 +427,9 @@ local function status()
   return {
     linked = link ~= nil,
     account = link and link.account or nil,
+    avatar = link and link.avatar or nil,
+    site = link and link.host or nil,
+    scripts = link and #support.scriptRows(allResources(), versionOf, GetResourceState) or nil,
     serverName = link and link.serverName or serverName(),
     linkedAt = link and link.linkedAt or nil,
     linkedBy = link and link.linkedBy or nil,

@@ -19,7 +19,15 @@ end
 AddEventHandler('onResourceStop', function(resource)
   for k,v in pairs(dialogs) do 
     if v.resource == resource then
-      v:close()
+      -- The owner is GONE, so nothing of theirs may be called back. Their
+      -- `onClose` is a function reference into a script host that is being torn
+      -- down, and calling one throws "Execution of function reference in script
+      -- host failed" on every restart of every resource with a dialog.
+      v:close(false, true)
+      -- ...and forgotten. A dialog whose owner has stopped can never be
+      -- reopened by anyone; keeping it would only leave a stale entry for the
+      -- next `closeDialog` sweep to trip over.
+      dialogs[k] = nil
     end 
   end
 end)
@@ -111,6 +119,11 @@ function dialog:closeCamera()
   if not self.cam then return; end 
   RenderScriptCams(false, true, 500, true, true)
   DestroyCam(self.cam)
+  -- Forgotten as well as destroyed. The handle used to outlive the camera, so
+  -- the next close called DestroyCam on something already gone — and the same
+  -- handle is passed on to a chained dialogue (`dialog.cam = self.cam`), which
+  -- then held a camera that no longer existed.
+  self.cam = nil
 end 
 
 function dialog:open(another_menu, entity)
@@ -227,7 +240,18 @@ function dialog:update(data)
   self:send()
 end
 
-function dialog:close(keep_cam)
+--- @param keep_cam? boolean leave the conversation camera up
+--- @param ownerGone? boolean the resource that made this has stopped — close it
+---        without calling anything of theirs
+function dialog:close(keep_cam, ownerGone)
+  -- Nothing to close. `lib.closeDialog` sweeps EVERY dialog with a matching id
+  -- whether it is up or not, and a resource stopping closes all of its dialogs
+  -- whether they are up or not — so this was firing `onClose` for
+  -- conversations nobody was having. On a restart that callback belongs to the
+  -- resource being torn down, which is how a plain restart produced a script
+  -- error without anyone having opened anything.
+  if not self.isOpen then return end
+
   self.isOpen = false
   SetNuiFocus(false, false)
 
@@ -238,8 +262,16 @@ function dialog:close(keep_cam)
     self:closeCamera()
   end
 
-  if self.onClose then 
-    self.onClose()
+  -- Not when the owner is gone: see the stop handler above.
+  --
+  -- pcall'd regardless. The callback is somebody else's code, and a close that
+  -- throws halfway leaves NUI focus and the camera in whatever state they were
+  -- in — which is a player stuck with a cursor and no way out.
+  if self.onClose and not ownerGone then
+    local ok, err = pcall(self.onClose)
+    if not ok then
+      lib.print.warn(('[dialog] %s onClose failed: %s'):format(tostring(self.id), tostring(err)))
+    end
   end
 end
 

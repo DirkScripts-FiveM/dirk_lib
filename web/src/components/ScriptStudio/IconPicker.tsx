@@ -31,18 +31,7 @@ const FA_ICONS: string[] = [...new Set(
   Object.values(fas).map((icon) => (icon as { iconName?: string }).iconName).filter(Boolean) as string[],
 )].sort();
 
-/** The value a field of this set actually stores. */
-function iconValue(set: IconSet, name: string): string {
-  return set === 'fontawesome' ? `fa-solid fa-${name}` : name;
-}
-
-/** ...and the bare name inside one, for matching the current selection. */
-function iconName(set: IconSet, value: string): string {
-  if (set !== 'fontawesome') return value;
-  return parseFaIcon(value)?.[1] ?? '';
-}
-
-export type IconSet = 'lucide' | 'fontawesome';
+export type IconSet = 'lucide' | 'fontawesome' | 'both';
 
 /** kebab-case names, derived from lucide's own exports rather than a list. */
 const ALL_ICONS: string[] = (() => {
@@ -57,6 +46,30 @@ const ALL_ICONS: string[] = (() => {
   }
   return [...seen].sort();
 })();
+
+/**
+ * One catalogue entry, carrying the value it STORES alongside the name it is
+ * searched by.
+ *
+ * `both` is why this exists. The set used to be a property of the field alone,
+ * so the picker could convert a name to a value with one rule. Offering two
+ * sets at once means each icon has to carry its own - and it already can: a
+ * Font Awesome value is `fa-solid fa-fish` and a lucide one is a bare
+ * `fish`, which `parseFaIcon` tells apart with no extra field to store and
+ * nothing to migrate. `AnyIcon` renders either, so everything downstream of
+ * the picker already worked.
+ */
+type Entry = { value: string; name: string; set: 'lucide' | 'fontawesome' };
+
+const LUCIDE_ENTRIES: Entry[] = ALL_ICONS.map((name) => ({ value: name, name, set: 'lucide' }));
+const FA_ENTRIES: Entry[] = FA_ICONS.map((name) => ({
+  value: `fa-solid fa-${name}`, name, set: 'fontawesome',
+}));
+
+/** Which set a stored value belongs to, read from the value itself. */
+function setOfValue(value: string): 'lucide' | 'fontawesome' {
+  return parseFaIcon(value) ? 'fontawesome' : 'lucide';
+}
 
 /**
  * No cap.
@@ -82,21 +95,34 @@ export function IconPicker({
   const [query, setQuery] = useState('');
 
   const stored = typeof value === 'string' ? value : '';
-  const current = iconName(set, stored);
-  const catalogue = set === 'fontawesome' ? FA_ICONS : ALL_ICONS;
+
+  // On a `both` field the tab starts on the set the current value came from, so
+  // opening a picker on a Font Awesome icon does not look like it has nothing
+  // selected.
+  const [tab, setTab] = useState<'lucide' | 'fontawesome'>(() => setOfValue(stored));
+
+  const catalogue = useMemo(() => {
+    if (set === 'fontawesome') return FA_ENTRIES;
+    if (set === 'lucide') return LUCIDE_ENTRIES;
+    return tab === 'fontawesome' ? FA_ENTRIES : LUCIDE_ENTRIES;
+  }, [set, tab]);
+
+  const current = useMemo(
+    () => catalogue.find((entry) => entry.value === stored)?.name ?? '',
+    [catalogue, stored],
+  );
 
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) {
       // With no search, lead with whatever is already set so it is visible
       // rather than buried alphabetically.
-      // Whatever is already set leads, so it is visible rather than buried
-      // alphabetically.
-      const rest = catalogue.filter((n) => n !== current);
-      return current ? [current, ...rest] : rest;
+      const rest = catalogue.filter((entry) => entry.value !== stored);
+      const active = catalogue.find((entry) => entry.value === stored);
+      return active ? [active, ...rest] : rest;
     }
-    return catalogue.filter((n) => n.includes(needle));
-  }, [query, current, catalogue]);
+    return catalogue.filter((entry) => entry.name.includes(needle));
+  }, [query, stored, catalogue]);
 
   return (
     <Flex direction="column" gap="xs" style={{ width: '100%', flex: 1, minHeight: 0 }}>
@@ -142,6 +168,43 @@ export function IconPicker({
         </Text>
       </Flex>
 
+      {/* Only where the field takes either. One set stays a plain grid — a
+          switcher with nothing to switch to is just chrome. */}
+      {set === 'both' && (
+        <Flex gap="0.3vh" style={{ flexShrink: 0 }}>
+          {([
+            ['lucide', t('iconPicker.lucide', 'Lucide')],
+            ['fontawesome', t('iconPicker.fontAwesome', 'Font Awesome')],
+          ] as const).map(([id, label]) => {
+            const active = tab === id;
+            return (
+              <motion.button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                whileTap={{ scale: 0.98 }}
+                style={{
+                  flex: 1,
+                  padding: '0.5vh 0.8vh',
+                  background: active ? alpha(color, 0.16) : alpha(theme.colors.dark[9], 0.5),
+                  border: `0.1vh solid ${active ? alpha(color, 0.5) : alpha(theme.colors.dark[5], 0.35)}`,
+                  borderRadius: theme.radius.xs,
+                  cursor: 'pointer',
+                }}
+              >
+                <Text
+                  ff="Akrobat SemiBold"
+                  size="xs"
+                  c={active ? color : 'rgba(255,255,255,0.45)'}
+                >
+                  {label}
+                </Text>
+              </motion.button>
+            );
+          })}
+        </Flex>
+      )}
+
       <Flex
         gap="0.3vh" wrap="wrap" p="0.4vh"
         className="studio-scroll"
@@ -155,14 +218,15 @@ export function IconPicker({
           overflowY: 'auto',
         }}
       >
-        {shown.map((name) => {
-          const active = name === current;
+        {shown.map((entry) => {
+          const { value: entryValue, name } = entry;
+          const active = entryValue === stored;
           return (
             <motion.button
-              key={name}
+              key={entryValue}
               type="button"
               title={name}
-              onClick={() => !disabled && onChange(iconValue(set, name))}
+              onClick={() => !disabled && onChange(entryValue)}
               whileTap={disabled ? undefined : { scale: 0.9 }}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -176,7 +240,7 @@ export function IconPicker({
               aria-label={name}
             >
               <AnyIcon
-                name={iconValue(set, name)}
+                name={entryValue}
                 size="1.7vh"
                 color={active ? color : 'rgba(255,255,255,0.6)'}
               />

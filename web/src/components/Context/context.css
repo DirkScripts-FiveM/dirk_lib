@@ -1,0 +1,19 @@
+/* lib.registerContext on top of the kit's .cx rules */
+.dk .cx .srch { cursor: text; }
+.dk .cx .srch input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; padding: 0; margin: 0; font: inherit; color: #fff; caret-color: #fff; }
+.dk .cx .srch input::placeholder { color: rgba(255,255,255,.45); text-transform: uppercase; letter-spacing: .08em; font-style: italic; }
+/* the rows scroll inside .scr (its side padding keeps the slanted ends from being cut off); .list holds the bar.
+   The slant pushes each end out by a quarter of the row's height / 2, so a tall row (a long description,
+   ~25vh) needs ~3.2vh: 1.2vh only covered short rows. */
+.dk .cx .list.scroll { max-height: none; overflow: visible; padding-right: var(--gut, 0px); }
+/* the scroll bar: a thin accent rail on a dark track, square ended, in its own gutter clear of the rows' slanted ends.
+   main.tsx sizes the gutter (--out past the column's edge, --gut off the rows); --th is the thumb, --tp how far down. */
+.dk .cx .bar2 { right: calc(var(--out, 0px) * -1); width: .35vh; background: var(--plate2); }
+.dk .cx .bar2 i { top: calc((100% - var(--th)) * var(--tp, 0)); height: var(--th); background: var(--a); }
+.dk .cx .scr { position: relative; display: grid; gap: .5vh; max-height: 66vh; overflow-x: hidden; overflow-y: auto; margin: 0 -4vh; padding: 0 4vh; scrollbar-width: none; }
+.dk .cx .scr::-webkit-scrollbar { display: none; }
+.dk .cx .it { cursor: pointer; } .dk .cx .it.off, .dk .cx .it.ro { cursor: default; }
+.dk .cx .it .thumb { flex: none; }
+.dk .cx .none { padding: 1vh 2.2vh; }
+.dk .cx .meta { z-index: 1; }
+.dk .cx .wm { width: 6.5vh; height: 6.5vh; object-fit: contain; justify-self: end; margin-top: .6vh; }

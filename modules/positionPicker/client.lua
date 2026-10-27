@@ -32,7 +32,14 @@ local function positionPicker(options)
     Wait(0)
     lib.disableControls()
 
-    local hit, _, endCoords, _, _ = lib.raycast.fromCamera(511, 4, 100.0)
+    -- `hit, endCoords` — in that order.
+    --
+    -- This read `hit, _, endCoords`, which skips the real endCoords and binds
+    -- the ENTITY HANDLE to it instead: a number, where the lines below expect
+    -- a vector. It never blew up because `lib.raycast` had a separate bug that
+    -- made `hit` false on every call, so the branch under it never ran at all —
+    -- one bug hiding another, and this picker silently drawing nothing.
+    local hit, endCoords = lib.raycast.fromCamera(511, 4, 100.0)
 
     if hit and endCoords then
       lastCoords = endCoords

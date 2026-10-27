@@ -10,6 +10,14 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   height: 100vh;
+  /* Game UI: a drag or double-click never highlights text. Fields stay selectable below. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input, textarea, [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 #root {
@@ -33,14 +41,12 @@ code {
   width: 100% !important;
 }
 
-
-
 /* ── Script Studio ─────────────────────────────────────────────────────────
    The settings pane is a long scroll, so its bar has to be grabbable. The
    global 2px thumb suits small popovers but not this, hence a scoped rule
    rather than widening every scrollbar in dirk_lib. */
 .studio-scroll::-webkit-scrollbar {
-  width: 10px;
+  width: 7px;
 }
 
 .studio-scroll::-webkit-scrollbar-track {
@@ -55,6 +61,7 @@ code {
   background-clip: padding-box;
   border: 2px solid transparent;
   border-radius: 6px;
+  min-height: 24px;
 }
 
 .studio-scroll::-webkit-scrollbar-thumb:hover {
@@ -66,7 +73,6 @@ code {
   background: var(--mantine-primary-color-5);
   background-clip: padding-box;
 }
-
 
 /* ── Portal layering ───────────────────────────────────────────────────────
    Mantine portals its dropdowns, popovers and tooltips to <body> at
@@ -124,10 +130,12 @@ code {
 .studio-native .mantine-Select-input {
   background: var(--studio-input-bg);
   border: var(--studio-input-border);
+  border-bottom: var(--studio-input-border-bottom);
   border-radius: var(--studio-input-radius);
   min-height: var(--studio-input-height);
   height: var(--studio-input-height);
-  font-family: 'Akrobat SemiBold';
+  font-family: 'Akrobat';
+  font-weight: 700;
   font-size: var(--studio-input-font-size);
   padding-inline: var(--studio-input-padding);
   color: rgba(255, 255, 255, 0.9);
@@ -145,6 +153,7 @@ code {
   background: var(--studio-dropdown-bg, inherit);
   border: var(--studio-dropdown-border, inherit);
   border-radius: var(--studio-dropdown-radius, inherit);
+  box-shadow: var(--studio-dropdown-shadow, inherit);
 }
 
 .mantine-Combobox-option {
@@ -162,7 +171,6 @@ code {
 .studio-spin {
   animation: studio-spin 0.9s linear infinite;
 }
-
 
 /* ── Screenshot mode ──────────────────────────────────────────────────────
    Set `data-shot` on <html> and nothing behind the panel paints, so a capture
@@ -186,7 +194,8 @@ html[data-shot] [style*="background-image"] {
 html[data-shot] [data-studio-panel] {
   box-shadow: none;
 }
-html[data-shot] div:has(> [data-studio-panel]) {
+html[data-shot] div:has(> [data-studio-panel]),
+html[data-shot] .ss-dim {
   background-color: transparent !important;
 }
 
@@ -212,3 +221,4 @@ html[data-shot] #root > div {
   background-image: none !important;
   background-color: transparent !important;
 }
+

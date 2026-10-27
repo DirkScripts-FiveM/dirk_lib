@@ -637,6 +637,25 @@ function M.scriptRows(names, versionOf, stateOf)
   return rows
 end
 
+-- ─── the account ─────────────────────────────────────────────────────────────
+
+--- The site's picture link for the account, or nil: an https url and nothing else.
+function M.avatarUrl(v)
+  if type(v) ~= 'string' or #v > 512 or not v:match('^https://[%w%.%-]+/') then return nil end
+  return v
+end
+
+--- Fold a check-in's `account { name, avatar }` into the stored link. Returns
+--- true when the name or picture changed (the caller writes it back).
+function M.mergeAccount(link, account)
+  if type(link) ~= 'table' or type(account) ~= 'table' then return false end
+  local name = type(account.name) == 'string' and account.name ~= '' and account.name:sub(1, 64) or link.account
+  local avatar = M.avatarUrl(account.avatar)
+  if name == link.account and avatar == link.avatar then return false end
+  link.account, link.avatar = name, avatar
+  return true
+end
+
 -- ─── sending one by hand ─────────────────────────────────────────────────────
 
 --- The resource a request or ticket is about, for its Script Studio settings:

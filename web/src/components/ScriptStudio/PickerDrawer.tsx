@@ -1,9 +1,7 @@
+import { toBodyHeight } from './bodyHeight';
 import { alpha, Flex, NumberInput, Text, TextInput, useMantineTheme } from '@mantine/core';
-import {
-  Modal, WorldPositionPicker, blipUrlForSprite, getBlipColor, getBlipEntry,
-  isEnvBrowser, loadModels, useItems, useModels,
-  type Vector4Value,
-} from 'dirk-cfx-react';
+import { WorldPositionPicker, blipUrlForSprite, getBlipColor, getBlipEntry, isEnvBrowser, loadModels, useItems, useModels, type Vector4Value } from 'dirk-cfx-react';
+import { Modal } from './Dialog';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { PedArt } from './pedArt';
 import { IconPicker } from './IconPicker';
@@ -56,12 +54,14 @@ type PickerProps = {
   onClose: () => void;
   disabled?: boolean;
   /** which icon set an `icon` picker should offer - schema `x-iconSet` */
-  iconSet?: 'lucide' | 'fontawesome';
+  iconSet?: 'lucide' | 'fontawesome' | 'both';
+  /** `x-bodyHeight` - a captured position is lifted to body height */
+  bodyHeight?: boolean;
 };
 
 
 export function PickerDrawer({
-  type, label, help, value, onApply, onClose, disabled, iconSet,
+  type, label, help, value, onApply, onClose, disabled, iconSet, bodyHeight,
 }: PickerProps) {
   const t = useChrome();
   const theme = useMantineTheme();
@@ -659,7 +659,7 @@ export function PickerDrawer({
               <Flex gap="xs" justify="flex-end">
                 <WorldPositionPicker
                   value={draft as Vector4Value}
-                  onChange={(next: Vector4Value) => setDraft(next)}
+                  onChange={(next: Vector4Value) => setDraft(toBodyHeight(next, bodyHeight))}
                 />
               </Flex>
 

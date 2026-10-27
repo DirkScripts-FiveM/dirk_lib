@@ -6,9 +6,11 @@ import { PANE_HEIGHT, PANE_MIN_HEIGHT } from './Controls';
 import { RowModal } from './RowModal';
 import { useStudio } from './store';
 import { notify } from './Toasts';
-import type { SettingEntry } from './types';
+import type { SettingEntry, SlottedSetting } from './types';
 import { translate, useActiveLanguage, useBundles } from './studioLocale';
 import { newRow } from './newRow';
+import { studioKit } from './studioKit';
+import './cc.css';
 import { copyToClipboard, fetchNui, isEnvBrowser } from 'dirk-cfx-react';
 import * as motion from 'framer-motion';
 import { motion as m } from 'framer-motion';
@@ -46,6 +48,10 @@ import * as reactVirtual from '@tanstack/react-virtual';
  *
  * The file default-exports a component taking `{ value, onChange, canEdit }` -
  * the same props ZoneMap already takes per layer.
+ *
+ * From v7 it can draw with the panel's own kit (`__dirkStudio.kit`, see
+ * studioKit.tsx) and say so with `export const contract = 7`, which hands it
+ * the whole frame to fill with its own plates.
  */
 
 /**
@@ -57,7 +63,16 @@ import * as reactVirtual from '@tanstack/react-virtual';
  * through rendering, which is the difference between a clear message and a
  * white panel.
  */
-const CONTRACT_VERSION = 6;
+const CONTRACT_VERSION = 7;
+
+/**
+ * Components that said they are built on the kit (`export const contract = 7`).
+ *
+ * Those draw their own plates, so the frame drops its border and background
+ * and becomes the box they fill. A v6 component never says so and keeps the
+ * bordered frame it was drawn for - both load, both look right.
+ */
+const KIT_BUILT = new WeakSet<object>();
 
 /** What a remote component is handed instead of importing it itself. */
 function sharedDeps() {
@@ -97,6 +112,11 @@ function sharedDeps() {
     '@tanstack/react-query': reactQuery,
     reactVirtual,
     '@tanstack/react-virtual': reactVirtual,
+    // v7: the lib kit and the Studio's own shapes (search, filters, toolbar,
+    // card wall, chip, button), so a script's screen is the panel's look by
+    // default instead of a copy of it that drifts
+    kit: studioKit,
+    'dirk-studio-kit': studioKit,
   };
 }
 
@@ -131,6 +151,29 @@ export type CustomProps = {
    * is not a list - there is no row to open.
    */
   openRow?: (index: number) => void;
+  /**
+   * Ask for the whole window, rail folded - only a `bare` control gets this,
+   * because only a control that already fills the pane has anywhere to put it.
+   */
+  setFull?: (on: boolean) => void;
+  /** whether it currently has the window, so it can draw the right control */
+  full?: boolean;
+  /**
+   * Leave the page altogether - hands the window back AND moves the rail off
+   * this section, because landing on a smaller copy of what you were just
+   * looking at reads as nothing having happened.
+   */
+  onBack?: () => void;
+  /**
+   * The section's plain settings, when this control holds the window.
+   *
+   * Its rail neighbours are folded away with the rail, so they come here
+   * instead. Each `node` is the PANEL's own row - same editor, same staging,
+   * same save bar - so placing them is a layout decision, not a rewrite; a
+   * control that ignores them simply does not show them. `path` is there so
+   * a master switch can be pulled out and put beside what it switches off.
+   */
+  settings?: SlottedSetting[];
   /** Append a row, seeded from the schema the same way the built-in list does. */
   addRow?: () => void;
   /** Remove a row by index. */
@@ -221,7 +264,7 @@ export function load(resource: string, path: string): Promise<React.ComponentTyp
       ? `/__nui/${resource}/${path}`
       : `nui://${resource}/${path}`) + (generation > 0 ? `?v=${generation}` : '');
 
-    let module_: { default?: React.ComponentType<CustomProps> };
+    let module_: { default?: React.ComponentType<CustomProps>; contract?: unknown };
     try {
       // Raced against a deadline: an nui:// fetch from a resource that is
       // mid-restart can neither resolve nor reject - the handler is simply
@@ -246,6 +289,7 @@ export function load(resource: string, path: string): Promise<React.ComponentTyp
 
     const Component = module_?.default;
     if (typeof Component !== 'function') throw new Error('NoDefaultExport');
+    if (typeof module_.contract === 'number' && module_.contract >= 7) KIT_BUILT.add(Component);
     return Component;
   })();
 
@@ -290,7 +334,7 @@ export const REASONS: Record<string, string> = {
 };
 
 export function CustomControl({
-  resource, component, value, onChange, canEdit, entry, bare, row,
+  resource, component, value, onChange, canEdit, entry, bare, row, settings, onBack, full, setFull,
 }: {
   resource: string;
   component: string;
@@ -309,6 +353,18 @@ export function CustomControl({
   canEdit: boolean;
   /** the setting itself, so list rows can be opened in the panel's own editor */
   entry?: SettingEntry;
+  /**
+   * The section's plain settings, for a control holding the window.
+   *
+   * These are the panel's OWN rows - they stage and save through the same bar
+   * as everything else - so a control placing them is choosing where they go,
+   * not reimplementing them.
+   */
+  settings?: SlottedSetting[];
+  /** the page shell's own controls, handed straight to the component */
+  onBack?: () => void;
+  full?: boolean;
+  setFull?: (on: boolean) => void;
 }) {
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
 
@@ -378,7 +434,7 @@ export function CustomControl({
 
     return (
       <>
-        <StudioFrame bare={bare}>
+        <StudioFrame bare={bare} kit={KIT_BUILT.has(loaded.Component)}>
           <ComponentBoundary resource={resource} component={component}>
             <loaded.Component
               value={value}
@@ -387,6 +443,10 @@ export function CustomControl({
               row={row}
               t={t}
               notify={notify}
+              setFull={setFull}
+              full={full}
+              settings={settings}
+              onBack={onBack}
               {...rowApi}
             />
           </ComponentBoundary>
@@ -465,7 +525,7 @@ export function CustomControl({
  * Deliberately no padding: a map or a canvas should reach the edges. Anything
  * needing inner spacing can add its own.
  */
-function StudioFrame({ children, bare }: { children: React.ReactNode; bare?: boolean }) {
+function StudioFrame({ children, bare, kit }: { children: React.ReactNode; bare?: boolean; kit?: boolean }) {
   const theme = useMantineTheme();
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -505,9 +565,9 @@ function StudioFrame({ children, bare }: { children: React.ReactNode; bare?: boo
       style={{
         // The same resting border every setting row uses. The accent is
         // reserved for a staged change, and red for a value that blocks saving.
-        border: bare ? 'none' : `0.1vh solid ${alpha(theme.colors.dark[5], 0.35)}`,
-        background: bare ? 'transparent' : alpha(theme.colors.dark[8], 0.45),
-        borderRadius: bare ? 0 : theme.radius.xs,
+        border: bare || kit ? 'none' : `0.1vh solid ${alpha(theme.colors.dark[5], 0.35)}`,
+        background: bare || kit ? 'transparent' : alpha(theme.colors.dark[8], 0.45),
+        borderRadius: bare || kit ? 0 : theme.radius.xs,
         overflow: 'hidden',
         width: '100%',
         // BOUNDED, so a component written as `h="100%"` has something to be
@@ -539,6 +599,7 @@ function StudioFrame({ children, bare }: { children: React.ReactNode; bare?: boo
         * way it sizes itself.
         */}
       <div
+        className={kit ? 'ss-cc' : undefined}
         style={{
           position: 'absolute',
           inset: 0,

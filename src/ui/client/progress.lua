@@ -159,6 +159,13 @@ local function startProgress(data)
   return true
 end
 
+-- The key cancel_lib_progress is bound to, for the cancel plate under the bar (a pad shows B, its pad binding).
+local function cancelKeyOf(data)
+  if not data.canCancel or not isFivem or not lib.getCommandKey then return nil end
+  local ok, key = pcall(lib.getCommandKey, 'cancel_lib_progress')
+  return ok and key ~= '' and key or nil
+end
+
 ---@param data ProgressProps
 ---@return boolean?
 function lib.progressBar(data)
@@ -182,6 +189,9 @@ function lib.progressBar(data)
         icon     = data.icon,
         description = data.description,
         theme    = theme,
+        -- the cancel key's plate shows only when the script lets you cancel
+        canCancel = data.canCancel or nil,
+        cancelKey = cancelKeyOf(data),
       }
     })
 
@@ -209,6 +219,8 @@ function lib.progressCircle(data)
         position = data.position or lib.settings.progBarPosition or 'bottom-center',
         label = data.label,
         theme = theme,
+        canCancel = data.canCancel or nil,
+        cancelKey = cancelKeyOf(data),
       }
     })
 
@@ -248,7 +260,13 @@ end)
 
 if isFivem then
   RegisterKeyMapping('cancel_lib_progress', locale('CancelProgress'), 'keyboard', 'x')
+  -- and B on a controller, which the bar's cancel plate shows on a pad (19/10 restyle). A mapping is keyed by its
+  -- command, so the pad one goes on the hidden ~! alias, as lib.addKeybind does for a secondary key.
+  RegisterKeyMapping('~!cancel_lib_progress', locale('CancelProgress'), 'PAD_DIGITALBUTTON', 'RRIGHT_INDEX')
 end
+
+-- for lib.test only (rawset: not an export)
+rawset(lib, '_progressCancelKeyOf', cancelKeyOf)
 
 local function deleteProgressProps(serverId)
   local playerProps = createdProps[serverId]

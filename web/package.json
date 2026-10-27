@@ -8,7 +8,8 @@
     "start": "vite --port 3001",
     "start:game": "vite build --watch",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:dui": "vite build --config vite.dui.config.ts"
   },
   "dependencies": {
     "@adamscybot/react-leaflet-component-marker": "^2.0.3",
@@ -31,7 +32,7 @@
     "axios": "^1.20.0",
     "chroma-js": "^3.2.0",
     "dayjs": "^1.11.13",
-    "dirk-cfx-react": "^1.1.97",
+    "dirk-cfx-react": "^1.1.99",
     "embla-carousel-autoplay": "8.5.2",
     "framer-motion": "^12.23.26",
     "leaflet": "^1.9.4",

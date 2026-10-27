@@ -1,0 +1,29 @@
+/* ── A script's own screens (contract v7): the frame is the page, the kit pieces in studioKit.tsx ── */
+
+/* a v7 component draws its own plates, so the frame is just the box it fills */
+.ss-cc { display: flex; flex-direction: column; gap: 1vh; min-height: 0; }
+
+.ss-cc .chip { display: inline-block; font: 800 italic 1.15vh/1 var(--f); text-transform: uppercase; letter-spacing: .06em; background: rgba(255, 255, 255, .14); padding: .4vh .8vh; transform: skewX(-14deg); color: #fff; white-space: nowrap; flex: none; }
+.ss-cc .chip > b { display: inline-block; font: inherit; color: inherit; transform: skewX(14deg); }
+.ss-cc .chip.a { background: var(--a); color: #0c0e11; }
+.ss-cc .chip.w { background: var(--warn); color: #0c0e11; }
+.ss-cc .chip.r { background: var(--red); color: #fff; }
+.ss-cc .chip.g { background: var(--a18); color: var(--a); box-shadow: inset 0 0 0 .15vh var(--a60); }
+.ss-cc .chip.c { background: var(--c); color: #0c0e11; }
+
+/* the row above a wall */
+.ss-ctool { display: flex; align-items: center; gap: 1.2vh; padding: 0 .8vh; flex: none; --i: 1; }
+.ss-ctool .ss-lf { flex: 1; min-width: 14vh; }
+.ss-ctool .kstrip { flex-wrap: nowrap; gap: .5vh; }
+.ss-ctool > .L { white-space: nowrap; }
+.dk .ss-cc .kp { cursor: pointer; }
+.dk .ss-cc .kp.sm { padding: .4vh 1.3vh .4vh 1vh; }
+.dk .ss-cc .kp.sm .act { font-size: 1.3vh; }
+.dk .ss-cc .kp.sm .cap { height: 2.1vh; min-width: 2.1vh; font-size: 1.15vh; }
+.dk .ss-cc .kp.sm .cap svg { height: 1.3vh; }
+.dk .ss-cc .kp:not(.on):hover { background: rgba(255, 255, 255, .14); }
+.dk .ss-cc .kp.off { opacity: .4; cursor: not-allowed; }
+
+/* a wall of cards, --cols across */
+.ss-wall { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); grid-auto-rows: max-content; gap: 1.4vh 1.6vh; padding: .6vh 2.8vh 1.6vh; overflow-y: auto; flex: 1; min-height: 0; align-content: start; }
+.ss-wall > .ss-empty { grid-column: 1 / -1; }

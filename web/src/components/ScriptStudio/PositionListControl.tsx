@@ -1,8 +1,7 @@
+import { toBodyHeight } from './bodyHeight';
 import { alpha, Flex, Text, useMantineTheme } from '@mantine/core';
-import {
-  ConfirmModal, Vector4DeleteButton, Vector4Display, WorldPositionPicker,
-  type Vector4Value,
-} from 'dirk-cfx-react';
+import { Vector4DeleteButton, Vector4Display, WorldPositionPicker, type Vector4Value } from 'dirk-cfx-react';
+import { ConfirmModal } from './Dialog';
 import { AnimatePresence } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
@@ -22,11 +21,13 @@ const ZERO: Position = { x: 0, y: 0, z: 0, w: 0 };
  * the position, teleport to it, or set it to wherever you are standing.
  */
 export function PositionListControl({
-  value, onChange, disabled,
+  value, onChange, disabled, bodyHeight,
 }: {
   value: unknown;
   onChange: (next: Position[]) => void;
   disabled?: boolean;
+  /** `x-bodyHeight` - captured positions are lifted to body height */
+  bodyHeight?: boolean;
 }) {
   const t = useChrome();
   const theme = useMantineTheme();
@@ -74,7 +75,7 @@ export function PositionListControl({
             <Flex gap="0.3vh">
               <WorldPositionPicker
                 value={row as Vector4Value}
-                onChange={(next: Vector4Value) => update(index, next)}
+                onChange={(next: Vector4Value) => update(index, toBodyHeight(next, bodyHeight))}
                 compact
               />
               <Vector4DeleteButton onClick={() => setConfirmDelete(index)} compact />

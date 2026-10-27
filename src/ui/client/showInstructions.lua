@@ -14,6 +14,17 @@
 --       { key = 'ESC', action = 'Cancel'  },
 --     },
 --   })
+--
+-- With a RESOURCE BAR (what the player is holding and how much is left - a
+-- watering can's litres, a bottle's ml): `bar` stacks a small card of the same
+-- style on top of the instruction card:
+--   lib.showInstructions({
+--     title = 'Galvy Rose Can',
+--     keys  = { { key = 'E', action = 'Water' } },
+--     bar   = { value = 3.2, max = 5, label = 'Water', unit = 'L' },
+--   })
+-- Call it again as the value changes (last call wins); keep it to a few times
+-- a second.
 --   -- ... do the in-world work ...
 --   lib.hideInstructions()
 --
@@ -33,13 +44,23 @@ end
 local owner = nil
 
 ---@class InstructionKey
----@field key    string  -- short label inside the key cap, e.g. 'E', '⌫', 'LMB'
+---@field key    string  -- short label inside the key cap, e.g. 'E', 'BACKSPACE', 'LMB' ('LMB / E' = either)
 ---@field action string  -- what the key does, e.g. 'Confirm', 'Cancel'
+---@field pad    string? -- the controller button shown when the player is on a pad, e.g. 'A', 'RT',
+---                      -- 'DPAD:lr'. Default: the usual one for `key` (E -> A, LMB -> RT, BACKSPACE -> B)
+
+---@class InstructionBar
+---@field value number                 -- how much is left
+---@field max   number                 -- the full amount
+---@field label string?                -- what it is, e.g. 'Water'
+---@field unit  string?                -- e.g. 'L', 'ml'
+---@field warn  boolean?               -- draw it in the warning colour (empty, overdosed, ...)
 
 ---@class InstructionSpec
 ---@field title string                 -- header line
 ---@field hint  string?                -- optional sub-text
 ---@field keys  InstructionKey[]?      -- optional list of key bindings
+---@field bar   InstructionBar?        -- optional resource bar stacked on top of the card
 
 ---Show the bottom-right instruction card. Safe to call repeatedly — the
 ---last call wins, no stacking.
@@ -54,6 +75,7 @@ function lib.showInstructions(spec)
     title = spec.title,
     hint  = spec.hint,
     keys  = spec.keys,
+    bar   = type(spec.bar) == 'table' and tonumber(spec.bar.value) and tonumber(spec.bar.max) and spec.bar or nil,
     theme = lib.uiTheme(owner),
   })
 end

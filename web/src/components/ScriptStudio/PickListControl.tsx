@@ -52,8 +52,14 @@ export function PickListControl({
         const shown = sourceLabelKey
           ? String((row as Record<string, unknown>)[sourceLabelKey] ?? name)
           : String((row as Record<string, unknown>).label ?? name);
-        // the inventory's label if it knows this one, else whatever the row says
-        const label = resolveItemLabel(items, name, shown);
+        // A declared `labelKey` is the schema saying which field to SHOW, so it
+        // is not second-guessed. Without that the inventory answered for any id
+        // that happened to also be an item name: dirk_stores' payment methods
+        // are keyed `cash` and `black_money`, and the picker offered "Money"
+        // and "Dirty Money" — ox_inventory's labels for two unrelated items.
+        // With no labelKey the source rows ARE item names (a zone's per-species
+        // overrides), and the inventory is exactly who should name them.
+        const label = sourceLabelKey ? shown : resolveItemLabel(items, name, shown);
         return { value: name, label: label === name ? name : `${label} (${name})` };
       })
       .filter((option): option is { value: string; label: string } => option !== null);

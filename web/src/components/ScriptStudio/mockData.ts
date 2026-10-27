@@ -148,7 +148,7 @@ const projectCars = schemaToStudio(projectCarsSchema as Record<string, unknown>,
 });
 
 export const MOCK_SCRIPTS: StudioScript[] = [
-  fishing, projectCars, { ...loading, designs: true }, lib,
+  fishing, projectCars, loading, lib,
 ];
 
 /**

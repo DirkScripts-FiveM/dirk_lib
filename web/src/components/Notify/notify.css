@@ -1,0 +1,11 @@
+/* lib.notify on top of the kit's .nst / .n rules */
+.dk-notify { z-index: 1000; }
+/* the gap comes from each card's own margin, so a closing card can fold it away */
+.dk .nst { gap: 0; }
+.dk .nst.bc { bottom: 3vh; left: 50%; margin-left: -21vh; }
+/* a real toast drains once, over its own duration */
+.dk .n .time { animation-iteration-count: 1; animation-fill-mode: forwards; }
+/* the ×N pill slants with the plate, its number upright (Liam 19/10) */
+.dk .cnt > i { display: inline-block; font-style: inherit; transform: skewX(14deg); }
+/* ...and a bottom stack sits on its edge, not on its last card's margin */
+.dk .nst.bl, .dk .nst.bc, .dk .nst.br { margin-bottom: -.9vh; }

@@ -1,7 +1,7 @@
 import { fetchNui, isEnvBrowser } from 'dirk-cfx-react';
 import { schemaToStudio } from './schemaToStudio';
 import { MOCK_SCRIPTS } from './mockData';
-import { useStudio } from './store';
+import { markFresh, markStale, useStudio } from './store';
 import { notify } from './Toasts';
 import type { DraftValue } from './store';
 import type { StudioScript } from './types';
@@ -10,8 +10,8 @@ import { forgetLocales } from './studioLocale';
 
 /**
  * One script as the server hands it over: its schema read from disk by
- * dirk_lib, and its values pulled from that resource's own permission-gated
- * `getFullScriptConfig`.
+ * dirk_lib, and its values from that resource's own client VM plus the
+ * server-only sliver its own permission check let through.
  */
 export type LivePayload = {
   resource: string;
@@ -30,6 +30,11 @@ export type LivePayload = {
    * original text here keeps the order the schema was written in.
    */
   schemaJson?: string;
+  /**
+   * Content hash of the schema. When the panel already holds the text for
+   * this hash, Lua leaves `schemaJson` out and it is filled from SCHEMAS.
+   */
+  hash?: number | string;
   /** `x-autoDefault` values the server resolved from its convars, by path. */
   autoDefaults?: Record<string, unknown>;
   /** Pre-1.2.81 servers, and the browser mock, still send a decoded object. */
@@ -116,6 +121,104 @@ function flatten(value: Record<string, unknown>, prefix = '', out: Record<string
 }
 
 /**
+ * Schema text the panel holds, by resource.
+ *
+ * Every open used to carry every schema across from Lua again - fishing's alone
+ * is a quarter of a megabyte - to describe what was already on screen. The
+ * panel keeps them here instead and tells Lua which hashes it has
+ * (SCRIPT_STUDIO_HELD), so a payload carries a script's schema only when it is
+ * new or has changed.
+ */
+const SCHEMAS = new Map<string, { hash: number | string; text: string }>();
+
+/**
+ * Put the held text back into entries Lua sent without it. Returns the
+ * resources it could not fill: a hash Lua believes is held but this page does
+ * not have, which only happens if the page was reloaded under a running client.
+ */
+function fillSchemas(payload: LivePayload[]): string[] {
+  const missing: string[] = [];
+  for (const entry of payload) {
+    if (entry.schemaJson) {
+      if (entry.hash !== undefined) SCHEMAS.set(entry.resource, { hash: entry.hash, text: entry.schemaJson });
+      continue;
+    }
+    if (entry.schema || entry.hash === undefined) continue;
+    const held = SCHEMAS.get(entry.resource);
+    if (held && held.hash === entry.hash) entry.schemaJson = held.text;
+    else missing.push(entry.resource);
+  }
+  return missing;
+}
+
+/** Tell Lua which schemas it can leave out of the next payload. */
+function reportHeld() {
+  const schemas: Record<string, number | string> = {};
+  for (const [resource, held] of SCHEMAS) schemas[resource] = held.hash;
+  fetchNui('SCRIPT_STUDIO_HELD', { schemas }).catch(() => { /* the next payload just carries the text */ });
+}
+
+/**
+ * Fill in held schemas; if any cannot be, ask once for every schema in full,
+ * rather than render a script with no schema.
+ */
+async function settle(payload: LivePayload[]): Promise<LivePayload[]> {
+  if (fillSchemas(payload).length === 0) return payload;
+  const full = await fetchNui<LivePayload[]>('GET_SCRIPT_STUDIO', { full: true }, [])
+    .catch(() => [] as LivePayload[]);
+  if (Array.isArray(full) && full.length > 0) {
+    fillSchemas(full);
+    return full;
+  }
+  return payload;
+}
+
+/**
+ * What each script looked like when it was last built, so a payload that says
+ * nothing new rebuilds nothing.
+ *
+ * Re-running the schema walk for every script on every open re-rendered the
+ * whole panel to show the same thing. The signature is everything the build
+ * reads; a script whose signature matches keeps its existing object, and when
+ * every script does, the store is not touched at all.
+ *
+ * Reused only while the store still holds the very object that was built. A
+ * save replaces it (applyStagedLocally), so a script saved since its last
+ * build is always rebuilt from what the server says now.
+ */
+const BUILT = new Map<string, { signature: string; script: StudioScript }>();
+
+function signatureOf(entry: LivePayload): string {
+  return JSON.stringify([
+    entry.hash ?? null, entry.clientVersion ?? null, entry.startedAt ?? null,
+    entry.label, entry.icon, entry.version, entry.shared ?? false,
+    entry.autoDefaults ?? null, entry.values ?? null,
+  ]);
+}
+
+/** Build only what changed, reusing the rest. `changed` is false when nothing did. */
+function rebuild(payload: LivePayload[], previous: StudioScript[]) {
+  const byResource = new Map(previous.map((script) => [script.resource, script]));
+  let changed = payload.length !== previous.length;
+
+  const scripts = payload.map((entry, index) => {
+    const signature = signatureOf(entry);
+    const before = byResource.get(entry.resource);
+    const built = BUILT.get(entry.resource);
+    if (before && built && built.script === before && built.signature === signature) {
+      if (previous[index] !== before) changed = true;   // same script, new position
+      return before;
+    }
+    changed = true;
+    const script = toStudioScripts([entry])[0]!;
+    BUILT.set(entry.resource, { signature, script });
+    return script;
+  });
+
+  return { scripts, changed };
+}
+
+/**
  * Ask the game for the real config.
  *
  * In a browser there is no game to ask, so the mock stands in - which is what
@@ -128,7 +231,8 @@ export async function loadLiveScripts(focus?: string) {
   }
 
   const payload = await fetchNui<LivePayload[]>('GET_SCRIPT_STUDIO', undefined, []);
-  applyLivePayload(payload, focus);
+  if (!Array.isArray(payload) || payload.length === 0) return;
+  applyLivePayload(await settle(payload), focus);
 }
 
 /**
@@ -154,11 +258,22 @@ function noticeRestarts(payload: LivePayload[]) {
   }
 }
 
+/** Real data from the game has been applied since this page loaded. */
+let hydrated = false;
+
+/**
+ * Replace everything with this payload - the first one, when there is nothing
+ * on screen worth keeping. Every later payload MERGES (mergeLivePayload).
+ */
 export function applyLivePayload(payload: LivePayload[], focus?: string) {
   if (!Array.isArray(payload) || payload.length === 0) return;
+  fillSchemas(payload);
   noticeRestarts(payload);
 
   const scripts = toStudioScripts(payload);
+  payload.forEach((entry, index) => {
+    BUILT.set(entry.resource, { signature: signatureOf(entry), script: scripts[index]! });
+  });
   const wanted = focus && scripts.some((s) => s.resource === focus) ? focus : null;
 
   useStudio.setState({
@@ -172,6 +287,8 @@ export function applyLivePayload(payload: LivePayload[], focus?: string) {
     undoStack: {},
     redoStack: {},
   });
+  hydrated = true;
+  afterPayload(payload);
 }
 
 /**
@@ -242,6 +359,48 @@ function pruneDrafts(scripts: StudioScript[]) {
 }
 
 /**
+ * Merge fresh values in behind what is on screen, keeping what is still valid.
+ *
+ * Staged edits survive (pruned to what the schema still describes) and so does
+ * wherever you were - which is what lets an open show the panel's memory at
+ * once and correct it a moment later, with nothing moving but the values that
+ * actually changed.
+ */
+export function mergeLivePayload(payload: LivePayload[]) {
+  if (!Array.isArray(payload) || payload.length === 0) return;
+  fillSchemas(payload);
+  noticeRestarts(payload);
+
+  const state = useStudio.getState();
+  const { scripts, changed } = rebuild(payload, state.scripts);
+
+  if (changed) {
+    const { draft, undoStack, redoStack, dropped } = pruneDrafts(scripts);
+    useStudio.setState({
+      scripts,
+      draft,
+      undoStack,
+      redoStack,
+      // Whatever you were looking at survives, unless that script is no longer
+      // one of the ones on offer.
+      activeResource: scripts.some((s) => s.resource === state.activeResource)
+        ? state.activeResource
+        : scripts[0]?.resource ?? '',
+      saveError: null,
+    });
+
+    if (dropped > 0) {
+      notify('info', dropped === 1
+        ? '1 unsaved change was dropped - that setting has changed'
+        : `${dropped} unsaved changes were dropped - those settings have changed`);
+    }
+  }
+
+  hydrated = true;
+  afterPayload(payload);
+}
+
+/**
  * Re-read every script from the server, keeping what is still valid.
  *
  * Two things call this: the Refresh button, and a script restarting underneath
@@ -253,27 +412,116 @@ export async function reloadFromServer() {
   if (isEnvBrowser()) return;
   const payload = await fetchNui<LivePayload[]>('GET_SCRIPT_STUDIO', undefined, []);
   if (!Array.isArray(payload) || payload.length === 0) return;
+  mergeLivePayload(await settle(payload));
+}
+
+/**
+ * The rail's changelog and test tabs: which scripts have one.
+ *
+ * Asked once per SET of scripts, not once per open. Neither answer can change
+ * without a script starting or stopping, and every payload carries when each
+ * script last started - so the key below changes exactly when an answer might,
+ * and every other open skips both round trips (the changelog one used to read
+ * every CHANGELOG.md on the server to say yes or no).
+ */
+let indexKey = '';
+
+function refreshIndexes(payload: LivePayload[]) {
+  const resources = payload
+    .map((entry) => entry.resource)
+    .filter((name): name is string => typeof name === 'string');
+  if (resources.length === 0) return;
+
+  const key = payload
+    .map((entry) => `${entry.resource}@${entry.startedAt ?? ''}`)
+    .sort()
+    .join(',');
+  if (key === indexKey) return;
+  indexKey = key;
+
+  // Which scripts ship a changelog - one question covering all of them,
+  // rather than a call per script or a tab that opens onto nothing. A failed
+  // ask clears the key, so the next payload asks again rather than the panel
+  // remembering "no tabs" for the rest of the session.
+  fetchNui<{ resources?: string[] }>('GET_CHANGELOG_INDEX', { resources }, { resources })
+    .then((reply) => useStudio.setState({ changelogs: reply?.resources ?? [] }))
+    .catch(() => { indexKey = ''; });
+
+  fetchNui<{ resources?: string[] }>('GET_TEST_INDEX', { resources }, { resources })
+    .then((reply) => useStudio.setState({ tests: reply?.resources ?? [] }))
+    .catch(() => { indexKey = ''; });
+}
+
+/** Everything a payload sets off once it is in the store. */
+function afterPayload(payload: LivePayload[]) {
+  reportHeld();
+  refreshIndexes(payload);
+}
+
+export type StudioDataMessage = { scripts?: LivePayload[]; focus?: string; reason?: 'open' | 'prewarm' };
+export type StudioOpenMessage = { focus?: string; askLanguage?: boolean; canEdit?: boolean; stale?: boolean };
+
+/**
+ * A gather from Lua: the warm-up after joining, or the fresh values for an
+ * open. Shut or open, it lands in memory - which is what the next open shows.
+ */
+export async function onStudioData(data: StudioDataMessage | undefined) {
+  const payload = data?.scripts;
+  if (!Array.isArray(payload) || payload.length === 0) {
+    // Nothing for us (Lua closes the panel itself); just stop holding saves.
+    markFresh();
+    return;
+  }
+
+  const settled = await settle(payload);
+  if (hydrated) mergeLivePayload(settled);
+  else applyLivePayload(settled, data?.focus);
+  if (data?.reason === 'open') markFresh();
+}
+
+/**
+ * The panel is opening.
+ *
+ * `stale` means it is opening from MEMORY: what it held last time is shown at
+ * once, and the fresh gather follows as SCRIPT_STUDIO_DATA - saves wait for
+ * it. A named script (`/dirk_fishing`) is jumped to now rather than when the
+ * values land; with none named you are put back where you were, staged edits
+ * and all.
+ */
+export function onStudioOpen(data: StudioOpenMessage | undefined) {
+  if (data?.stale) markStale();
 
   const state = useStudio.getState();
-  const scripts = toStudioScripts(payload);
-  const { draft, undoStack, redoStack, dropped } = pruneDrafts(scripts);
+  const focus = data?.focus;
+  const jump = focus && state.scripts.some((s) => s.resource === focus) ? focus : null;
 
   useStudio.setState({
-    scripts,
-    draft,
-    undoStack,
-    redoStack,
-    // Whatever you were looking at survives, unless that script is no longer
-    // one of the ones on offer.
-    activeResource: scripts.some((s) => s.resource === state.activeResource)
-      ? state.activeResource
-      : scripts[0]?.resource ?? '',
-    saveError: null,
+    open: true,
+    canEdit: data?.canEdit !== false,
+    askLanguage: data?.askLanguage === true,
+    ...(jump ? { activeResource: jump, activePage: null } : {}),
   });
+}
 
-  if (dropped > 0) {
-    notify('info', dropped === 1
-      ? '1 unsaved change was dropped - that setting has changed'
-      : `${dropped} unsaved changes were dropped - those settings have changed`);
+/**
+ * Listened for at module level, not in a component.
+ *
+ * The warm-up arrives while the panel is SHUT, and whether the panel's
+ * component is mounted then is the panel's business, not this file's. A
+ * listener here hears it either way. Guarded so a hot reload in dev does not
+ * stack a second one.
+ */
+if (typeof window !== 'undefined' && !isEnvBrowser()) {
+  const flag = window as unknown as { __studioLiveListener?: boolean };
+  if (!flag.__studioLiveListener) {
+    flag.__studioLiveListener = true;
+    window.addEventListener('message', (event: MessageEvent) => {
+      const message = event.data as { action?: string; data?: unknown } | undefined;
+      if (message?.action === 'SCRIPT_STUDIO_DATA') {
+        void onStudioData(message.data as StudioDataMessage);
+      } else if (message?.action === 'OPEN_SCRIPT_STUDIO') {
+        onStudioOpen(message.data as StudioOpenMessage);
+      }
+    });
   }
 }

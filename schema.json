@@ -153,6 +153,24 @@
         }
       }
     },
+    "interface": {
+      "x-icon": "monitor",
+      "type": "object",
+      "description": "How dirk_lib's shared UI behaves while it has hold of the screen.",
+      "properties": {
+        "keysWhileBusy": {
+          "type": "array",
+          "x-control": "controls",
+          "default": [
+            249
+          ],
+          "items": {
+            "type": "number"
+          },
+          "description": "GTA control IDs that stay usable while a dirk_lib UI has the screen — a spoken line, a cutaway camera, a screen you are sat reading.\n\nEverything else is switched off, because every keybind on the server is a key that fires while you cannot see your character. 249 is push-to-talk and is ALWAYS kept whether it is listed here or not: somebody watching a scene is exactly the person being asked a question.\n\nAdd more IDs for anything else that must survive — see https://docs.fivem.net/docs/game-references/controls/."
+        }
+      }
+    },
     "bridging": {
       "x-icon": "plug",
       "type": "object",
@@ -411,7 +429,7 @@
         },
         "notify": {
           "type": "string",
-          "default": "ox_lib",
+          "default": "dirk_lib",
           "enum": [
             "ox_lib",
             "dirk_lib"
@@ -421,7 +439,7 @@
         },
         "progress": {
           "type": "string",
-          "default": "ox_lib",
+          "default": "dirk_lib",
           "enum": [
             "ox_lib",
             "dirk_lib"
@@ -431,7 +449,7 @@
         },
         "showTextUI": {
           "type": "string",
-          "default": "ox_lib",
+          "default": "dirk_lib",
           "enum": [
             "ox_lib",
             "dirk_lib"
@@ -441,7 +459,7 @@
         },
         "contextMenu": {
           "type": "string",
-          "default": "ox_lib",
+          "default": "dirk_lib",
           "enum": [
             "ox_lib",
             "dirk_lib"
@@ -451,7 +469,7 @@
         },
         "alertDialog": {
           "type": "string",
-          "default": "ox_lib",
+          "default": "dirk_lib",
           "enum": [
             "ox_lib",
             "dirk_lib"
@@ -461,7 +479,7 @@
         },
         "inputDialog": {
           "type": "string",
-          "default": "ox_lib",
+          "default": "dirk_lib",
           "enum": [
             "ox_lib",
             "dirk_lib"

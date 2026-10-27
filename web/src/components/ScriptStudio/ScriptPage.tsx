@@ -2,12 +2,13 @@ import { alpha, Flex, Loader, Text, useMantineTheme } from '@mantine/core';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { load, REASONS } from './CustomControl';
+import { CustomControl, load, REASONS } from './CustomControl';
+import { effectiveValue, setValue } from './store';
 import { Icon } from './Icon';
 import { notify } from './Toasts';
 import { studioQueryClient } from './studioQuery';
 import { translate, useActiveLanguage, useBundles } from './studioLocale';
-import type { ScriptPage as ScriptPageDef } from './types';
+import type { ScriptPage as ScriptPageDef, SettingEntry, SlottedSetting } from './types';
 
 /**
  * A whole page supplied by the script that owns it.
@@ -23,11 +24,28 @@ import type { ScriptPage as ScriptPageDef } from './types';
  * every bit of knowledge about its own data.
  */
 export function ScriptPage({
-  resource, page, canEdit,
+  resource, page, canEdit, onBack, full, setFull, entry, settings,
 }: {
   resource: string;
   page: ScriptPageDef;
   canEdit: boolean;
+  /**
+   * The setting this page EDITS, when it declares `x-pages[].path`.
+   *
+   * Given one, the page is mounted through CustomControl rather than loaded
+   * here: that is what already owns the row editor, the staging and the save
+   * bar, so a page that is really a list gets all three for free instead of
+   * building its own and drifting from the rest of the panel.
+   */
+  entry?: SettingEntry;
+  /** the settings that belong to this page, for it to place as it likes */
+  settings?: SlottedSetting[];
+  /** handed on to the page, so a full-window one can close itself */
+  onBack?: () => void;
+  /** whether the page currently HAS the whole window */
+  full?: boolean;
+  /** ask for it, or give it back - a Designs tab does this on open/close */
+  setFull?: (on: boolean) => void;
 }) {
   const theme = useMantineTheme();
   const color = theme.colors[theme.primaryColor][5];
@@ -41,6 +59,9 @@ export function ScriptPage({
   >({ state: 'loading' });
 
   useEffect(() => {
+    // A page bound to a setting is mounted by CustomControl, which does its
+    // own loading. Nothing to fetch here.
+    if (entry) return;
     let live = true;
     setState({ state: 'loading' });
     load(resource, page.component)
@@ -56,10 +77,18 @@ export function ScriptPage({
         if (live) setState({ state: 'failed', reason: REASONS[error.message] ?? error.message });
       });
     return () => { live = false; };
-  }, [resource, page.component]);
+  }, [resource, page.component, entry]);
 
   return (
-    <Flex direction="column" flex={1} p="md" style={{ minHeight: 0, overflow: 'hidden' }}>
+    <Flex
+      direction="column" flex={1}
+      p={full ? 0 : 'md'}
+      style={{ minHeight: 0, overflow: 'hidden' }}
+    >
+      {/* A full-window page IS the window. It brings its own title bar and its
+          own way out, so a second heading above it - inside a panel header that
+          is also naming it - reads as a page inside a page. */}
+      {!full && (
       <Flex align="flex-start" gap="xs" mb="0.6vh" style={{ flexShrink: 0 }}>
         <Flex align="center" gap="xs" style={{ flexShrink: 0 }}>
           <Icon name={page.icon} size="1.9vh" color={color} />
@@ -79,15 +108,32 @@ export function ScriptPage({
           </Text>
         )}
       </Flex>
+      )}
 
       <Flex direction="column" flex={1} style={{ minHeight: 0 }}>
-        {state.state === 'loading' && (
+        {entry && (
+          <CustomControl
+            resource={resource}
+            component={entry.component ?? page.component}
+            entry={entry}
+            value={effectiveValue(resource, entry)}
+            canEdit={canEdit}
+            bare
+            settings={settings}
+            onBack={onBack}
+            full={full}
+            setFull={setFull}
+            onChange={(next) => setValue(resource, entry, next)}
+          />
+        )}
+
+        {!entry && state.state === 'loading' && (
           <Flex align="center" justify="center" flex={1}>
             <Loader size="sm" color={color} />
           </Flex>
         )}
 
-        {state.state === 'failed' && (
+        {!entry && state.state === 'failed' && (
           <Flex
             direction="column" align="center" justify="center" gap="xs" flex={1} p="md"
             style={{
@@ -109,7 +155,7 @@ export function ScriptPage({
           </Flex>
         )}
 
-        {state.state === 'ready' && (
+        {!entry && state.state === 'ready' && (
           // Its own provider, because a script page is the first thing here
           // that fetches on its own schedule - a player list is paged, cached
           // and refetched, none of which the settings tree needs.
@@ -118,6 +164,9 @@ export function ScriptPage({
               resource={resource}
               canEdit={canEdit}
               notify={notify}
+              onBack={onBack}
+              full={full}
+              setFull={setFull}
               t={(key: string, fallback: string) => translate(
                 bundles, language, resource, key, fallback,
               )}

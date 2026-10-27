@@ -128,6 +128,14 @@ type StudioState = {
    * would otherwise carry.
    */
   askLanguage: boolean;
+  /**
+   * The values on screen are the latest the server has given this panel.
+   *
+   * False between an open shown from memory and the fresh values landing
+   * behind it. Saves wait for it (see whenFresh), so a quick edit-and-save on
+   * a just-opened panel is written against the fresh version, not last time's.
+   */
+  fresh: boolean;
 };
 
 export const useStudio = create<StudioState>(() => ({
@@ -155,11 +163,52 @@ export const useStudio = create<StudioState>(() => ({
   openRowRequest: null,
   goToRequest: null,
   dispatch: [],
-  changelogs: [],
+  // the preview has a changelog for every script, so the page can be designed
+  changelogs: isEnvBrowser() ? ['dirk_fishing', 'dirk_lib'] : [],
   tests: [],
   editingDesign: null,
   askLanguage: false,
+  fresh: true,
 }));
+
+/**
+ * The gate a save waits on while the panel is showing values from memory.
+ *
+ * An open now draws what the panel held last time and merges the fresh gather
+ * in behind it, a moment later. Saving in that moment would send last time's
+ * section values with last time's version - the server would refuse it as a
+ * conflict at best. So the save waits for the fresh values instead, which on a
+ * normal open is shorter than it takes to find the Save button.
+ *
+ * Capped: if the fresh values never come (the gather failed, the panel was
+ * closed under it), a save goes ahead after the wait and the version check on
+ * the server is the backstop, as it always was.
+ */
+const FRESH_WAIT_MS = 15_000;
+let freshWait: { promise: Promise<void>; resolve: () => void } | null = null;
+
+export function markStale() {
+  if (!freshWait) {
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => { resolve = r; });
+    const wait = { promise, resolve };
+    freshWait = wait;
+    // Only ever releases THIS wait - a later stale open has its own timer.
+    setTimeout(() => { if (freshWait === wait) markFresh(); }, FRESH_WAIT_MS);
+  }
+  useStudio.setState({ fresh: false });
+}
+
+export function markFresh() {
+  const wait = freshWait;
+  freshWait = null;
+  wait?.resolve();
+  if (!useStudio.getState().fresh) useStudio.setState({ fresh: true });
+}
+
+export function whenFresh(): Promise<void> {
+  return freshWait?.promise ?? Promise.resolve();
+}
 
 /** Stable stringify so array/object comparisons don't depend on key order. */
 export function stableStringify(value: unknown): string {
@@ -197,6 +246,14 @@ export function effectiveValue(resource: string, entry: SettingEntry): unknown {
   const staged = useStudio.getState().draft[resource]?.[entry.path];
   if (!staged) return entry.value;
   return staged.kind === 'reset' ? entry.default : staged.value;
+}
+
+/** One setting's effective value, by path. For a control that needs a neighbour. */
+export function valueAtPath(resource: string, path: string): unknown {
+  const entry = useStudio.getState().scripts
+    .find((script) => script.resource === resource)?.entries
+    .find((other) => other.path === path);
+  return entry ? effectiveValue(resource, entry) : undefined;
 }
 
 /**
@@ -448,10 +505,21 @@ export type SaveError = { resource: string; message: string };
  * running server.
  */
 export async function commitDraft(resource: string): Promise<boolean> {
+  const waited = !useStudio.getState().fresh;
+  if (waited) {
+    // Shown as saving straight away, then read AFTER the wait: the merge may
+    // have moved the version on and pruned a staged path.
+    useStudio.setState({ saving: true, saveError: null, saved: null });
+    await whenFresh();
+  }
+
   const state = useStudio.getState();
   const script = state.scripts.find((s) => s.resource === resource);
   const staged = state.draft[resource] ?? {};
-  if (!script || Object.keys(staged).length === 0) return true;
+  if (!script || Object.keys(staged).length === 0) {
+    if (waited) useStudio.setState({ saving: false });
+    return true;
+  }
 
   useStudio.setState({ saving: true, saveError: null, saved: null });
   // Once written, the pre-save drafts describe a server state that is gone.

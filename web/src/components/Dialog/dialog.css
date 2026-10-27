@@ -1,0 +1,33 @@
+/* lib.openDialog on top of the kit's .npc rules (kit.css) */
+.dk .npc .rep, .dk .npc .card, .dk .npc .pgk, .dk .npc .close { cursor: pointer; }
+.dk .npc .rep.lock, .dk .npc .card.off { cursor: default; }
+.dk .npc.busy .rep, .dk .npc.busy .card { cursor: default; }
+.dk .npc.locked .reps, .dk .npc.locked .cards, .dk .npc.locked .pinrow { opacity: .45; }
+.dk .npc .rep.gap, .dk .npc .card.gap { visibility: hidden; }
+.dk .npc .rep.gap { min-height: 4.6vh; }
+/* the tones: ok green, bad red, warn amber, muted grey */
+.dk .npc .line.good { color: var(--ok); } .dk .npc .line.bad { color: var(--red); } .dk .npc .line.warn { color: var(--warn); } .dk .npc .line.muted { color: rgba(255,255,255,.6); }
+.dk .npc .md.warn .V { color: var(--warn); } .dk .npc .md.muted .V { color: rgba(255,255,255,.55); }
+.dk .npc .md.em.good .V { color: var(--a); }
+.dk .npc .nt.good { color: var(--ok); } .dk .npc .nt.bad { color: var(--red); } .dk .npc .nt.warn { color: var(--warn); } .dk .npc .nt.muted { color: rgba(255,255,255,.5); }
+.dk .card .badge.good { background: var(--ok); } .dk .card .badge.bad { background: var(--red); color: #fff; } .dk .card .badge.muted { background: rgba(255,255,255,.22); color: #fff; }
+/* the readouts' pops: the big figure when it changes, the level chip on a level-up */
+@keyframes dk-pop { from { transform: skewX(14deg) scale(1.16); } }
+@keyframes dk-pop-lv { from { transform: skewX(-14deg) scale(1.35); opacity: .4; } }
+.dk .npc .md .V.pop { transform-origin: right center; animation: dk-pop .28s ease-out; }
+.dk .npc .skill .lv { animation: dk-pop-lv .35s ease-out; flex: none; }
+.dk .npc .skill .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk .npc .skill .barTop { display: flex; justify-content: space-between; align-items: center; gap: 1vh; }
+/* cards: the art, long names clamped so a row never grows into the line above it */
+.dk .card .im img { max-width: 88%; max-height: 8.4vh; object-fit: contain; }
+.dk .card .bd .T { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.dk .card .bd .L { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.dk .card.off { opacity: .45; }
+.dk .card .lk { position: absolute; right: 1.2vh; bottom: 1.2vh; width: 2vh; height: 2vh; color: #fff; }
+/* card mode: who and the line side by side over the cards */
+.dk .npc .say.row { flex-direction: row; align-items: flex-end; bottom: 41vh; width: auto; right: 6vh; gap: 3vh; }
+.dk .npc .say.row .who { min-width: 28vh; }
+.dk .npc .say.row .line { flex: 0 1 80vh; margin-bottom: 1vh; -webkit-line-clamp: 2; }
+/* the note beside the pager; with nothing left to say, in the replies' place */
+.dk .npc .pager .note2 { margin-left: 2vh; font: 700 italic 1.4vh/1 var(--f); color: rgba(255,255,255,.6); }
+.dk .npc .ntbig { position: absolute; left: 7vh; bottom: 12vh; max-width: 98vh; font: 700 italic 2.2vh/1.3 var(--f); color: rgba(255,255,255,.75); }

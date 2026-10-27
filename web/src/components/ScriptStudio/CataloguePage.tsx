@@ -1,28 +1,39 @@
-import { alpha, Flex, Select, Text, TextInput, useMantineTheme } from '@mantine/core';
-import { fetchNui, getItemImageUrl, useItems, useSettings, type Vehicle } from 'dirk-cfx-react';
-import { AnimatePresence, motion } from 'framer-motion';
-import {
-  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Box, Car, Check, ChevronRight,
-  Package, PackagePlus,
-} from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { copyToClipboard, fetchNui, formatMoney, formatWeight, getItemImageUrl, useItems, type Vehicle } from 'dirk-cfx-react';
+import { Box, Car, Check, ChevronLeft, ChevronRight, Copy, Loader2, Package, PackagePlus } from 'lucide-react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useStudio } from './store';
-import { StudioButton } from './ui';
 import { useChrome } from './studioLocale';
+import { Btn, hexA } from './studioKit';
+import { notify } from './Toasts';
+import { toneOf } from './tone';
+import './kitpages.css';
 
 /**
  * A browsable reference of what this server actually has: every item the
- * inventory knows, and every vehicle the framework's shared table lists.
+ * inventory knows, and every vehicle the framework's shared table lists - as
+ * kit cards with their picture (Liam's 25/10 mock).
  *
  * Read-only on purpose - it answers "what is this called / does this exist"
  * while you are configuring something else, which is otherwise a trip to a
- * different resource's files.
+ * different resource's files. The search is the top bar's.
  *
  * Item art comes from the inventory path dirk_lib already resolves. Vehicle art
  * is not something a framework ships, so it comes from a CDN.
  */
 const VEHICLE_IMAGE = 'https://cdn.sky-systems.net/vehicles/%s.png';
-const PER_PAGE = 25;
+
+// the browser preview has a few vehicles, so the page can be designed
+const PREVIEW_VEHICLES: Vehicle[] = [
+  ['adder', 'Adder', 'Truffade', 'super', 1000000], ['zentorno', 'Zentorno', 'Pegassi', 'super', 725000],
+  ['t20', 'T20', 'Progen', 'super', 2200000], ['elegy', 'Elegy Retro Custom', 'Annis', 'sports', 904000],
+  ['comet2', 'Comet', 'Pfister', 'sports', 100000], ['sultan', 'Sultan', 'Karin', 'sports', 12000],
+  ['buffalo', 'Buffalo', 'Bravado', 'sports', 35000], ['kuruma', 'Kuruma', 'Karin', 'sports', 95000],
+  ['dominator', 'Dominator', 'Vapid', 'muscle', 35000], ['gauntlet', 'Gauntlet', 'Bravado', 'muscle', 32000],
+  ['baller', 'Baller', 'Gallivanter', 'suvs', 90000], ['granger', 'Granger', 'Declasse', 'suvs', 35000],
+  ['sanchez', 'Sanchez', 'Maibatsu', 'motorcycles', 8000], ['bati', 'Bati 801', 'Pegassi', 'motorcycles', 15000],
+  ['police', 'Police Cruiser', 'Vapid', 'emergency', 0], ['mule', 'Mule', 'Maibatsu', 'commercial', 22000],
+].map(([model, name, brand, category, price]) => ({ model, name, brand, category, price } as Vehicle));
+const PER_PAGE = 24;
 
 type Kind = 'items' | 'vehicles';
 
@@ -35,26 +46,27 @@ const FAILURES: Record<string, string> = {
   NoReply: 'No response from the server',
 };
 
-type Row = {
+type Card = {
   id: string;
   label: string;
   image?: string;
-  cells: string[];
-  facts: { label: string; value: string }[];
-  description?: string;
+  /** the class for a vehicle; colours the card */
+  group?: string;
+  /** price or weight, top right */
+  figure?: string;
+  /** brand, or the item's description */
+  sub?: string;
+  /** for sorting by the figure as a number */
+  amount: number;
 };
+
+type Sort = 'name' | 'figure';
 
 export function CataloguePage({ kind, query }: { kind: Kind; query: string }) {
   const t = useChrome();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-
   const [category, setCategory] = useState<string | null>(null);
-  // Which column orders the table, and which way. Null = the source order,
-  // which for items is the inventory's own and for vehicles is the framework's.
-  const [sort, setSort] = useState<{ column: number; dir: 'asc' | 'desc' } | null>(null);
+  const [sort, setSort] = useState<Sort>('name');
   const [page, setPage] = useState(0);
-  const [open, setOpen] = useState<string | null>(null);
 
   const items = useItems();
 
@@ -70,452 +82,237 @@ export function CataloguePage({ kind, query }: { kind: Kind; query: string }) {
     if (kind !== 'vehicles') return;
     let live = true;
     setLoadingVehicles(true);
-    fetchNui<Vehicle[]>('GET_VEHICLES', undefined, [])
+    fetchNui<Vehicle[]>('GET_VEHICLES', undefined, PREVIEW_VEHICLES)
       .then((data) => { if (live) setVehicles(Array.isArray(data) ? data : []); })
       .catch(() => { if (live) setVehicles([]); })
       .finally(() => { if (live) setLoadingVehicles(false); });
     return () => { live = false; };
   }, [kind]);
 
-  const categories = useMemo(
-    () => [...new Set(vehicles.map((v) => v.category).filter(Boolean))].sort() as string[],
-    [vehicles],
-  );
-
   const needle = query.trim().toLowerCase();
 
-  const rows: Row[] = useMemo(() => {
+  // the class keys count what the search leaves, so a key never promises cars it will not show
+  const searched = useMemo(() => vehicles.filter((vehicle) => !needle
+    || vehicle.model.toLowerCase().includes(needle)
+    || (vehicle.name ?? '').toLowerCase().includes(needle)
+    || (vehicle.brand ?? '').toLowerCase().includes(needle)), [vehicles, needle]);
+
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const vehicle of searched) if (vehicle.category) counts.set(vehicle.category, (counts.get(vehicle.category) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [searched]);
+
+  const cards: Card[] = useMemo(() => {
     if (kind === 'items') {
       return Object.values(items)
         .filter((item) => !needle
           || item.name.toLowerCase().includes(needle)
           || (item.label ?? '').toLowerCase().includes(needle))
-        .sort((a, b) => a.name.localeCompare(b.name))
         .map((item) => ({
           id: item.name,
           label: item.label || item.name,
           image: getItemImageUrl(item.name),
-          cells: [item.name, item.weight > 0 ? `${item.weight}g` : '—'],
-          description: item.description,
-          facts: [
-            { label: t('column.weight', 'Weight'), value: item.weight > 0 ? `${item.weight}g` : '—' },
-            { label: t('column.spawnName', 'Spawn name'), value: item.name },
-          ],
+          figure: item.weight > 0 ? formatWeight(item.weight) : undefined,
+          sub: item.description,
+          amount: item.weight || 0,
         }));
     }
-
-    return vehicles
-      .filter((vehicle) => {
-        if (category && vehicle.category !== category) return false;
-        if (!needle) return true;
-        return vehicle.model.toLowerCase().includes(needle)
-          || (vehicle.name ?? '').toLowerCase().includes(needle)
-          || (vehicle.brand ?? '').toLowerCase().includes(needle);
-      })
+    return searched
+      .filter((vehicle) => !category || vehicle.category === category)
       .map((vehicle) => ({
         id: vehicle.model,
         label: vehicle.name || vehicle.model,
         image: VEHICLE_IMAGE.replace('%s', vehicle.model),
-        cells: [vehicle.model, vehicle.brand ?? '—', vehicle.category ?? '—'],
-        facts: [
-          ...(vehicle.brand ? [{ label: t('column.brand', 'Brand'), value: vehicle.brand }] : []),
-          ...(vehicle.category ? [{ label: t('column.class', 'Class'), value: vehicle.category }] : []),
-          ...(vehicle.price !== undefined ? [{ label: t('column.price', 'Price'), value: `${useSettings.getState().currency || '$'}${vehicle.price.toLocaleString()}` }] : []),
-        ],
+        group: vehicle.category,
+        figure: vehicle.price !== undefined ? formatMoney(vehicle.price, { decimals: 3 }) : undefined,
+        sub: vehicle.brand,
+        amount: vehicle.price ?? 0,
       }));
-  }, [kind, items, vehicles, needle, category]);
+  }, [kind, items, searched, needle, category]);
 
-  // Sorting the BUILT rows gives one comparison path for both catalogues, and
-  // sorts what is on screen rather than the underlying shape. Column -1 is
-  // Name, which lives outside `cells`.
-  const sorted = useMemo(() => {
-    if (!sort) return rows;
-    const pick = (row: Row) => (sort.column === -1 ? row.label : row.cells[sort.column] ?? '');
-    const factor = sort.dir === 'asc' ? 1 : -1;
-    return [...rows].sort((a, b) => {
-      const left = pick(a);
-      const right = pick(b);
-      // Weight and price READ as numbers, so compare them as numbers - or
-      // "9g" sorts after "10g".
-      const nl = Number(left.replace(/[^\d.-]/g, ''));
-      const nr = Number(right.replace(/[^\d.-]/g, ''));
-      const numeric = /^[^a-z]*[\d.,-]+[a-z]?$/i;
-      if (numeric.test(left) && numeric.test(right) && !Number.isNaN(nl) && !Number.isNaN(nr)) {
-        return (nl - nr) * factor;
-      }
-      return left.localeCompare(right) * factor;
-    });
-  }, [rows, sort]);
+  const sorted = useMemo(() => [...cards].sort((a, b) => (sort === 'figure'
+    ? b.amount - a.amount || a.label.localeCompare(b.label)
+    : a.label.localeCompare(b.label))), [cards, sort]);
 
   const pages = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
   const shown = sorted.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
 
-  useEffect(() => { setPage(0); setOpen(null); }, [kind, needle, category, sort]);
+  useEffect(() => { setPage(0); }, [kind, needle, category, sort]);
 
-  const columns = kind === 'items'
-    ? [t('column.spawnName', 'Spawn name'), t('column.weight', 'Weight')]
-    : [t('column.spawnName', 'Spawn name'), t('column.brand', 'Brand'), t('column.class', 'Class')];
+  const loading = kind === 'vehicles' && loadingVehicles;
+  const Icon = kind === 'items' ? Package : Car;
 
   return (
-    <Flex direction="column" style={{ flex: 1, minHeight: 0 }}>
-      {/* controls */}
-      <Flex
-        align="center" gap="xs" px="md" py="sm"
-        style={{ borderBottom: `0.1vh solid ${alpha(theme.colors.dark[6], 0.7)}`, flexShrink: 0 }}
-      >
-        <Flex align="center" gap="xs" style={{ flex: 1 }}>
+    <div className="ss-cat">
+      <div className="ss-ctop in">
+        <Icon className="ico" />
+        <span className="T">{kind === 'items' ? t('cataloguePage.items', 'Items') : t('cataloguePage.vehicles', 'Vehicles')}</span>
+        <span className="D">
           {kind === 'items'
-            ? <Package size="1.9vh" color={color} />
-            : <Car size="1.9vh" color={color} />}
-          <Text ff="Akrobat Bold" size="md" c="rgba(255,255,255,0.92)">
-            {kind === 'items' ? 'Items' : 'Vehicles'}
-          </Text>
-          <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.35)">
-            {kind === 'items'
-              ? 'Everything your inventory knows about'
-              : "Every vehicle in your framework's shared table"}
-          </Text>
-        </Flex>
+            ? t('cataloguePage.items_hint', 'Everything your inventory knows about')
+            : t('cataloguePage.vehicles_hint', "Every vehicle in your framework's shared table")}
+        </span>
+        <div className="kstrip">
+          {(['name', 'figure'] as Sort[]).map((id) => (
+            <span key={id} className={'pl kp sm' + (sort === id ? ' on' : '')} onClick={() => setSort(id)}>
+              <span className="sk"><span className="act">
+                {id === 'name' ? t('cataloguePage.a_z', 'A–Z')
+                  : kind === 'items' ? t('cataloguePage.heaviest', 'Heaviest') : t('cataloguePage.priciest', 'Priciest')}
+              </span></span>
+            </span>
+          ))}
+        </div>
+      </div>
 
-        {kind === 'vehicles' && categories.length > 0 && (
-          <Select
-            data={categories}
-            value={category}
-            onChange={setCategory}
-            placeholder={t('cataloguePage.all_classes', 'All classes')}
-            clearable
-            comboboxProps={{ zIndex: 10800 }}
-            styles={{
-              input: {
-                background: alpha(theme.colors.dark[9], 0.75),
-                border: `0.1vh solid ${alpha(theme.colors.dark[4], 0.55)}`,
-                color: 'rgba(255,255,255,0.9)',
-                fontFamily: 'Akrobat SemiBold',
-                fontSize: '1.4vh',
-                height: '3.4vh',
-                minHeight: '3.4vh',
-                width: '26vh',
-              },
-              dropdown: { background: theme.colors.dark[8], border: `0.1vh solid ${theme.colors.dark[6]}` },
-            }}
-          />
-        )}
-
-        <Text ff="monospace" size="xs" c="rgba(255,255,255,0.35)" style={{ flexShrink: 0 }}>
-          {rows.length}
-        </Text>
-      </Flex>
-
-      {/* column header */}
-      <Flex
-        align="center" gap="sm" px="sm" py="0.6vh"
-        style={{ borderBottom: `0.1vh solid ${alpha(theme.colors.dark[6], 0.5)}`, flexShrink: 0 }}
-      >
-        <Flex w="1.4vh" style={{ flexShrink: 0 }} />
-        <Flex w="3.6vh" style={{ flexShrink: 0 }} />
-        <SortHeader
-          label={t('cataloguePage.name', 'Name')} column={-1} sort={sort} onSort={setSort}
-          style={{ flex: 1, minWidth: 0 }}
-        />
-        {columns.map((column, index) => (
-          <SortHeader
-            key={column}
-            label={column} column={index} sort={sort} onSort={setSort}
-            style={{ width: '13vh', flexShrink: 0 }}
-          />
-        ))}
-      </Flex>
-
-      <Flex direction="column" className="studio-scroll"
-        style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
-        {shown.map((row) => (
-          <CatalogueRow
-            key={row.id}
-            row={row}
-            kind={kind}
-            open={open === row.id}
-            onToggle={() => setOpen(open === row.id ? null : row.id)}
-          />
-        ))}
-
-        {rows.length === 0 && (
-          <Flex direction="column" align="center" justify="center" gap="xs" py="xl">
-            {kind === 'items' ? <Package size="3vh" color="rgba(255,255,255,0.18)" /> : <Car size="3vh" color="rgba(255,255,255,0.18)" />}
-            <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.4)">
-              {loadingVehicles && kind === 'vehicles'
-                ? 'Reading the vehicle table…'
-                : needle || category ? 'Nothing matches that' : `No ${kind} found`}
-            </Text>
-            {kind === 'vehicles' && !loadingVehicles && !needle && !category && (
-              <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.3)" ta="center" style={{ maxWidth: '60vh' }}>
-                The shared-vehicle table comes from qb-core / qbx_core. ESX has no categorised
-                equivalent, so this list is empty there until we add another source.
-              </Text>
-            )}
-          </Flex>
-        )}
-      </Flex>
-
-      {pages > 1 && (
-        <Flex align="center" justify="space-between" px="md" py="xs"
-          style={{ borderTop: `0.1vh solid ${alpha(theme.colors.dark[6], 0.7)}`, flexShrink: 0 }}>
-          <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.35)">
-            {page * PER_PAGE + 1}–{Math.min((page + 1) * PER_PAGE, rows.length)} of {rows.length}
-          </Text>
-          <Flex gap="xxs">
-            <StudioButton label={t('cataloguePage.prev', 'Prev')} onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} />
-            <StudioButton label={t('cataloguePage.next', 'Next')} onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1} />
-          </Flex>
-        </Flex>
+      {kind === 'vehicles' && categories.length > 0 && (
+        <div className="ss-ckeys in" style={{ '--i': 1 } as CSSProperties}>
+          <div className="kstrip">
+            <span className={'pl kp sm' + (category === null ? ' on' : '')} onClick={() => setCategory(null)}>
+              <span className="sk">
+                <span className="act">{t('cataloguePage.all_classes', 'All classes')}</span>
+                <span className={'cap sm' + (category === null ? '' : ' dark')}><b>{searched.length}</b></span>
+              </span>
+            </span>
+            {categories.map(([name, count]) => (
+              <span
+                key={name}
+                className={'pl kp sm' + (category === name ? ' on' : '')}
+                style={{ '--r': toneOf(name) } as CSSProperties}
+                onClick={() => setCategory(category === name ? null : name)}
+              >
+                <span className="sk">
+                  <i className="dt" />
+                  <span className="act">{name}</span>
+                  <span className={'cap sm' + (category === name ? '' : ' dark')}><b>{count}</b></span>
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
       )}
-    </Flex>
+
+      <div className="ss-cscroll studio-scroll">
+        {loading && (
+          <div className="ss-lwait"><Loader2 className="spin" /><span className="L">{t('cataloguePage.reading', 'Reading the vehicle table')}</span></div>
+        )}
+        {!loading && cards.length === 0 && (
+          <div className="ss-empty">
+            {kind === 'items' ? <Package /> : <Car />}
+            <div className="T">{needle || category ? t('cataloguePage.no_match', 'Nothing matches that') : kind === 'items' ? t('cataloguePage.no_items', 'No items found') : t('cataloguePage.no_vehicles', 'No vehicles found')}</div>
+            {kind === 'vehicles' && !needle && !category && (
+              <div className="D">{t('cataloguePage.esx_note', 'The shared-vehicle table comes from qb-core / qbx_core. ESX has no categorised equivalent, so this list is empty there until we add another source.')}</div>
+            )}
+          </div>
+        )}
+        <div className="ss-vgrid">
+          {shown.map((card, i) => <CatalogueCard key={card.id} card={card} kind={kind} i={i} />)}
+        </div>
+      </div>
+
+      <div className="ss-lfoot">
+        <span className="L">
+          {sorted.length
+            ? t('cataloguePage.range', '{0}–{1} of {2}')
+              .replace('{0}', String(page * PER_PAGE + 1))
+              .replace('{1}', String(Math.min((page + 1) * PER_PAGE, sorted.length)))
+              .replace('{2}', String(sorted.length))
+            : ''}
+          {` · ${t('cataloguePage.copy_hint', 'Click a spawn name to copy it')}`}
+        </span>
+        {pages > 1 && (
+          <>
+            <Btn sm icon={<ChevronLeft />} label={t('cataloguePage.prev', 'Prev')} onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} />
+            <Btn sm icon={<ChevronRight />} label={t('cataloguePage.next', 'Next')} onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1} />
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
-/**
- * A column header you click to sort by. Third click clears back to the source
- * order - the inventory's own for items, the framework's for vehicles - which
- * is worth being able to get back to.
- */
-function SortHeader({
-  label, column, sort, onSort, style,
-}: {
-  label: string;
-  column: number;
-  sort: { column: number; dir: 'asc' | 'desc' } | null;
-  onSort: (next: { column: number; dir: 'asc' | 'desc' } | null) => void;
-  style?: React.CSSProperties;
-}) {
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-  const active = sort?.column === column;
-
-  return (
-    <motion.button
-      type="button"
-      whileTap={{ scale: 0.97 }}
-      onClick={() => {
-        if (!active) return onSort({ column, dir: 'asc' });
-        if (sort!.dir === 'asc') return onSort({ column, dir: 'desc' });
-        return onSort(null);
-      }}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '0.4vh',
-        background: 'transparent', border: 'none', padding: 0,
-        cursor: 'pointer', textAlign: 'left', ...style,
-      }}
-    >
-      <Text
-        ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.12em"
-        c={active ? color : 'rgba(255,255,255,0.3)'}
-        truncate
-      >
-        {label}
-      </Text>
-      {active
-        ? (sort!.dir === 'asc'
-          ? <ArrowUp size="1.1vh" color={color} />
-          : <ArrowDown size="1.1vh" color={color} />)
-        : <ArrowUpDown size="1.1vh" color="rgba(255,255,255,0.15)" />}
-    </motion.button>
-  );
-}
-
-function CatalogueRow({
-  row, kind, open, onToggle,
-}: {
-  row: Row;
-  kind: Kind;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-
-  // Whether the last press worked. Both actions are permission-gated on the
-  // server, so a silent button would leave you unable to tell "denied" from
-  // "nothing happened".
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+function CatalogueCard({ card, kind, i }: { card: Card; kind: Kind; i: number }) {
+  const t = useChrome();
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const tone = card.group ? toneOf(card.group) : 'var(--a)';
+  const style = {
+    '--i': i,
+    '--r': tone,
+    '--r30': card.group ? hexA(tone, 0.3) : 'var(--a30)',
+  } as CSSProperties;
 
-  useEffect(() => { if (!open) setResult(null); }, [open]);
+  const copy = () => {
+    copyToClipboard(card.id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 900);
+  };
 
+  // Both actions are decided on the SERVER - the item grant and the vehicle
+  // spawn each check the same permission that gates editing a config, and the
+  // vehicle is created server-side. Pressing this without it does nothing but
+  // say so: a silent button would leave you unable to tell "denied" from
+  // "nothing happened".
   const run = async () => {
     if (busy) return;
     setBusy(true);
-    setResult(null);
     const reply = await fetchNui<{ success?: boolean; _error?: string }>(
       kind === 'items' ? 'GIVE_SCRIPT_CONFIG_ITEM' : 'SPAWN_VEHICLE',
-      kind === 'items' ? { itemName: row.id, itemAmount: 1 } : { model: row.id },
+      kind === 'items' ? { itemName: card.id, itemAmount: 1 } : { model: card.id },
       { success: false, _error: 'NoReply' },
     ).catch(() => ({ success: false, _error: 'NoReply' }));
     setBusy(false);
-    setResult(reply?.success
-      ? { ok: true, message: kind === 'items' ? 'In your inventory' : 'Spawned' }
-      : { ok: false, message: FAILURES[reply?._error ?? ''] ?? 'Could not do that' });
-
+    if (!reply?.success) {
+      notify('error', FAILURES[reply?._error ?? ''] ?? t('cataloguePage.could_not', 'Could not do that'));
+      return;
+    }
+    notify('success', kind === 'items' ? t('cataloguePage.in_inventory', 'In your inventory') : t('cataloguePage.spawned', 'Spawned'));
     // A spawned vehicle is behind the panel. Closing is the whole point of
     // pressing the button - you asked for it so you could look at it, and an
     // item lands in an inventory you can check later, but a car does not.
-    if (reply?.success && kind !== 'items') {
+    if (kind !== 'items') {
       useStudio.setState({ open: false, searches: {} });
       fetchNui('CLOSE_SCRIPT_STUDIO');
     }
   };
 
   return (
-    <Flex
-      direction="column"
-      style={{
-        borderBottom: `0.1vh solid ${alpha('#ffffff', 0.05)}`,
-        background: open ? alpha('#ffffff', 0.03) : 'transparent',
-      }}
-    >
-      <Flex
-        align="center" gap="sm" px="sm" py="0.9vh"
-        onClick={onToggle}
-        style={{ cursor: 'pointer' }}
-      >
-        <motion.div
-          animate={{ rotate: open ? 90 : 0 }}
-          transition={{ duration: 0.15 }}
-          style={{ display: 'flex', width: '1.4vh', flexShrink: 0 }}
-        >
-          <ChevronRight size="1.2vh" color="rgba(255,255,255,0.25)" />
-        </motion.div>
-
-        <Flex align="center" justify="center" w="3.6vh" h="3.6vh" style={{ flexShrink: 0 }}>
-          <Art src={row.image} kind={kind} />
-        </Flex>
-
-        <Text
-          ff="Akrobat SemiBold" size="xs"
-          c={open ? color : 'rgba(255,255,255,0.85)'}
-          style={{ flex: 1, minWidth: 0 }}
-          truncate
-        >
-          {row.label}
-        </Text>
-
-        {/* fixed-width cells, so two columns and three columns line up the same */}
-        {row.cells.map((cell, index) => (
-          <Text
-            key={index}
-            ff="monospace" size="xxs" c="rgba(255,255,255,0.35)"
-            style={{ width: '13vh', flexShrink: 0 }}
-            truncate
-          >
-            {cell}
-          </Text>
-        ))}
-      </Flex>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.16 }}
-            style={{ overflow: 'hidden' }}
-          >
-            <Flex gap="md" px="sm" pb="sm" pt="xxs" align="flex-start">
-              {/* the picture lit by a blurred copy of itself, so a red car
-                  glows red without anyone tagging it */}
-              <Flex
-                align="center" justify="center"
-                w="16vh" h="12vh"
-                style={{ position: 'relative', flexShrink: 0 }}
-              >
-                {row.image && (
-                  <img
-                    src={row.image}
-                    alt=""
-                    aria-hidden
-                    style={{
-                      position: 'absolute', inset: 0, width: '100%', height: '100%',
-                      objectFit: 'contain', filter: 'blur(2.4vh) saturate(1.8)',
-                      opacity: 0.55, pointerEvents: 'none',
-                    }}
-                  />
-                )}
-                <Art src={row.image} kind={kind} large />
-              </Flex>
-
-              <Flex direction="column" gap="sm" style={{ flex: 1, minWidth: 0 }}>
-                {row.description && (
-                  <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.5)">
-                    {row.description}
-                  </Text>
-                )}
-
-                {/* Both actions are decided on the SERVER - the item grant and
-                    the vehicle spawn each check the same permission that gates
-                    editing a config, and the vehicle is created server-side.
-                    Pressing these without that permission does nothing. */}
-                <Flex align="center" gap="xs" py="0.4vh">
-                  <StudioButton
-                    label={kind === 'items' ? 'Give me one' : 'Spawn it'}
-                    icon={kind === 'items' ? PackagePlus : Car}
-                    primary
-                    onClick={run}
-                  />
-                  {result && (
-                    <Flex align="center" gap="0.4vh">
-                      {result.ok
-                        ? <Check size="1.3vh" color="#5BC98C" />
-                        : <AlertTriangle size="1.3vh" color="#ef4444" />}
-                      <Text ff="Akrobat SemiBold" size="xxs" c={result.ok ? '#5BC98C' : '#ef4444'}>
-                        {result.message}
-                      </Text>
-                    </Flex>
-                  )}
-                </Flex>
-
-                <Flex gap="xs" wrap="wrap">
-                  {row.facts.map((fact) => (
-                    <Flex
-                      key={fact.label}
-                      direction="column" px="sm" py="0.4vh"
-                      style={{
-                        background: alpha(theme.colors.dark[9], 0.5),
-                        border: `0.1vh solid ${alpha(theme.colors.dark[5], 0.3)}`,
-                        borderRadius: theme.radius.xs,
-                      }}
-                    >
-                      <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.08em" c="rgba(255,255,255,0.3)">
-                        {fact.label}
-                      </Text>
-                      <Text ff="monospace" size="xs" c="rgba(255,255,255,0.85)">{fact.value}</Text>
-                    </Flex>
-                  ))}
-                </Flex>
-              </Flex>
-            </Flex>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </Flex>
+    <div className="ss-vc in" style={style}>
+      <div className="sk">
+        <div className="art"><Art src={card.image} kind={kind} /></div>
+        <div className="bd">
+          <div className="hd">
+            {card.group ? <span className="chip c" style={{ '--c': tone } as CSSProperties}><b>{card.group}</b></span> : <span />}
+            {card.figure && <span className="vp">{card.figure}</span>}
+          </div>
+          <div className="t" title={card.label}>{card.label}</div>
+          {card.sub && <div className="br" title={card.sub}>{card.sub}</div>}
+          <div className="ft">
+            <span className={'sn' + (copied ? ' done' : '')} onClick={copy} title={t('cataloguePage.copy_spawn', 'Copy the spawn name')}>
+              <code>{copied ? t('cataloguePage.copied', 'copied') : card.id}</code>
+              {copied ? <Check /> : <Copy />}
+            </span>
+            <span
+              className={'go' + (busy ? ' busy' : '')}
+              onClick={run}
+              title={kind === 'items' ? t('cataloguePage.give_one', 'Give me one') : t('cataloguePage.spawn_it', 'Spawn it')}
+            >
+              {busy ? <Loader2 className="spin" /> : kind === 'items' ? <PackagePlus /> : <Car />}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function Art({ src, kind, large }: { src?: string; kind: Kind; large?: boolean }) {
+function Art({ src, kind }: { src?: string; kind: Kind }) {
   const [failed, setFailed] = useState(false);
-
   useEffect(() => { setFailed(false); }, [src]);
 
   if (!src || failed) {
     const Icon = kind === 'items' ? Box : Car;
-    return <Icon size={large ? '4vh' : '2.2vh'} color="rgba(255,255,255,0.15)" />;
+    return <Icon className="none" />;
   }
-
-  return (
-    <img
-      src={src}
-      alt=""
-      loading="lazy"
-      onError={() => setFailed(true)}
-      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', position: 'relative' }}
-    />
-  );
+  return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />;
 }

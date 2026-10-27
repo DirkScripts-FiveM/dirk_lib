@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { fetchNui, isEnvBrowser } from 'dirk-cfx-react';
 import { useStudio } from './store';
 
@@ -95,29 +96,45 @@ export function translate(
  * English is fetched alongside anything else, because it is the fallback the
  * whole resolution chain leans on. Already-loaded languages are skipped - the
  * bundles are immutable for the life of the resource.
+ *
+ * ONE call for every language still missing, and only for the scripts missing
+ * it. It was a call per language, one after the other, each re-reading every
+ * script's file - so a German panel paid two round trips in a row, and one
+ * restarted script (forgetLocales) re-fetched everyone's.
  */
+const inFlight = new Set<string>();
+
 export async function loadLocales(language: string) {
   if (isEnvBrowser()) return;
 
   const state = useStudio.getState();
-  const resources = state.scripts.map((script) => script.resource);
+  const wanted = language === 'en' ? ['en'] : [language, 'en'];
+
+  const resources = state.scripts
+    .map((script) => script.resource)
+    .filter((resource) => wanted.some((lang) =>
+      !state.locales[resource]?.[lang] && !inFlight.has(`${resource}:${lang}`)));
   if (resources.length === 0) return;
 
-  const wanted = language === 'en' ? ['en'] : [language, 'en'];
-  const missing = wanted.filter((lang) =>
-    !resources.every((resource) => state.locales[resource]?.[lang]));
-  if (missing.length === 0) return;
+  const languages = wanted.filter((lang) =>
+    resources.some((resource) => !state.locales[resource]?.[lang]));
+  // The effect that calls this re-runs as the script list changes; an ask
+  // already on its way is not asked again.
+  const keys = resources.flatMap((resource) => languages.map((lang) => `${resource}:${lang}`));
+  for (const key of keys) inFlight.add(key);
 
-  for (const lang of missing) {
-    const bundles = await fetchNui<Record<string, LocaleBundle>>(
-      'GET_STUDIO_LOCALES',
-      { language: lang, resources },
-      {},
-    ).catch(() => ({} as Record<string, LocaleBundle>));
+  const byLanguage = await fetchNui<Record<string, Record<string, LocaleBundle>>>(
+    'GET_STUDIO_LOCALES',
+    { languages, resources },
+    {},
+  ).catch(() => ({} as Record<string, Record<string, LocaleBundle>>));
 
-    useStudio.setState((current) => {
-      const next: LocaleBundles = { ...current.locales };
-      for (const [resource, bundle] of Object.entries(bundles ?? {})) {
+  for (const key of keys) inFlight.delete(key);
+
+  useStudio.setState((current) => {
+    const next: LocaleBundles = { ...current.locales };
+    for (const lang of languages) {
+      for (const [resource, bundle] of Object.entries(byLanguage?.[lang] ?? {})) {
         next[resource] = { ...next[resource], [lang]: bundle };
       }
       // A language with no file anywhere still gets marked as attempted, so a
@@ -127,9 +144,9 @@ export async function loadLocales(language: string) {
           next[resource] = { ...next[resource], [lang]: {} };
         }
       }
-      return { locales: next };
-    });
-  }
+    }
+    return { locales: next };
+  });
 }
 
 /**
@@ -160,6 +177,9 @@ export function forgetLocales(resource: string) {
 export function useChrome() {
   const language = useActiveLanguage();
   const bundles = useBundles();
-  return (key: string, fallback: string) =>
-    translate(bundles, language, 'dirk_lib', `studio.${key}`, fallback);
+  // stable while the language and bundles are, so it can sit in a memo's deps
+  return useCallback(
+    (key: string, fallback: string) => translate(bundles, language, 'dirk_lib', `studio.${key}`, fallback),
+    [bundles, language],
+  );
 }

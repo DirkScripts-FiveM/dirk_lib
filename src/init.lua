@@ -149,8 +149,15 @@ if context == 'client' then
   RegisterNuiCallback('GET_SCRIPT_CONFIG_MASTER_GROUP', function(_, cb)
     -- Match the server-side default in src/scriptConfig/server.lua —
     -- comma-separated list, ANY one passing IsPlayerAceAllowed = master.
-    local g = GetConvar('dirk_lib_master_group', 'group.admin,admin,command')
-    if g == nil or g == '' then g = 'group.admin,admin,command' end
+    --
+    -- It did NOT match: this said `group.admin,admin,command` while the server
+    -- said `group.admin,admin`. The server half is the one that gates access,
+    -- and it leaves `command` out on purpose (an operator may grant `command`
+    -- to a non-admin, so trusting it would silently widen master access). This
+    -- copy only feeds the Admins page, so the drift made the page advertise a
+    -- wider group than the gate actually honoured.
+    local g = GetConvar('dirk_lib_master_group', 'group.admin,admin')
+    if g == nil or g == '' then g = 'group.admin,admin' end
     cb({ group = g })
   end)
 

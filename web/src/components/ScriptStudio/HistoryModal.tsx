@@ -1,5 +1,5 @@
 import { alpha, Flex, Select, Text, TextInput, useMantineTheme } from '@mantine/core';
-import { Modal } from 'dirk-cfx-react';
+import { Modal } from './Dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, ChevronRight, History, Search, Undo2, User } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';

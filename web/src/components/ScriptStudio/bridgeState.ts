@@ -105,12 +105,19 @@ export function useBridgeRows() {
 export function useBridgeState(names: string[]) {
   const [state, setState] = useState<BridgeState | null>(null);
   const [loading, setLoading] = useState(true);
+  // bumped by "Check again" - a resource started since the page opened
+  const [asked, setAsked] = useState(0);
+  // The page stays mounted while the panel is shut, and the game refuses this
+  // with the panel shut - so an answer from then sat there as "Could not read
+  // this server" after the next open. Every open asks again.
+  const open = useStudio((s) => s.open);
 
   // The names are stable in practice but not by identity, so the effect keys
   // off their content rather than the array.
   const key = names.join(',');
 
   useEffect(() => {
+    if (!open) return;
     let live = true;
     setLoading(true);
 
@@ -133,7 +140,7 @@ export function useBridgeState(names: string[]) {
 
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, asked, open]);
 
-  return { state, loading };
+  return { state, loading, again: () => setAsked((n) => n + 1) };
 }

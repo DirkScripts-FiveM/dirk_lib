@@ -495,3 +495,27 @@ lib.test.add('link: what the panel is sent never carries the key or poll secret'
   t.expect(body:find('%.key') == nil).toBeTruthy()
   t.expect(body:find('pollSecret', 1, true) == nil).toBeTruthy()
 end, { context = 'server' })
+
+lib.test.add('link: the account name + picture follow the check-in', function(t)
+  local s = support()
+  t.expect(s.avatarUrl('https://forum.cfx.re/user_avatar/forum.cfx.re/liam/128/1_2.png')).notToBeNil()
+  t.expect(s.avatarUrl('http://example.com/a.png')).toBeNil()
+  t.expect(s.avatarUrl('javascript:alert(1)')).toBeNil()
+  t.expect(s.avatarUrl('https:///x')).toBeNil()
+  t.expect(s.avatarUrl(('https://a.b/'):rep(60))).toBeNil()
+  t.expect(s.avatarUrl(42)).toBeNil()
+
+  local link = { key = 'dsk_x', account = 'Old' }
+  t.expect(s.mergeAccount(link, { name = 'New', avatar = 'https://a.b/p.png' })).toBeTruthy()
+  t.expect(link.account).toBe('New')
+  t.expect(link.avatar).toBe('https://a.b/p.png')
+  t.expect(link.key).toBe('dsk_x')
+  -- the same again is no change, so nothing is written
+  t.expect(s.mergeAccount(link, { name = 'New', avatar = 'https://a.b/p.png' })).toBeFalsy()
+  -- a blank name keeps ours; a bad picture clears it
+  t.expect(s.mergeAccount(link, { name = '', avatar = 'nope' })).toBeTruthy()
+  t.expect(link.account).toBe('New')
+  t.expect(link.avatar).toBeNil()
+  -- an older site (no account) changes nothing
+  t.expect(s.mergeAccount(link, nil)).toBeFalsy()
+end, { context = 'server' })

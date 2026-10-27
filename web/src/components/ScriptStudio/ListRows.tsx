@@ -1,7 +1,6 @@
-import { alpha, Flex, Text, TextInput, useMantineTheme } from '@mantine/core';
-import { ConfirmModal } from 'dirk-cfx-react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { List, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ConfirmModal } from './Dialog';
+import { AnimatePresence } from 'framer-motion';
+import { List, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useStudio } from './store';
 import { RowModal } from './RowModal';
@@ -40,9 +39,6 @@ export function ListRows({
   fill?: boolean;
 }) {
   const t = useChrome();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-
   // Fishing ships 37 species and 24 hooks; mounting every row of every list at
   // once is what made switching scripts stall. Same page size fishing's own
   // list sections use.
@@ -128,46 +124,21 @@ export function ListRows({
      * bottom edge. `flex: 1` does nothing in the inline case (there is no
      * free space to take), so one layout serves both without a fixed height
      * anywhere. */
-    <Flex direction="column" gap="xxs" style={{ width: '100%', flex: 1, minHeight: 0 }}>
+    <div className="ss-list" style={{ flex: 1 }}>
       {rows.length > 6 && (
-        <TextInput
-          value={query}
-          onChange={(e) => setQuery(e.currentTarget.value)}
-          placeholder={t('listRows.filter', 'Filter %s').replace('%s', entry.label.toLowerCase())}
-          leftSection={<Search size="1.4vh" color="rgba(255,255,255,0.35)" />}
-          rightSection={query ? (
-            <motion.button
-              type="button"
-              onClick={() => setQuery('')}
-              whileTap={{ scale: 0.85 }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-              }}
-              aria-label={t('listRows.clear_filter', 'Clear filter')}
-            >
-              <X size="1.3vh" color="rgba(255,255,255,0.45)" />
-            </motion.button>
-          ) : null}
-          styles={{
-            input: {
-              background: alpha(theme.colors.dark[9], 0.7),
-              border: `0.1vh solid ${alpha(theme.colors.dark[4], 0.5)}`,
-              color: 'rgba(255,255,255,0.85)',
-              fontFamily: 'Akrobat SemiBold',
-              fontSize: '1.3vh',
-              height: '3vh',
-              minHeight: '3vh',
-              borderRadius: theme.radius.xs,
-              // matches the icon well, so the caret is not sitting on the glass
-              paddingLeft: '3.6vh',
-              paddingRight: '3.2vh',
-            },
-            section: { width: '3.6vh' },
-          }}
-          mb="xxs"
-          style={{ flexShrink: 0 }}
-        />
+        <label className="ss-lf">
+          <Search />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.currentTarget.value)}
+            placeholder={t('listRows.filter', 'Filter %s').replace('%s', entry.label.toLowerCase())}
+          />
+          {query && (
+            <span className="cap dark" onClick={() => setQuery('')} aria-label={t('listRows.clear_filter', 'Clear filter')}>
+              <b><X /></b>
+            </span>
+          )}
+        </label>
       )}
 
       {/* Two behaviours, on purpose.
@@ -179,110 +150,76 @@ export function ListRows({
         * FILLING (`flex: 1`): the list is the page, so the rows take the height
         * and the footer stays on the bottom edge where you can always reach it.
         */}
-      <Flex
-        direction="column" gap="xxs"
-        className="studio-scroll"
+      <div
+        className="ss-lrows studio-scroll"
         style={{ flex: fill ? 1 : '0 1 auto', minHeight: 0, overflowY: 'auto' }}
       >
-      {paged.map((index) => {
+      {paged.map((index, k) => {
         const row = rows[index];
         return (
-          <motion.div
+          // A row is a plate you click to edit - the whole of it, not a pencil
+          // at its far end. Delete stays a separate, deliberate button.
+          <div
             key={index}
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.15 }}
+            className={'pl ss-lr in' + (disabled ? ' off' : '')}
+            style={{ '--i': Math.min(k, 12) } as React.CSSProperties}
+            onClick={() => { if (!disabled) setEditing(index); }}
           >
-            <Flex
-              align="center" gap="sm"
-              px="sm" py="xs"
-              style={{
-                background: alpha(theme.colors.dark[9], 0.5),
-                border: `0.1vh solid ${alpha(theme.colors.dark[5], 0.4)}`,
-                borderRadius: theme.radius.xs,
-              }}
-            >
-              {itemKey && <ItemArt name={String(row[itemKey] ?? '')} />}
+            <div className="sk">
+              {itemKey
+                ? <span className="th"><ItemArt name={String(row[itemKey] ?? '')} /></span>
+                : <span className="th"><List /></span>}
 
-              <Flex direction="column" style={{ minWidth: '14vh', lineHeight: 1.15 }}>
-                <Text ff="Akrobat Bold" size="xs" c="rgba(255,255,255,0.88)" truncate>
-                  {rowTitle(row, index)}
-                </Text>
-                {itemKey && (
-                  <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.3)" truncate>
-                    {String(row[itemKey] ?? '')}
-                  </Text>
-                )}
-              </Flex>
+              <div className="tx">
+                <div className="t">{rowTitle(row, index)}</div>
+                {itemKey && <div className="p">{String(row[itemKey] ?? '')}</div>}
+              </div>
 
               {/* at-a-glance values so the list is readable without opening a row */}
-              <Flex align="center" gap="xs" wrap="wrap" style={{ flex: 1, minWidth: 0 }}>
+              <div className="sum">
                 {summaryColumns.map((column) => (
-                  <Flex key={column.key} align="center" gap="0.4vh">
-                    <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.3)">{column.label}</Text>
-                    <Text ff="Akrobat Bold" size="xxs" c="rgba(255,255,255,0.7)">
-                      {formatCell(row[column.key], column)}
-                    </Text>
-                  </Flex>
+                  <span key={column.key}><i>{column.label}</i><b>{formatCell(row[column.key], column)}</b></span>
                 ))}
-              </Flex>
+              </div>
 
-              <Flex align="center" gap="xxs" style={{ flexShrink: 0 }}>
-                <RowIconButton icon={Pencil} label={t('listRows.edit', 'Edit')} onClick={() => setEditing(index)} disabled={disabled} />
+              <div className="end">
+                <Pencil className="ico" />
                 <RowIconButton icon={Trash2} label={t('listRows.delete', 'Delete')} danger onClick={() => setConfirmDelete(index)} disabled={disabled} />
-              </Flex>
-            </Flex>
-          </motion.div>
+              </div>
+            </div>
+          </div>
         );
       })}
 
       {rows.length === 0 && (
-        <Flex align="center" justify="center" gap="xs" py="md"
-          style={{
-            border: `0.1vh dashed ${alpha(theme.colors.dark[4], 0.5)}`,
-            borderRadius: theme.radius.xs,
-          }}
-        >
-          <List size="1.6vh" color="rgba(255,255,255,0.25)" />
-          <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.3)">{t('listRows.nothing_here_yet', 'Nothing here yet')}</Text>
-        </Flex>
+        <div className="ss-empty sm">
+          <List />
+          <span className="L">{t('listRows.nothing_here_yet', 'Nothing here yet')}</span>
+        </div>
       )}
 
       {visible.length === 0 && rows.length > 0 && (
-        <Flex justify="center" py="sm">
-          <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.3)">No entry matches "{query}"</Text>
-        </Flex>
+        <div className="ss-empty sm">
+          <Search />
+          <span className="L">{t('listRows.no_match', 'No entry matches "{0}"').replace('{0}', rowFilter ?? query)}</span>
+        </div>
       )}
 
-      </Flex>
+      </div>
 
       {pageCount > 1 && (
-        <Flex align="center" justify="space-between" pt="xxs" style={{ flexShrink: 0 }}>
-          <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.35)">
-            {page * PAGE + 1}–{Math.min((page + 1) * PAGE, visible.length)} of {visible.length}
-          </Text>
-          <Flex gap="xxs">
-            <StudioButton label={t('listRows.prev', 'Prev')} onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} />
-            <StudioButton label={t('listRows.next', 'Next')} onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} disabled={page >= pageCount - 1} />
-          </Flex>
-        </Flex>
+        <div className="ss-pager">
+          <span className="L">{page * PAGE + 1}–{Math.min((page + 1) * PAGE, visible.length)} / {visible.length}</span>
+          <StudioButton label={t('listRows.prev', 'Prev')} onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} />
+          <StudioButton label={t('listRows.next', 'Next')} onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} disabled={page >= pageCount - 1} />
+        </div>
       )}
 
       {/* Pinned when the list owns the page: a rule above it so it reads as a
         * footer rather than as one more row that happens to be a button. */}
-      <Flex
-        pt="xxs"
-        style={{
-          flexShrink: 0,
-          ...(fill ? {
-            marginTop: '0.4vh',
-            paddingTop: '0.9vh',
-            borderTop: `0.1vh solid ${alpha(theme.colors.dark[4], 0.45)}`,
-          } : {}),
-        }}
-      >
+      <div className={'ss-lfoot' + (fill ? ' fill' : '')}>
         <StudioButton label={t('listRows.add', 'Add {name}').replace('{name}', singular(entry.label))} icon={Plus} onClick={addRow} disabled={disabled} grow />
-      </Flex>
+      </div>
 
       <AnimatePresence>
         {creating && (
@@ -332,37 +269,22 @@ export function ListRows({
           />
         )}
       </AnimatePresence>
-    </Flex>
+    </div>
   );
 }
 
 function RowIconButton({
   icon: Icon, label, onClick, disabled, danger,
 }: { icon: React.ElementType; label: string; onClick: () => void; disabled?: boolean; danger?: boolean }) {
-  const theme = useMantineTheme();
-  const accent = danger ? '#ef4444' : theme.colors[theme.primaryColor][5];
-
   return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      whileHover={disabled ? undefined : { background: alpha(accent, 0.16), borderColor: alpha(accent, 0.5) }}
-      whileTap={disabled ? undefined : { scale: 0.94 }}
-      style={{
-        aspectRatio: '1 / 1', height: '2.8vh',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'transparent',
-        border: `0.1vh solid ${alpha(theme.colors.dark[4], 0.55)}`,
-        borderRadius: theme.radius.xs,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        color: 'rgba(255,255,255,0.55)',
-        opacity: disabled ? 0.5 : 1,
-      }}
+    <span
+      className={'cap dark ss-rb' + (danger ? ' no' : '') + (disabled ? ' off' : '')}
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onClick(); }}
       aria-label={label}
+      title={label}
     >
-      <Icon size="1.4vh" />
-    </motion.button>
+      <b><Icon /></b>
+    </span>
   );
 }
 
@@ -375,6 +297,13 @@ function formatCell(value: unknown, column: SettingColumn): string {
   // of what the card needs to say.
   if (column.type === 'secret') return '••••••••';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (column.type === 'cameras') {
+    return Array.isArray(value) && value.length ? `${value.length} shot${value.length === 1 ? '' : 's'}` : '-';
+  }
+  if (column.type === 'camera') {
+    const p = (value as { pos?: { x?: number; y?: number; z?: number } })?.pos;
+    return p && (p.x || p.y || p.z) ? 'Framed' : '-';
+  }
   if (column.type === 'coords') {
     const c = value as { x?: number; y?: number };
     return typeof c.x === 'number' ? `${c.x.toFixed(0)}, ${c.y?.toFixed(0)}` : '-';

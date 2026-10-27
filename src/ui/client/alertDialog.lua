@@ -38,10 +38,14 @@ function lib.alertDialog(data, timeout)
     alert = promise.new()
 
     SetNuiFocus(true, true)
-    data.theme = theme
+    -- a copy, so the caller's table doesn't keep this call's theme / timeout
+    local payload = {}
+    for k, v in pairs(data) do payload[k] = v end
+    payload.theme = theme
+    payload.timeout = timeout -- the dialog shows the countdown; Lua still does the closing
     SendNuiMessage(json.encode({
         action = 'SHOW_ALERT_DIALOG',
-        data = data
+        data = payload
     }))
 
     if timeout then

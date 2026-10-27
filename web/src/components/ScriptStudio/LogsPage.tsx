@@ -1,28 +1,31 @@
-import { alpha, Flex, Select, Text, TextInput, useMantineTheme } from '@mantine/core';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { facetTotal, formatBytes, useLogFacets, useLogHealth, useLogRows } from './logsData';
 import { studioQueryClient } from './studioQuery';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, Copy, History, Inbox, Loader2,
-  ScrollText, Search, Send, User, XCircle,
+  AlertTriangle, CheckCircle2, ChevronRight, Copy, Database, Inbox, Layers, Loader2, Send, User, XCircle,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  MOCK_DELIVERY, MOCK_NOW, type LogLevel, type LogRow,
-} from './mockLogs';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { type LogLevel, type LogRow } from './mockLogs';
 import { HistoryPanel } from './HistoryModal';
 import { effectiveValue, setValue, useStudio } from './store';
 import { useLoggerSettings } from './loggerSettings';
 import { ListRows } from './ListRows';
 import { SettingControl } from './Controls';
 import type { SettingEntry } from './types';
-import { Chip, StudioButton } from './ui';
+import { Btn, Chip, Search } from './studioKit';
+import { Segs } from '../Kit';
+import { resolveIcon } from './Icon';
 import { useChrome } from './studioLocale';
-import { copyToClipboard } from 'dirk-cfx-react';
+import { copyToClipboard, formatNumber } from 'dirk-cfx-react';
+import { notify } from './Toasts';
+import { KitSelect } from './KitSelect';
+import { toneOf } from './tone';
+import './kitpages.css';
 
 /**
- * Everything that happened, in one place.
+ * Everything that happened, in one place, drawn in the lib kit (Liam's 25/10
+ * mock): five totals on top, the tabs as keys, the scripts on the left with
+ * their share, one slanted row per event.
  *
  * Three sources, three tabs, because they answer different questions and have
  * completely different volumes:
@@ -35,17 +38,35 @@ import { copyToClipboard } from 'dirk-cfx-react';
  *   Delivery- where log lines are actually going, and whether they arrived.
  *
  * The panel owns none of the filtering. That is deliberate: a log table is the
- * one thing on a server guaranteed to outgrow anything a client can hold.
+ * one thing on a server guaranteed to outgrow anything a client can hold. The
+ * totals on top come from the facets and the health the page already asks for
+ * - no extra query.
  */
 
 type Tab = 'events' | 'changes' | 'delivery';
 
-const RANGES: { value: string; label: string; seconds: number | null }[] = [
-  { value: '1h', label: 'Last hour', seconds: 3600 },
-  { value: '24h', label: 'Last 24 hours', seconds: 86400 },
-  { value: '7d', label: 'Last 7 days', seconds: 604800 },
-  { value: 'all', label: 'Everything kept', seconds: null },
+const RANGES: { value: string; label: string; key: string; seconds: number | null }[] = [
+  { value: '1h', label: 'Last hour', key: 'last_hour', seconds: 3600 },
+  { value: '24h', label: 'Last 24 hours', key: 'last_24h', seconds: 86400 },
+  { value: '7d', label: 'Last 7 days', key: 'last_7d', seconds: 604800 },
+  { value: 'all', label: 'Everything kept', key: 'everything_kept', seconds: null },
 ];
+
+/** The script's own label and icon when it is one of ours; its resource name otherwise. */
+function useScriptLook() {
+  const scripts = useStudio((s) => s.scripts);
+  return useMemo(() => {
+    const byResource = new Map(scripts.map((s) => [s.resource, s]));
+    return (resource: string) => {
+      const script = byResource.get(resource);
+      return {
+        label: script?.label ?? resource.replace(/^dirk[_-]/, ''),
+        Icon: resolveIcon(script?.icon || 'scroll-text'),
+        tone: toneOf(resource),
+      };
+    };
+  }, [scripts]);
+}
 
 /**
  * Hold a value still until typing stops.
@@ -75,49 +96,110 @@ export function LogsPage({ canEdit }: { canEdit: boolean }) {
 
 function LogsPageInner({ canEdit }: { canEdit: boolean }) {
   const t = useChrome();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
   const [tab, setTab] = useState<Tab>('events');
+  const [range, setRange] = useState('24h');
   const { data: health } = useLogHealth();
 
-  return (
-    <Flex direction="column" flex={1} style={{ minHeight: 0 }}>
-      <Flex
-        align="center" gap="xs" px="md" py="xs"
-        style={{ borderBottom: `0.1vh solid ${alpha(theme.colors.dark[4], 0.4)}`, flexShrink: 0 }}
-      >
-        <TabButton icon={ScrollText} label={t('logsPage.events', 'Events')} active={tab === 'events'} onClick={() => setTab('events')} />
-        <TabButton icon={History} label={t('logsPage.config_changes', 'Config changes')} active={tab === 'changes'} onClick={() => setTab('changes')} />
-        <TabButton icon={Send} label={t('logsPage.delivery', 'Delivery')} active={tab === 'delivery'} onClick={() => setTab('delivery')} />
-        <Flex flex={1} />
-        <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.28)">
-          {tab === 'events' && 'Filtered and paged on the server'}
-          {tab === 'changes' && 'Every saved edit, and who made it'}
-          {tab === 'delivery' && (health?.enabled
-            ? `Kept for ${health.retentionDays} days`
-            : 'Not keeping logs on this server')}
-        </Text>
-      </Flex>
+  const since = useMemo(() => {
+    const found = RANGES.find((r) => r.value === range);
+    return found?.seconds == null ? null : Math.floor(Date.now() / 1000) - found.seconds;
+  }, [range]);
+  // the unscoped facets: the totals on top are for every script in the window
+  const all = useLogFacets(null, since);
 
-      {tab === 'events' && <EventsTab />}
+  const total = facetTotal(all.data) ?? 0;
+  const level = (name: string) => all.data?.levels.find((l) => l.name === name)?.count ?? 0;
+  const routes = health?.routes ?? [];
+  const sent = routes.reduce((n, r) => n + (r.sent || 0), 0);
+  const dropped = routes.reduce((n, r) => n + (r.dropped || 0), 0);
+  const failing = routes.filter((r) => r.enabled && r.dropped > 0).length;
+  const rangeLabel = (() => { const r = RANGES.find((x) => x.value === range)!; return t(`logsPage.${r.key}`, r.label); })();
+
+  const stats: { icon: React.ElementType; label: string; value: string; detail: string; tone: string }[] = [
+    {
+      icon: Layers, label: t('logsPage.events', 'Events'), value: compact(total), tone: 'var(--a)',
+      detail: t('logsPage.scripts_logging', '{0} scripts · {1}').replace('{0}', String(all.data?.resources.length ?? 0)).replace('{1}', rangeLabel.toLowerCase()),
+    },
+    {
+      icon: AlertTriangle, label: t('logsPage.warnings', 'Warnings'), value: compact(level('warn')), tone: '#e0a13f',
+      detail: t('logsPage.in_window', 'in this window'),
+    },
+    {
+      icon: XCircle, label: t('logsPage.alerts', 'Alerts'), value: compact(level('alert')), tone: '#e5484d',
+      detail: t('logsPage.in_window', 'in this window'),
+    },
+    {
+      icon: Database, label: t('logsPage.kept_here', 'Kept here'), tone: '#339af0',
+      value: health?.enabled ? compact(health.rows ?? 0) : t('logsPage.off', 'Off'),
+      detail: health?.enabled
+        ? `${formatBytes(health.bytes ?? 0)} · ${t('logsPage.days', '{0} days').replace('{0}', String(health.retentionDays))}`
+        : t('logsPage.not_keeping', 'Not keeping logs on this server'),
+    },
+    {
+      icon: Send, label: t('logsPage.delivery', 'Delivery'), tone: '#a855f7',
+      value: routes.length ? `${sent + dropped ? Math.round((sent / (sent + dropped)) * 1000) / 10 : 100}%` : '—',
+      detail: routes.length
+        ? (failing ? t('logsPage.webhooks_failing', '{0} webhooks · {1} failing').replace('{0}', String(routes.length)).replace('{1}', String(failing))
+          : t('logsPage.webhooks', '{0} webhooks').replace('{0}', String(routes.length)))
+        : t('logsPage.no_webhooks', 'No webhooks'),
+    },
+  ];
+
+  return (
+    <div className="ss-logs">
+      <div className="ss-pstats">
+        {stats.map((s, k) => (
+          <div key={s.label} className="pl ss-ps edge in" style={{ '--i': k, '--e': s.tone } as CSSProperties}>
+            <div className="sk">
+              <div className="L" style={{ color: s.tone }}><s.icon className="ico" />{s.label}</div>
+              <div className="V">{s.value}</div>
+              <div className="D">{s.detail}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="ss-ltabs in" style={{ '--i': 5 } as CSSProperties}>
+        <div className="kstrip">
+          {([
+            ['events', t('logsPage.events', 'Events'), compact(total), false],
+            ['changes', t('logsPage.config_changes', 'Config changes'), null, false],
+            ['delivery', t('logsPage.delivery', 'Delivery'), failing ? String(failing) : null, failing > 0],
+          ] as [Tab, string, string | null, boolean][]).map(([id, label, count, bad]) => (
+            <span key={id} className={'pl kp sm' + (tab === id ? ' on' : '')} onClick={() => setTab(id)}>
+              <span className="sk">
+                <span className="act">{label}</span>
+                {count != null && <span className={'cap' + (bad ? ' red' : tab === id ? '' : ' dark')}><b>{count}</b></span>}
+              </span>
+            </span>
+          ))}
+        </div>
+        <span className="L ss-lnote">
+          {tab === 'events' && t('logsPage.paged_on_server', 'Filtered and paged on the server')}
+          {tab === 'changes' && t('logsPage.every_edit', 'Every saved edit, and who made it')}
+          {tab === 'delivery' && (health?.enabled
+            ? t('logsPage.kept_for', 'Kept for {0} days').replace('{0}', String(health.retentionDays))
+            : t('logsPage.not_keeping', 'Not keeping logs on this server'))}
+        </span>
+      </div>
+
+      {tab === 'events' && <EventsTab range={range} setRange={setRange} since={since} total={total} />}
       {tab === 'changes' && <ChangesTab canEdit={canEdit} />}
-      {tab === 'delivery' && <DeliveryTab accent={color} canEdit={canEdit} />}
-    </Flex>
+      {tab === 'delivery' && <DeliveryTab canEdit={canEdit} />}
+    </div>
   );
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────
 
-function EventsTab() {
+function EventsTab({ range, setRange, since, total }: { range: string; setRange: (v: string) => void; since: number | null; total: number }) {
   const t = useChrome();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
+  const look = useScriptLook();
   // Whether lines are being kept at all - the chip below says so, because an
   // empty Events tab with the sink off looks identical to a quiet server.
   const { data: health } = useLogHealth();
   const sinkOn = !!health?.enabled;
 
-  const [range, setRange] = useState('24h');
   const [resource, setResource] = useState<string | null>(null);
   const [event, setEvent] = useState<string | null>(null);
   const [level, setLevel] = useState<LogLevel | null>(null);
@@ -125,18 +207,15 @@ function EventsTab() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<number | null>(null);
 
-  // Typing must not fire a request per keystroke; the deferred value is what
-  // the query key reads, so React batches the burst into one fetch.
-  const since = useMemo(() => {
-    const found = RANGES.find((r) => r.value === range);
-    return found?.seconds == null ? null : Math.floor(Date.now() / 1000) - found.seconds;
-  }, [range]);
+  // Typing must not fire a request per keystroke; the settled value is what
+  // the query key reads, so a burst becomes one fetch.
   const deferredSearch = useDebounced(search);
   const deferredPlayer = useDebounced(player);
 
-  // The real table now, not the mock. Both hooks cache hard and neither
-  // polls: a log line does not change once written, and a page that refetches
-  // on a timer costs something while nobody is looking at it.
+  // The real table, not the mock. Both hooks cache hard and neither polls: a
+  // log line does not change once written, and a page that refetches on a
+  // timer costs something while nobody is looking at it.
+  const all = useLogFacets(null, since);
   const facets = useLogFacets(resource, since);
 
   const logs = useLogRows({
@@ -169,83 +248,82 @@ function EventsTab() {
     return () => observer.disconnect();
   }, [logs.hasNextPage, logs.isFetchingNextPage, logs.fetchNextPage]);
 
+  const filtered = !!(resource || event || level || player || search);
+
   return (
-    <Flex flex={1} style={{ minHeight: 0 }}>
-      {/* resource facets - the filter people actually reach for */}
-      <Flex
-        direction="column" gap="xxs" p="xs"
-        className="studio-scroll"
-        w="26vh"
-        style={{
-          borderRight: `0.1vh solid ${alpha(theme.colors.dark[6], 0.8)}`,
-          background: alpha(theme.colors.dark[8], 0.3),
-          overflowY: 'auto', flexShrink: 0, minHeight: 0,
-        }}
-      >
-        <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.12em" c="rgba(255,255,255,0.3)" px="0.4vh" pb="0.3vh">
-          {t('logsPage.resource', 'Resource')}
-        </Text>
-        <FacetRow
-          label={t('logsPage.all_resources', 'All resources')}
-          count={facetTotal(facets.data)}
-          active={resource === null}
-          onClick={() => setResource(null)}
+    <>
+      <div className="ss-ltool in" style={{ '--i': 6 } as CSSProperties}>
+        <Search value={search} onChange={setSearch} placeholder={t('logsPage.search_the_message', 'Search the message')} />
+        <label className="ss-lf ss-lpl">
+          <User />
+          <input value={player} onChange={(e) => setPlayer(e.currentTarget.value)} placeholder={t('logsPage.player_name_or_licence', 'Player name or licence')} />
+        </label>
+        <KitSelect
+          value={event} onChange={setEvent} width="22vh" placeholder={t('logsPage.any_event', 'Any event')}
+          data={eventOptions.map((e) => ({ value: e.name, label: `${e.name} (${e.count})` }))}
         />
-        {(facets.data?.resources ?? []).map((entry) => (
-          <FacetRow
-            key={entry.name}
-            label={entry.name}
-            count={entry.count}
-            active={resource === entry.name}
-            onClick={() => setResource(entry.name)}
-          />
-        ))}
-      </Flex>
+        <KitSelect
+          value={level} onChange={(v) => setLevel(v as LogLevel | null)} width="15vh" placeholder={t('logsPage.any_level', 'Any level')}
+          data={[
+            { value: 'info', label: t('logsPage.info', 'Info') },
+            { value: 'warn', label: t('logsPage.warning', 'Warning') },
+            { value: 'alert', label: t('logsPage.alert', 'Alert') },
+          ]}
+        />
+        <KitSelect
+          value={range} onChange={(v) => setRange(v ?? '24h')} width="18vh" clearable={false}
+          data={RANGES.map((r) => ({ value: r.value, label: t(`logsPage.${r.key}`, r.label) }))}
+        />
+      </div>
 
-      <Flex direction="column" flex={1} style={{ minHeight: 0 }}>
-        {/* filters */}
-        <Flex
-          gap="xs" px="md" py="xs" align="center"
-          style={{ borderBottom: `0.1vh solid ${alpha(theme.colors.dark[4], 0.4)}`, flexShrink: 0 }}
-        >
-          <LogInput
-            value={search} onChange={setSearch} icon={Search} grow
-            placeholder={t('logsPage.search_the_message', 'Search the message')}
-          />
-          <LogInput
-            value={player} onChange={setPlayer} icon={User} width="26vh"
-            placeholder={t('logsPage.player_name_or_licence', 'Player name or licence')}
-          />
-          <LogSelect
-            value={event} onChange={setEvent} width="24vh" placeholder={t('logsPage.any_event', 'Any event')}
-            data={eventOptions.map((e) => ({ value: e.name, label: `${e.name} (${e.count})` }))}
-          />
-          <LogSelect
-            value={level} onChange={(v) => setLevel(v as LogLevel | null)} width="16vh" placeholder={t('logsPage.any_level', 'Any level')}
-            data={[{ value: 'info', label: 'Info' }, { value: 'warn', label: 'Warning' }, { value: 'alert', label: 'Alert' }]}
-          />
-          <LogSelect
-            value={range} onChange={(v) => setRange(v ?? '24h')} width="20vh" clearable={false}
-            data={RANGES.map((r) => ({ value: r.value, label: r.label }))}
-          />
-        </Flex>
+      <div className="ss-lbody">
+        {/* the scripts that logged in this window - the filter people actually reach for */}
+        <div className="ss-lres studio-scroll">
+          <div className="L">{t('logsPage.scripts', 'Scripts')}</div>
+          <div
+            className={'pl ss-lrs in' + (resource === null ? ' on' : '')}
+            style={{ '--i': 7, '--s': 'var(--a)' } as CSSProperties}
+            onClick={() => setResource(null)}
+          >
+            <div className="sk">
+              <Layers className="ico" />
+              <span className="t">{t('logsPage.all_scripts', 'All scripts')}</span>
+              <span className="n">{compact(total)}</span>
+              <Segs n={12} frac={1} />
+            </div>
+          </div>
+          {(all.data?.resources ?? []).map((entry, k) => {
+            const s = look(entry.name);
+            return (
+              <div
+                key={entry.name}
+                className={'pl ss-lrs in' + (resource === entry.name ? ' on' : '')}
+                style={{ '--i': k + 8, '--s': s.tone } as CSSProperties}
+                onClick={() => setResource(entry.name)}
+                title={entry.name}
+              >
+                <div className="sk">
+                  <s.Icon className="ico" />
+                  <span className="t">{s.label}</span>
+                  <span className="n">{compact(entry.count)}</span>
+                  <Segs n={12} frac={total ? entry.count / total : 0} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-        {/* rows */}
-        <Flex
-          direction="column" gap="0.3vh" p="xs"
-          className="studio-scroll"
-          style={{ overflowY: 'auto', flex: 1, minHeight: 0, opacity: typing ? 0.55 : 1, transition: 'opacity 120ms' }}
-        >
+        <div className="ss-lfeed studio-scroll" style={{ opacity: typing ? 0.55 : 1 }}>
           {logs.isPending && <Waiting label={t('logsPage.fetching', 'Fetching')} />}
 
           {!logs.isPending && rows.length === 0 && (
-            <Flex direction="column" align="center" justify="center" gap="xs" py="xl">
-              <Inbox size="3vh" color="rgba(255,255,255,0.18)" />
-              <Text ff="Akrobat Bold" size="sm" c="rgba(255,255,255,0.4)">{t('logsPage.nothing_matches_those_filters', 'Nothing matches those filters')}</Text>
-              <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.25)">
-                {t('logsPage.widen_the_time_range_or_clear_the_resour', 'Widen the time range, or clear the resource filter.')}
-              </Text>
-            </Flex>
+            <div className="ss-empty">
+              <Inbox />
+              <div className="T">{t('logsPage.nothing_matches_those_filters', 'Nothing matches those filters')}</div>
+              <div className="D">{sinkOn
+                ? t('logsPage.widen_the_time_range_or_clear_the_resour', 'Widen the time range, or clear the resource filter.')
+                : t('logsPage.sink_off_detail', 'The Events tab has nothing to read while this is off.')}</div>
+            </div>
           )}
 
           {rows.map((row) => (
@@ -256,52 +334,34 @@ function EventsTab() {
               onToggle={() => setExpanded(expanded === row.id ? null : row.id)}
               onPlayer={() => setPlayer(row.player?.identifier ?? '')}
               onResource={() => setResource(row.resource)}
-              onEvent={() => setEvent(row.event)}
+              onEvent={() => { setResource(row.resource); setTimeout(() => setEvent(row.event), 0); }}
             />
           ))}
 
           <div ref={sentinel} />
           {logs.isFetchingNextPage && <Waiting label={t('logsPage.loading_older', 'Loading older')} />}
-
           {!logs.hasNextPage && rows.length > 0 && (
-            <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.22)" ta="center" py="sm">
-              {t('logsPage.that_is_everything_in_this_range', 'That is everything in this range.')}
-            </Text>
+            <div className="L ss-lend">{t('logsPage.that_is_everything_in_this_range', 'That is everything in this range.')}</div>
           )}
-        </Flex>
+        </div>
+      </div>
 
-        <Flex
-          align="center" justify="space-between" px="md" py="xs"
-          style={{ borderTop: `0.1vh solid ${alpha(theme.colors.dark[4], 0.4)}`, flexShrink: 0 }}
-        >
-          <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.3)">
-            {rows.length} loaded{logs.hasNextPage ? ' · scroll for older' : ''}
-          </Text>
-          <Flex align="center" gap="xs">
-            {(resource || event || level || player || search) && (
-              <StudioButton
-                label={t('logsPage.clear_filters', 'Clear filters')}
-                onClick={() => { setResource(null); setEvent(null); setLevel(null); setPlayer(''); setSearch(''); }}
-              />
-            )}
-            <Chip
-              label={sinkOn ? 'Keeping logs' : 'Not keeping logs'}
-              color={sinkOn ? color : '#9ca3af'}
-              dot
-              size="control"
-            />
-          </Flex>
-        </Flex>
-      </Flex>
-    </Flex>
+      <div className="ss-lfoot">
+        <span className="L">
+          {t('logsPage.loaded', '{0} loaded').replace('{0}', String(rows.length))}
+          {logs.hasNextPage ? ` · ${t('logsPage.scroll_older', 'scroll for older')}` : ''}
+          {` · ${t('logsPage.paged_on_server', 'Filtered and paged on the server')}`}
+        </span>
+        {filtered && (
+          <Btn sm label={t('logsPage.clear_filters', 'Clear filters')} onClick={() => { setResource(null); setEvent(null); setLevel(null); setPlayer(''); setSearch(''); }} />
+        )}
+        {sinkOn
+          ? <Chip tone="g">{t('logsPage.kept_for', 'Kept for {0} days').replace('{0}', String(health?.retentionDays ?? ''))}</Chip>
+          : <Chip>{t('logsPage.not_keeping_short', 'Not keeping logs')}</Chip>}
+      </div>
+    </>
   );
 }
-
-const LEVEL_COLOR: Record<LogLevel, string> = {
-  info: '#9ca3af',
-  warn: '#f59e0b',
-  alert: '#ef4444',
-};
 
 function LogRowCard({
   row, open, onToggle, onPlayer, onResource, onEvent,
@@ -314,134 +374,87 @@ function LogRowCard({
   onEvent: () => void;
 }) {
   const t = useChrome();
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-  const tone = LEVEL_COLOR[row.level];
-  const flagged = row.level !== 'info';
+  const look = useScriptLook()(row.resource);
+  const lv = row.level === 'warn' ? ' warn' : row.level === 'alert' ? ' err' : '';
+
+  // Guarded: identifiers are decoded from a TEXT column written by whatever
+  // wrote the row. A shape that is not an array of "type:value" strings must
+  // degrade, not take the expander down with it.
+  const ids = (Array.isArray(row.player?.identifiers) ? row.player!.identifiers! : [])
+    .filter((id): id is string => typeof id === 'string');
+  const tags = row.tags && typeof row.tags === 'object' && !Array.isArray(row.tags) ? Object.entries(row.tags) : [];
+
+  const copy = () => {
+    copyToClipboard(JSON.stringify(row, null, 2));
+    notify('success', t('logsPage.copied', 'Copied'));
+  };
 
   return (
-    <Flex
-      direction="column"
-      style={{
-        background: flagged ? alpha(tone, 0.07) : alpha(theme.colors.dark[9], 0.4),
-        border: `0.1vh solid ${alpha(flagged ? tone : theme.colors.dark[5], flagged ? 0.35 : 0.3)}`,
-        borderRadius: theme.radius.xs,
-        flexShrink: 0,
-      }}
+    <>
+      <div className={'pl ss-lgr' + lv + (open ? ' open' : '')} style={{ '--s': look.tone } as CSSProperties} onClick={onToggle}>
+        <div className="sk">
+          <span className="tm">{clock(row.at)}</span>
+          <span className="rs"><look.Icon className="ico" /><span>{look.label}</span></span>
+          <div className="ev">
+            <div className="t">
+              <span>{row.event}</span>
+              {row.level === 'warn' && <Chip tone="w">{t('logsPage.warn', 'Warn')}</Chip>}
+              {row.level === 'alert' && <Chip tone="r">{t('logsPage.alert', 'Alert')}</Chip>}
+            </div>
+            <div className="D">{row.message}</div>
+          </div>
+          <div className="who">
+            {row.player ? row.player.name : t('logsPage.server', 'server')}
+            {row.player?.source != null && <small>{`id ${row.player.source}`}</small>}
+          </div>
+          <ChevronRight className="ico" />
+        </div>
+      </div>
+      {open && (
+        <div className="pl ss-lgx">
+          <div className="sk">
+            <div className="ss-lgk">
+              <Kv label={t('logsPage.message', 'Message')} value={row.message} wide />
+              {tags.map(([k, v]) => <Kv key={k} label={k} value={String(v)} />)}
+              {row.player && <Kv label={t('logsPage.player', 'Player')} value={row.player.name} />}
+              {row.player && <Kv label={t('logsPage.identifier', 'Identifier')} value={row.player.identifier} copyable />}
+              {row.player?.source != null && <Kv label={t('logsPage.server_id', 'Server id')} value={String(row.player.source)} />}
+              {ids.map((id) => {
+                const [type, ...rest] = id.split(':');
+                return <Kv key={id} label={type} value={rest.join(':')} copyable />;
+              })}
+              <Kv label={t('logsPage.when', 'When')} value={stamp(row.at)} />
+              <Kv label="Id" value={String(row.id)} />
+            </div>
+            <div className="acts">
+              {row.player && <Btn sm icon={<User />} label={t('logsPage.this_player', 'This player')} onClick={onPlayer} />}
+              <Btn sm label={t('logsPage.this_resource', 'This resource')} onClick={onResource} />
+              <Btn sm label={t('logsPage.this_event', 'This event')} onClick={onEvent} />
+              <Btn sm icon={<Copy />} label={t('logsPage.copy', 'Copy')} onClick={copy} />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Kv({ label, value, copyable, wide }: { label: string; value: string; copyable?: boolean; wide?: boolean }) {
+  return (
+    <div
+      className={'k' + (wide ? ' wide' : '') + (copyable ? ' cp' : '')}
+      title={copyable ? 'Copy' : value}
+      onClick={copyable ? (e) => { e.stopPropagation(); copyToClipboard(value); notify('success', 'Copied'); } : undefined}
     >
-      <motion.button
-        type="button"
-        onClick={onToggle}
-        whileHover={{ background: alpha(color, 0.05) }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '0.9vh',
-          padding: '0.6vh 0.8vh',
-          background: 'transparent', border: 'none', borderRadius: 'inherit',
-          cursor: 'pointer', textAlign: 'left', width: '100%',
-        }}
-      >
-        <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.35)" style={{ flexShrink: 0, width: '9vh' }}>
-          {clock(row.at)}
-        </Text>
-
-        <Flex w="0.5vh" h="0.5vh" style={{ background: tone, borderRadius: '50%', flexShrink: 0 }} />
-
-        <Text
-          ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.05em"
-          c={alpha(color, 0.85)}
-          style={{ flexShrink: 0, width: '16vh' }}
-          truncate
-        >
-          {row.resource.replace(/^dirk[_-]/, '')}
-        </Text>
-
-        <Text
-          ff="Akrobat SemiBold" size="xxs"
-          c="rgba(255,255,255,0.45)"
-          style={{ flexShrink: 0, width: '15vh' }}
-          truncate
-        >
-          {row.event}
-        </Text>
-
-        <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.85)" style={{ flex: 1, minWidth: 0 }} truncate>
-          {row.message}
-        </Text>
-
-        <motion.div animate={{ rotate: open ? 180 : 0 }} style={{ display: 'flex', flexShrink: 0 }}>
-          <ChevronDown size="1.4vh" color="rgba(255,255,255,0.3)" />
-        </motion.div>
-      </motion.button>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.16 }}
-            style={{ overflow: 'hidden' }}
-          >
-            <Flex
-              direction="column" gap="xs" px="sm" pb="sm" pt="xxs"
-              style={{ borderTop: `0.1vh solid ${alpha(theme.colors.dark[5], 0.4)}` }}
-            >
-              <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.8)" pt="xs">
-                {row.message}
-              </Text>
-
-              {row.player && (
-                <Flex align="center" gap="xs" wrap="wrap">
-                  <Detail label={t('logsPage.player', 'Player')} value={row.player.name} />
-                  <Detail label={t('logsPage.identifier', 'Identifier')} value={row.player.identifier} mono copyable />
-                  {row.player.source != null && <Detail label={t('logsPage.server_id', 'Server id')} value={String(row.player.source)} mono />}
-                  {/* Every raw identifier captured with the line - licence,
-                      discord, steam, fivem. The one above is what filtering
-                      matches on; these are what you take to a ban list. */}
-                  {/* Guarded: this is decoded from a TEXT column written by
-                      whatever wrote the row. A shape that is not an array of
-                      "type:value" strings must degrade, not take the expander
-                      down with it - one malformed row would otherwise make
-                      every log line unopenable. */}
-                  {(Array.isArray(row.player.identifiers) ? row.player.identifiers : [])
-                    .filter((id): id is string => typeof id === 'string')
-                    .map((id) => {
-                    const [type, ...rest] = id.split(':');
-                    return (
-                      <Detail
-                        key={id}
-                        label={type}
-                        value={rest.join(':')}
-                        mono
-                        copyable
-                      />
-                    );
-                  })}
-                </Flex>
-              )}
-
-              <Flex align="center" gap="xs" wrap="wrap">
-                <Detail label={t('logsPage.when', 'When')} value={stamp(row.at)} mono />
-                <Detail label="Id" value={String(row.id)} mono />
-              </Flex>
-
-              <Flex align="center" gap="xs" pt="0.2vh">
-                <StudioButton label={t('logsPage.this_player', 'This player')} icon={User} onClick={onPlayer} />
-                <StudioButton label={t('logsPage.this_resource', 'This resource')} onClick={onResource} />
-                <StudioButton label={t('logsPage.this_event', 'This event')} onClick={onEvent} />
-              </Flex>
-            </Flex>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </Flex>
+      <div className="L">{label}</div>
+      <div className="v">{value}{copyable && <Copy />}</div>
+    </div>
   );
 }
 
 // ── Config changes ──────────────────────────────────────────────────────────
 
 function ChangesTab({ canEdit }: { canEdit: boolean }) {
-  const t = useChrome();
   const scripts = useStudio((s) => s.scripts);
   const activeResource = useStudio((s) => s.activeResource);
   const [resource, setResource] = useState(activeResource);
@@ -464,26 +477,25 @@ function ChangesTab({ canEdit }: { canEdit: boolean }) {
   };
 
   return (
-    <Flex direction="column" flex={1} style={{ minHeight: 0 }}>
-      <Flex px="md" py="xs" style={{ flexShrink: 0 }}>
-        <LogSelect
+    <div className="ss-lchg">
+      <div className="ss-ltool">
+        <KitSelect
           value={resource}
           onChange={(v) => setResource(v ?? activeResource)}
           width="34vh"
           clearable={false}
           data={scripts.map((s) => ({ value: s.resource, label: s.label }))}
         />
-      </Flex>
+      </div>
       <HistoryPanel resource={resource} canEdit={canEdit} onRevert={revert} />
-    </Flex>
+    </div>
   );
 }
 
 // ── Delivery ────────────────────────────────────────────────────────────────
 
-function DeliveryTab({ accent, canEdit }: { accent: string; canEdit: boolean }) {
+function DeliveryTab({ canEdit }: { canEdit: boolean }) {
   const t = useChrome();
-  const theme = useMantineTheme();
   const { data: health, isLoading } = useLogHealth();
   const settings = useLoggerSettings();
 
@@ -495,14 +507,10 @@ function DeliveryTab({ accent, canEdit }: { accent: string; canEdit: boolean }) 
   const healthFor = (i: number) => routes[i];
 
   return (
-    <Flex
-      direction="column" gap="lg" p="md"
-      className="studio-scroll"
-      style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}
-    >
+    <div className="ss-ldel studio-scroll">
       <DeliveryBlock
         title={t('logsPage.this_server', 'This server')}
-        description="Kept here, and read by the Events tab"
+        description={t('logsPage.this_server_hint', 'Kept here, and read by the Events tab')}
       >
         <DeliveryRow
           ok={!!health?.enabled}
@@ -510,58 +518,54 @@ function DeliveryTab({ accent, canEdit }: { accent: string; canEdit: boolean }) 
             ? t('logsPage.local_sink_on', 'Keeping logs on this server')
             : t('logsPage.local_sink_off', 'Not keeping logs')}
           detail={health?.enabled
-            ? `${(health.rows ?? 0).toLocaleString()} lines · ${formatBytes(health.bytes ?? 0)} · kept ${health.retentionDays} days`
+            ? `${formatNumber(health.rows ?? 0)} lines · ${formatBytes(health.bytes ?? 0)} · ${t('logsPage.kept_for', 'Kept for {0} days').replace('{0}', String(health.retentionDays))}`
             : t('logsPage.sink_off_detail', 'The Events tab has nothing to read while this is off.')}
           right={isLoading ? '…' : undefined}
         />
 
         {/* The settings themselves, not a link to them. This is the page
             about where log lines go. */}
-        <Flex direction="column" gap="xs" pt="0.4vh">
+        <div className="ss-lset">
           {settings.enabled && (
             <SettingLine entry={settings.enabled} resource={settings.resource} canEdit={canEdit} />
           )}
           {settings.retentionDays && (
             <SettingLine entry={settings.retentionDays} resource={settings.resource} canEdit={canEdit} />
           )}
-        </Flex>
+        </div>
       </DeliveryBlock>
 
       <DeliveryBlock
         title={t('logsPage.redirects', 'Redirects')}
-        description="Where these lines are sent on to, as well as kept here"
+        description={t('logsPage.redirects_hint', 'Where these lines are sent on to, as well as kept here')}
       >
-        {routeRows.length > 0 && (
-          <Flex direction="column" gap="xxs" pb="0.4vh">
-            {routeRows.map((row, i) => {
-              const rh = healthFor(i);
-              const filters = [
-                Array.isArray(row.resources) && row.resources.length
-                  ? `${row.resources.length} script${row.resources.length === 1 ? '' : 's'}` : null,
-                Array.isArray(row.events) && row.events.length
-                  ? `${row.events.length} event${row.events.length === 1 ? '' : 's'}` : null,
-                Array.isArray(row.levels) && row.levels.length ? row.levels.join(', ') : null,
-              ].filter(Boolean).join(' · ');
+        {routeRows.map((row, i) => {
+          const rh = healthFor(i);
+          const filters = [
+            Array.isArray(row.resources) && row.resources.length
+              ? `${row.resources.length} script${row.resources.length === 1 ? '' : 's'}` : null,
+            Array.isArray(row.events) && row.events.length
+              ? `${row.events.length} event${row.events.length === 1 ? '' : 's'}` : null,
+            Array.isArray(row.levels) && row.levels.length ? row.levels.join(', ') : null,
+          ].filter(Boolean).join(' · ');
 
-              return (
-                <DeliveryRow
-                  key={String(row.id ?? i)}
-                  ok={row.enabled !== false}
-                  title={String(row.label || t('logsPage.unnamed_route', 'Unnamed route'))}
-                  detail={[
-                    filters || t('logsPage.everything', 'everything'),
-                    rh ? `${rh.sent.toLocaleString()} sent` : null,
-                    rh?.dropped ? `${rh.dropped.toLocaleString()} dropped` : null,
-                    rh?.queued ? `${rh.queued} waiting` : null,
-                  ].filter(Boolean).join(' · ')}
-                  right={row.enabled === false
-                    ? t('logsPage.off', 'off')
-                    : (rh?.lastAt ? ago(rh.lastAt) : t('logsPage.nothing_yet', 'nothing yet'))}
-                />
-              );
-            })}
-          </Flex>
-        )}
+          return (
+            <DeliveryRow
+              key={String(row.id ?? i)}
+              ok={row.enabled !== false && !(rh && rh.dropped > 0)}
+              title={String(row.label || t('logsPage.unnamed_route', 'Unnamed route'))}
+              detail={[
+                filters || t('logsPage.everything', 'everything'),
+                rh ? `${formatNumber(rh.sent)} sent` : null,
+                rh?.dropped ? `${formatNumber(rh.dropped)} dropped` : null,
+                rh?.queued ? `${rh.queued} waiting` : null,
+              ].filter(Boolean).join(' · ')}
+              right={row.enabled === false
+                ? t('logsPage.off', 'Off')
+                : (rh?.lastAt ? ago(rh.lastAt) : t('logsPage.nothing_yet', 'nothing yet'))}
+            />
+          );
+        })}
 
         {/* The editor itself - adding a webhook happens here, not in a
             settings page two clicks away. */}
@@ -576,23 +580,18 @@ function DeliveryTab({ accent, canEdit }: { accent: string; canEdit: boolean }) 
         )}
       </DeliveryBlock>
 
-      <Flex
-        align="center" gap="xs" px="sm" py="xs"
-        style={{
-          background: alpha(accent, 0.06),
-          border: `0.1vh solid ${alpha(accent, 0.25)}`,
-          borderRadius: theme.radius.xs,
-        }}
-      >
-        <AlertTriangle size="1.5vh" color={accent} />
-        <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.6)">
-          {t(
-            'logsPage.delivery_note',
-            'A webhook is as well as keeping lines here, never instead. Messages are batched, so a busy minute is a few posts rather than hundreds.',
-          )}
-        </Text>
-      </Flex>
-    </Flex>
+      <div className="pl ss-lnotice edge">
+        <div className="sk">
+          <AlertTriangle className="ico" />
+          <span className="D">
+            {t(
+              'logsPage.delivery_note',
+              'A webhook is as well as keeping lines here, never instead. Messages are batched, so a busy minute is a few posts rather than hundreds.',
+            )}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -611,22 +610,22 @@ function SettingLine({
   const value = effectiveValue(resource, entry);
 
   return (
-    <Flex align="center" gap="sm" justify="space-between">
-      <Flex direction="column" style={{ minWidth: 0, flex: 1 }}>
-        <Text ff="Akrobat SemiBold" size="xs" c="rgba(255,255,255,0.75)">{entry.label}</Text>
-        {entry.help && (
-          <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.3)">{entry.help}</Text>
-        )}
-      </Flex>
-      <SettingControl
-        type={entry.type}
-        entry={entry}
-        resource={resource}
-        value={value}
-        disabled={!canEdit}
-        onChange={(next) => setValue(resource, entry, next)}
-      />
-    </Flex>
+    <div className="pl ss-lsl">
+      <div className="sk">
+        <div className="tx">
+          <div className="t">{entry.label}</div>
+          {entry.help && <div className="D">{entry.help}</div>}
+        </div>
+        <SettingControl
+          type={entry.type}
+          entry={entry}
+          resource={resource}
+          value={value}
+          disabled={!canEdit}
+          onChange={(next) => setValue(resource, entry, next)}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -634,222 +633,38 @@ function DeliveryBlock({
   title, description, children,
 }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <Flex direction="column" gap="xs">
-      <Flex align="baseline" gap="xs">
-        <Text ff="Akrobat Bold" size="sm" tt="uppercase" lts="0.06em" c="rgba(255,255,255,0.85)">{title}</Text>
-        <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.32)">{description}</Text>
-      </Flex>
-      <Flex direction="column" gap="xxs">{children}</Flex>
-    </Flex>
+    <div className="ss-lblk">
+      <div className="bh"><span className="L">{title}</span><span className="D">{description}</span></div>
+      {children}
+    </div>
   );
 }
 
 function DeliveryRow({
   ok, title, detail, right,
 }: { ok: boolean; title: string; detail: string; right?: string }) {
-  const theme = useMantineTheme();
-  const tone = ok ? '#22c55e' : '#ef4444';
-
   return (
-    <Flex
-      align="center" gap="sm" px="sm" py="xs"
-      style={{
-        background: alpha(theme.colors.dark[9], 0.45),
-        border: `0.1vh solid ${alpha(ok ? theme.colors.dark[5] : '#ef4444', ok ? 0.3 : 0.4)}`,
-        borderRadius: theme.radius.xs,
-      }}
-    >
-      {ok ? <CheckCircle2 size="1.6vh" color={tone} /> : <XCircle size="1.6vh" color={tone} />}
-      <Flex direction="column" style={{ flex: 1, minWidth: 0, lineHeight: 1.25 }}>
-        <Text ff="Akrobat Bold" size="xs" c="rgba(255,255,255,0.88)" truncate>{title}</Text>
-        <Text ff="Akrobat SemiBold" size="xxs" c={ok ? 'rgba(255,255,255,0.35)' : '#ef4444'} truncate>{detail}</Text>
-      </Flex>
-      <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.28)" style={{ flexShrink: 0 }}>{right}</Text>
-    </Flex>
+    <div className={'pl ss-ldr edge' + (ok ? '' : ' bad')}>
+      <div className="sk">
+        {ok ? <CheckCircle2 className="ico" /> : <XCircle className="ico" />}
+        <div className="tx">
+          <div className="t">{title}</div>
+          <div className="D">{detail}</div>
+        </div>
+        {right && <span className="L">{right}</span>}
+      </div>
+    </div>
   );
 }
 
 // ── bits ────────────────────────────────────────────────────────────────────
 
-function TabButton({
-  icon: Icon, label, active, onClick,
-}: { icon: React.ElementType; label: string; active: boolean; onClick: () => void }) {
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      whileTap={{ scale: 0.98 }}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '0.6vh',
-        padding: '0.6vh 1.1vh',
-        background: active ? alpha(color, 0.14) : 'transparent',
-        border: `0.1vh solid ${active ? alpha(color, 0.45) : 'transparent'}`,
-        borderRadius: theme.radius.xs,
-        cursor: 'pointer',
-      }}
-    >
-      <Icon size="1.4vh" color={active ? color : 'rgba(255,255,255,0.45)'} />
-      <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.07em" c={active ? color : 'rgba(255,255,255,0.55)'}>
-        {label}
-      </Text>
-    </motion.button>
-  );
-}
-
-function FacetRow({
-  label, count, active, onClick,
-}: { label: string; count?: number; active: boolean; onClick: () => void }) {
-  const theme = useMantineTheme();
-  const color = theme.colors[theme.primaryColor][5];
-
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      whileTap={{ scale: 0.99 }}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '0.6vh',
-        padding: '0.5vh 0.7vh',
-        background: active ? alpha(color, 0.12) : 'transparent',
-        border: 'none',
-        borderLeft: `0.2vh solid ${active ? color : 'transparent'}`,
-        borderRadius: `0 ${theme.radius.xs} ${theme.radius.xs} 0`,
-        cursor: 'pointer', textAlign: 'left', width: '100%',
-      }}
-    >
-      <Text
-        ff="Akrobat SemiBold" size="sm"
-        c={active ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.55)'}
-        style={{ flex: 1, minWidth: 0 }}
-        truncate
-      >
-        {label.replace(/^dirk[_-]/, '')}
-      </Text>
-      {count != null && (
-        <Text ff="monospace" size="xxs" c="rgba(255,255,255,0.25)">{compact(count)}</Text>
-      )}
-    </motion.button>
-  );
-}
-
-function Detail({
-  label, value, mono, copyable,
-}: { label: string; value: string; mono?: boolean; copyable?: boolean }) {
-  const theme = useMantineTheme();
-  const [copied, setCopied] = useState(false);
-
-  const copy = () => {
-    copyToClipboard(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
-  };
-
-  return (
-    <Flex
-      align="center" gap="0.5vh" px="0.7vh" py="0.2vh"
-      style={{
-        background: alpha(theme.colors.dark[7], 0.55),
-        border: `0.1vh solid ${alpha(theme.colors.dark[4], 0.4)}`,
-        borderRadius: '0.3vh',
-      }}
-    >
-      <Text ff="Akrobat Bold" size="xxs" tt="uppercase" lts="0.08em" c="rgba(255,255,255,0.3)">{label}</Text>
-      <Text ff={mono ? 'monospace' : 'Akrobat SemiBold'} size="xxs" c="rgba(255,255,255,0.75)">{value}</Text>
-      {copyable && (
-        <motion.button
-          type="button"
-          onClick={copy}
-          whileTap={{ scale: 0.9 }}
-          style={{ display: 'flex', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
-          aria-label={`Copy ${label}`}
-        >
-          <Copy size="1.1vh" color={copied ? '#22c55e' : 'rgba(255,255,255,0.35)'} />
-        </motion.button>
-      )}
-    </Flex>
-  );
-}
-
 function Waiting({ label }: { label: string }) {
   return (
-    <Flex align="center" justify="center" gap="xs" py="md">
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-        style={{ display: 'flex' }}
-      >
-        <Loader2 size="1.6vh" color="rgba(255,255,255,0.3)" />
-      </motion.div>
-      <Text ff="Akrobat SemiBold" size="xxs" c="rgba(255,255,255,0.3)">{label}</Text>
-    </Flex>
-  );
-}
-
-function useLogInputStyles() {
-  const theme = useMantineTheme();
-  return {
-    input: {
-      background: alpha(theme.colors.dark[9], 0.6),
-      border: `0.1vh solid ${alpha(theme.colors.dark[4], 0.5)}`,
-      borderRadius: theme.radius.xs,
-      color: 'rgba(255,255,255,0.9)',
-      fontFamily: 'Akrobat SemiBold',
-      fontSize: '1.4vh',
-      height: '3.2vh',
-      minHeight: '3.2vh',
-    },
-  } as const;
-}
-
-function LogInput({
-  value, onChange, placeholder, icon: Icon, width, grow,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  icon?: React.ElementType;
-  width?: string;
-  grow?: boolean;
-}) {
-  const styles = useLogInputStyles();
-  return (
-    <TextInput
-      value={value}
-      onChange={(e) => onChange(e.currentTarget.value)}
-      placeholder={placeholder}
-      leftSection={Icon ? <Icon size="1.4vh" color="rgba(255,255,255,0.3)" /> : undefined}
-      styles={styles}
-      style={{ width, flex: grow ? 1 : undefined }}
-    />
-  );
-}
-
-function LogSelect({
-  value, onChange, data, placeholder, width, clearable = true,
-}: {
-  value: string | null;
-  onChange: (v: string | null) => void;
-  data: { value: string; label: string }[];
-  placeholder?: string;
-  width?: string;
-  clearable?: boolean;
-}) {
-  const styles = useLogInputStyles();
-  return (
-    <Select
-      value={value}
-      onChange={onChange}
-      data={data}
-      placeholder={placeholder}
-      clearable={clearable}
-      searchable
-      styles={styles}
-      style={{ width, flexShrink: 0 }}
-      comboboxProps={{ zIndex: 10800 }}
-    />
+    <div className="ss-lwait">
+      <Loader2 className="spin" />
+      <span className="L">{label}</span>
+    </div>
   );
 }
 
@@ -862,7 +677,7 @@ function stamp(at: number) {
 }
 
 function ago(at: number) {
-  const seconds = Math.max(0, MOCK_NOW - at);
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - at);
   if (seconds < 90) return `${seconds}s ago`;
   if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
   if (seconds < 172800) return `${Math.round(seconds / 3600)}h ago`;
@@ -870,5 +685,5 @@ function ago(at: number) {
 }
 
 function compact(value: number) {
-  return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
+  return value >= 10000 ? `${Math.round(value / 1000)}k` : value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
 }
